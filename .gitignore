@@ -1,0 +1,17 @@
+# OS
+.DS_Store
+
+# Android
+*.iml
+.gradle/
+.idea/
+build/
+captures/
+.externalNativeBuild/
+.cxx/
+local.properties
+
+# Node (website/server)
+node_modules/
+dist/
+.env

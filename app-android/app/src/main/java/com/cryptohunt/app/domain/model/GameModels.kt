@@ -1,0 +1,83 @@
+package com.cryptohunt.app.domain.model
+
+data class GameConfig(
+    val id: String,
+    val name: String,
+    val entryFee: Double,
+    val minPlayers: Int,
+    val maxPlayers: Int,
+    val zoneCenterLat: Double,
+    val zoneCenterLng: Double,
+    val initialRadiusMeters: Double,
+    val shrinkSchedule: List<ZoneShrink>,
+    val durationMinutes: Int,
+    val checkInDurationMinutes: Int = 10
+)
+
+data class ZoneShrink(val atMinute: Int, val newRadiusMeters: Double)
+
+data class Player(
+    val id: String,
+    val number: Int,
+    val walletAddress: String,
+    val isAlive: Boolean = true,
+    val killCount: Int = 0,
+    val isCheckedIn: Boolean = false
+)
+
+data class Target(val player: Player, val assignedAt: Long)
+
+data class LeaderboardEntry(
+    val rank: Int,
+    val playerNumber: Int,
+    val kills: Int,
+    val isAlive: Boolean,
+    val isCurrentPlayer: Boolean = false
+)
+
+data class KillEvent(
+    val id: String,
+    val hunterNumber: Int,
+    val targetNumber: Int,
+    val timestamp: Long,
+    val zone: String
+)
+
+enum class GamePhase {
+    NOT_JOINED, REGISTERED, CHECK_IN, ACTIVE, ELIMINATED, ENDED, CANCELLED
+}
+
+data class GameState(
+    val phase: GamePhase = GamePhase.NOT_JOINED,
+    val config: GameConfig,
+    val currentPlayer: Player,
+    val currentTarget: Target? = null,
+    val playersRemaining: Int = 100,
+    val currentZoneRadius: Double = 0.0,
+    val nextShrinkSeconds: Int = 0,
+    val killFeed: List<KillEvent> = emptyList(),
+    val gameTimeElapsedSeconds: Long = 0,
+    val isInZone: Boolean = true,
+    val outOfZoneSeconds: Int = 0,
+    val spectatorMode: Boolean = false,
+    val usedItems: Set<String> = emptySet(),
+    val ghostModeActive: Boolean = false,
+    val ghostModeExpiresAt: Long = 0,
+    val leaderboard: List<LeaderboardEntry> = emptyList(),
+    val registeredAt: Long = 0L,
+    val gameStartTime: Long = 0L,
+    val checkInVerified: Boolean = false,
+    val checkInTimeRemainingSeconds: Int = 0,
+    val checkedInCount: Int = 0,
+    val checkedInPlayerNumbers: Set<Int> = emptySet()
+)
+
+sealed class CheckInResult {
+    data object Verified : CheckInResult()
+    data object AlreadyVerified : CheckInResult()
+    data object PlayerNotCheckedIn : CheckInResult()
+    data object ScanYourself : CheckInResult()
+    data object UnknownPlayer : CheckInResult()
+    data object WrongPhase : CheckInResult()
+    data object NoGame : CheckInResult()
+}

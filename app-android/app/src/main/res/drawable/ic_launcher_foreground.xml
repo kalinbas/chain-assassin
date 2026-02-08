@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <!-- Crosshair icon -->
+    <!-- Outer circle -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-18,0a18,18 0,1 1,36 0a18,18 0,1 1,-36 0"/>
+    <!-- Inner circle -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="1.5"
+        android:fillColor="#00000000"
+        android:pathData="M54,54m-7,0a7,7 0,1 1,14 0a7,7 0,1 1,-14 0"/>
+    <!-- Center dot -->
+    <path
+        android:fillColor="#00FF88"
+        android:pathData="M54,54m-2.5,0a2.5,2.5 0,1 1,5 0a2.5,2.5 0,1 1,-5 0"/>
+    <!-- Top line -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M54,28L54,42"/>
+    <!-- Bottom line -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M54,66L54,80"/>
+    <!-- Left line -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M28,54L42,54"/>
+    <!-- Right line -->
+    <path
+        android:strokeColor="#00FF88"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:fillColor="#00000000"
+        android:pathData="M66,54L80,54"/>
+</vector>
