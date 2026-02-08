@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chain-Assassin — Hunt or Be Hunted. On-Chain.</title>
+    <meta name="description" content="Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on Base blockchain. Up to 100 players per game.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Chain-Assassin — Hunt or Be Hunted. On-Chain.">
+    <meta property="og:description" content="Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on Base.">
+    <meta property="og:image" content="media/banner.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Preload hero -->
+    <link rel="preload" as="image" href="media/banner.png">
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ==================== NAV ==================== -->
+    <header class="nav" id="nav">
+        <div class="nav__inner">
+            <a href="#" class="nav__logo">
+                <span class="nav__logo-chain">CHAIN</span><span class="nav__logo-assassin">ASSASSIN</span>
+            </a>
+            <nav class="nav__links" id="navLinks">
+                <a href="#how-it-works">How It Works</a>
+                <a href="#features">Features</a>
+                <a href="#screenshots">Screenshots</a>
+                <a href="#prizes">Prizes</a>
+                <a href="#faq">FAQ</a>
+            </nav>
+            <a href="#" class="btn btn--primary nav__cta">Download App</a>
+            <button class="nav__hamburger" id="hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+
+        <!-- ==================== HERO ==================== -->
+        <section class="hero" id="hero">
+            <div class="hero__bg">
+                <img src="media/banner.png" alt="Players hunting in a park with QR codes" class="hero__img">
+                <div class="hero__overlay"></div>
+            </div>
+            <div class="hero__content">
+                <h1 class="hero__title">Hunt or Be Hunted.<br><span class="text-primary">On-Chain.</span></h1>
+                <p class="hero__sub">Real-world elimination game. GPS-tracked zones. QR-code kills. ETH prizes on Base.</p>
+                <div class="hero__ctas">
+                    <a href="#" class="btn btn--primary btn--lg">Download App</a>
+                    <a href="#demo" class="btn btn--outline btn--lg">Watch Demo</a>
+                </div>
+                <div class="hero__badges">
+                    <div class="badge">100 Players</div>
+                    <div class="badge">Real ETH Prizes</div>
+                    <div class="badge">GPS + QR Verified</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== HOW IT WORKS ==================== -->
+        <section class="section" id="how-it-works">
+            <div class="container">
+                <h2 class="section__title">How It Works</h2>
+                <p class="section__sub">Five steps to the hunt</p>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step__number">1</div>
+                        <div class="step__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
+                        </div>
+                        <h3 class="step__title">Create Wallet</h3>
+                        <p class="step__desc">Generate a Base wallet in-app. Deposit ETH to enter games.</p>
+                    </div>
+                    <div class="step__connector"></div>
+                    <div class="step">
+                        <div class="step__number">2</div>
+                        <div class="step__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                        </div>
+                        <h3 class="step__title">Join a Game</h3>
+                        <p class="step__desc">Browse upcoming games by city. Pay the entry fee to register.</p>
+                    </div>
+                    <div class="step__connector"></div>
+                    <div class="step">
+                        <div class="step__number">3</div>
+                        <div class="step__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h6v6H4z"/><path d="M14 4h6v6h-6z"/><path d="M4 14h6v6H4z"/><circle cx="17" cy="17" r="3"/></svg>
+                        </div>
+                        <h3 class="step__title">Check In</h3>
+                        <p class="step__desc">Arrive at the game zone. Scan another player's QR to verify attendance.</p>
+                    </div>
+                    <div class="step__connector"></div>
+                    <div class="step">
+                        <div class="step__number">4</div>
+                        <div class="step__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+                        </div>
+                        <h3 class="step__title">Hunt Your Target</h3>
+                        <p class="step__desc">Find and scan your target's QR code. Stay inside the shrinking zone.</p>
+                    </div>
+                    <div class="step__connector"></div>
+                    <div class="step">
+                        <div class="step__number">5</div>
+                        <div class="step__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>
+                        </div>
+                        <h3 class="step__title">Win ETH</h3>
+                        <p class="step__desc">Last players standing split the prize pool. Claim winnings to your wallet.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== FEATURES / GAME MECHANICS ==================== -->
+        <section class="section section--alt" id="features">
+            <div class="container">
+                <h2 class="section__title">Game Mechanics</h2>
+                <p class="section__sub">Battle royale meets the real world</p>
+                <div class="features-grid">
+                    <div class="feature-card">
+                        <div class="feature-card__icon feature-card__icon--danger">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/></svg>
+                        </div>
+                        <h3 class="feature-card__title">The Hunt</h3>
+                        <ul class="feature-card__list">
+                            <li>Each player is assigned a random target</li>
+                            <li>Scan their QR code to eliminate them</li>
+                            <li>Get a new target after each kill</li>
+                            <li>Your hunter is also looking for you</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card__icon feature-card__icon--warning">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+                        </div>
+                        <h3 class="feature-card__title">Shrinking Zone</h3>
+                        <ul class="feature-card__list">
+                            <li>Game zone starts large (2km radius)</li>
+                            <li>Zone shrinks in stages every 10 minutes</li>
+                            <li>60 seconds outside = elimination</li>
+                            <li>Final zone forces close-quarters action</li>
+                        </ul>
+                    </div>
+                    <div class="feature-card">
+                        <div class="feature-card__icon feature-card__icon--shield">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                        </div>
+                        <h3 class="feature-card__title">Tactical Items</h3>
+                        <ul class="feature-card__list">
+                            <li><strong>Ping Target</strong> — reveal their zone</li>
+                            <li><strong>Ping Hunter</strong> — detect proximity</li>
+                            <li><strong>Ghost Mode</strong> — invisible for 2 min</li>
+                            <li><strong>Decoy Ping</strong> — fake location</li>
+                            <li><strong>EMP Blast</strong> — disable target's map</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== SCREENSHOTS ==================== -->
+        <section class="section" id="screenshots">
+            <div class="container">
+                <h2 class="section__title">The App</h2>
+                <p class="section__sub">Built for the hunt</p>
+                <div class="carousel" id="carousel">
+                    <div class="carousel__track" id="carouselTrack">
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-welcome.jpg" alt="Welcome screen" loading="lazy">
+                            </div>
+                            <p class="carousel__label">Welcome</p>
+                        </div>
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-browser.jpg" alt="Game browser" loading="lazy">
+                            </div>
+                            <p class="carousel__label">Browse Games</p>
+                        </div>
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-detail.jpg" alt="Game details" loading="lazy">
+                            </div>
+                            <p class="carousel__label">Game Details</p>
+                        </div>
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-game.jpg" alt="Main game screen" loading="lazy">
+                            </div>
+                            <p class="carousel__label">In-Game HUD</p>
+                        </div>
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-items.jpg" alt="Tactical items" loading="lazy">
+                            </div>
+                            <p class="carousel__label">Tactical Items</p>
+                        </div>
+                        <div class="carousel__slide">
+                            <div class="phone-frame">
+                                <img src="media/screen-spectator.jpg" alt="Spectator mode" loading="lazy">
+                            </div>
+                            <p class="carousel__label">Spectator Mode</p>
+                        </div>
+                    </div>
+                    <div class="carousel__dots" id="carouselDots"></div>
+                    <button class="carousel__btn carousel__btn--prev" id="carouselPrev" aria-label="Previous">&#8249;</button>
+                    <button class="carousel__btn carousel__btn--next" id="carouselNext" aria-label="Next">&#8250;</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== DEMO VIDEO ==================== -->
+        <section class="section section--alt" id="demo">
+            <div class="container">
+                <h2 class="section__title">See It In Action</h2>
+                <p class="section__sub">Alpha gameplay footage — Chain-Assassin CDMX</p>
+                <div class="video-wrapper">
+                    <video controls preload="metadata" poster="media/banner.png">
+                        <source src="media/demo.mp4" type="video/mp4">
+                        Your browser does not support the video tag.
+                    </video>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== PRIZES ==================== -->
+        <section class="section" id="prizes">
+            <div class="container">
+                <h2 class="section__title">Prize Distribution</h2>
+                <p class="section__sub">90% of entry fees go to the prize pool</p>
+
+                <div class="prize-visual">
+                    <div class="prize-bar">
+                        <div class="prize-bar__fill prize-bar__fill--1st" style="width: 40%">
+                            <span class="prize-bar__label">1st — 40%</span>
+                        </div>
+                    </div>
+                    <div class="prize-bar">
+                        <div class="prize-bar__fill prize-bar__fill--2nd" style="width: 15%">
+                            <span class="prize-bar__label">2nd — 15%</span>
+                        </div>
+                    </div>
+                    <div class="prize-bar">
+                        <div class="prize-bar__fill prize-bar__fill--3rd" style="width: 10%">
+                            <span class="prize-bar__label">3rd — 10%</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="calculator" id="calculator">
+                    <h3 class="calculator__title">Prize Calculator</h3>
+                    <div class="calculator__row">
+                        <label class="calculator__label">
+                            Players
+                            <span class="calculator__value" id="calcPlayers">100</span>
+                        </label>
+                        <input type="range" min="10" max="200" value="100" step="10" class="calculator__slider" id="sliderPlayers">
+                    </div>
+                    <div class="calculator__row">
+                        <label class="calculator__label">
+                            Entry Fee
+                            <span class="calculator__value" id="calcFee">0.05 ETH</span>
+                        </label>
+                        <input type="range" min="1" max="100" value="5" step="1" class="calculator__slider" id="sliderFee">
+                    </div>
+                    <div class="calculator__results">
+                        <div class="calculator__result">
+                            <span class="calculator__result-label">Prize Pool</span>
+                            <span class="calculator__result-value" id="calcPool">4.500 ETH</span>
+                        </div>
+                        <div class="calculator__result">
+                            <span class="calculator__result-label">1st Place</span>
+                            <span class="calculator__result-value calculator__result-value--gold" id="calc1st">1.800 ETH</span>
+                        </div>
+                        <div class="calculator__result">
+                            <span class="calculator__result-label">2nd Place</span>
+                            <span class="calculator__result-value calculator__result-value--silver" id="calc2nd">0.675 ETH</span>
+                        </div>
+                        <div class="calculator__result">
+                            <span class="calculator__result-label">3rd Place</span>
+                            <span class="calculator__result-value calculator__result-value--bronze" id="calc3rd">0.450 ETH</span>
+                        </div>
+                    </div>
+                    <p class="calculator__note">Games that don't reach minimum players are cancelled. Full refund guaranteed.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== HOST A GAME ==================== -->
+        <section class="section section--alt" id="host">
+            <div class="container">
+                <h2 class="section__title">Create Your Own Game</h2>
+                <p class="section__sub">Anyone can host a Chain-Assassin event</p>
+                <div class="host-grid">
+                    <div class="host-info">
+                        <p class="host-info__desc">Pick a city, define the play zone, set the stakes. You control every parameter of the game.</p>
+                        <ul class="host-info__list">
+                            <li>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+                                <div><strong>Location & Zone</strong><br>Choose any city. Set the initial radius.</div>
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                                <div><strong>Entry Fee</strong><br>0.01 — 1.0 ETH per player</div>
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+                                <div><strong>Player Cap</strong><br>10 — 200 players per game</div>
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                                <div><strong>Duration</strong><br>30 — 120 minutes</div>
+                            </li>
+                            <li>
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
+                                <div><strong>Zone Schedule</strong><br>Configure shrink stages and timing</div>
+                            </li>
+                        </ul>
+                        <a href="#" class="btn btn--primary btn--lg">Host a Game <span class="badge badge--soon">Coming Soon</span></a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== ON-CHAIN GAMES ==================== -->
+        <section class="section" id="games">
+            <div class="container">
+                <h2 class="section__title">Live & Upcoming Games</h2>
+                <p class="section__sub">Connected to Base blockchain — real-time game data coming soon</p>
+                <div class="games-grid">
+                    <div class="game-card">
+                        <div class="game-card__header">
+                            <h3 class="game-card__name">Chain-Assassin CDMX #48</h3>
+                            <span class="game-card__fee">0.05 ETH</span>
+                        </div>
+                        <div class="game-card__meta">
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Mexico City Centro</span>
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Feb 15 · 16:00</span>
+                        </div>
+                        <div class="game-card__players">
+                            <span>87 / 100</span>
+                            <div class="game-card__bar"><div class="game-card__bar-fill" style="width:87%"></div></div>
+                        </div>
+                        <div class="game-card__pool">Prize Pool <strong>4.50 ETH</strong></div>
+                    </div>
+                    <div class="game-card">
+                        <div class="game-card__header">
+                            <h3 class="game-card__name">Chain-Assassin NYC #12</h3>
+                            <span class="game-card__fee">0.10 ETH</span>
+                        </div>
+                        <div class="game-card__meta">
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Midtown Manhattan</span>
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Feb 16 · 14:00</span>
+                        </div>
+                        <div class="game-card__players">
+                            <span>62 / 100</span>
+                            <div class="game-card__bar"><div class="game-card__bar-fill" style="width:62%"></div></div>
+                        </div>
+                        <div class="game-card__pool">Prize Pool <strong>9.00 ETH</strong></div>
+                    </div>
+                    <div class="game-card">
+                        <div class="game-card__header">
+                            <h3 class="game-card__name">Chain-Assassin Berlin #5</h3>
+                            <span class="game-card__fee">0.02 ETH</span>
+                        </div>
+                        <div class="game-card__meta">
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg> Berlin Mitte</span>
+                            <span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="14" height="14"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg> Feb 17 · 10:00</span>
+                        </div>
+                        <div class="game-card__players">
+                            <span>34 / 50</span>
+                            <div class="game-card__bar"><div class="game-card__bar-fill" style="width:68%"></div></div>
+                        </div>
+                        <div class="game-card__pool">Prize Pool <strong>0.90 ETH</strong></div>
+                    </div>
+                </div>
+                <p class="section__note">Smart contract integration in development. Game data will be read directly from Base blockchain.</p>
+            </div>
+        </section>
+
+        <!-- ==================== FAQ ==================== -->
+        <section class="section section--alt" id="faq">
+            <div class="container">
+                <h2 class="section__title">FAQ</h2>
+                <p class="section__sub">Everything you need to know</p>
+                <div class="faq-list" id="faqList">
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            What is Chain-Assassin?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Chain-Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees are paid in ETH on Base blockchain, and the prize pool is split among the top players.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            How do kills work?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Each player is assigned a random target. Find them in the real world and scan the QR code on their shirt or badge using the app. The kill is verified instantly. You then receive a new random target from the remaining alive players.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            What happens when the zone shrinks?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Like battle royale games, the play zone shrinks over time on a predefined schedule. If you're outside the zone for more than 60 seconds, you're eliminated. The shrinking zone forces players closer together, creating more encounters and faster-paced gameplay as the match progresses.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            How are prizes distributed?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>90% of all entry fees go to the prize pool. 1st place wins 40%, 2nd place wins 15%, and 3rd place wins 10%. The remaining 10% is the platform fee. Use the prize calculator above to see exact payouts for different game configurations.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            What blockchain does it use?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Chain-Assassin runs on Base, an Ethereum Layer 2 blockchain. Base offers low transaction fees, fast confirmations, and the full security of Ethereum. All entry fees, prize distributions, and game records are on-chain.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            What if a game is cancelled?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>If the minimum player count isn't reached before the game start time, the game is automatically cancelled and all entry fees are refunded to players' wallets. No risk of losing funds on cancelled games.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            What are tactical items?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Tactical items are one-use abilities that give you a strategic edge. <strong>Ping Target</strong> reveals your target's approximate zone. <strong>Ping Hunter</strong> shows how close your hunter is. <strong>Ghost Mode</strong> makes you invisible for 2 minutes. <strong>Decoy Ping</strong> sends a fake location to mislead your hunter. <strong>EMP Blast</strong> disables your target's map for 30 seconds.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            Is GPS tracking required?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Yes. GPS is used to verify you're inside the play zone and to track zone boundaries. If your GPS signal is lost for an extended period, you'll be disqualified to ensure fair play for all participants.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            Can I spectate after elimination?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Yes! After being eliminated, you can switch to spectator mode. Watch the live leaderboard, follow the kill feed in real-time, and see how the remaining players battle it out for the prize pool.</p>
+                        </div>
+                    </div>
+                    <div class="faq-item">
+                        <button class="faq-item__q" aria-expanded="false">
+                            How do I host a game?
+                            <span class="faq-item__icon">+</span>
+                        </button>
+                        <div class="faq-item__a">
+                            <p>Game hosting is coming soon. Hosts will be able to create games with custom locations, zone sizes, entry fees, player caps, durations, and zone shrink schedules. Follow our social channels for updates.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="footer">
+        <div class="container footer__inner">
+            <div class="footer__brand">
+                <div class="nav__logo">
+                    <span class="nav__logo-chain">CHAIN</span><span class="nav__logo-assassin">ASSASSIN</span>
+                </div>
+                <p class="footer__tagline">Hunt or be hunted. On-chain.</p>
+            </div>
+            <div class="footer__links">
+                <a href="https://x.com/assassin_chain" target="_blank" rel="noopener">Twitter / X</a>
+                <a href="https://discord.gg/SayMP2cJsp" target="_blank" rel="noopener">Discord</a>
+                <a href="https://github.com/kalinbas/chain-assassin" target="_blank" rel="noopener">GitHub</a>
+            </div>
+            <div class="footer__base">
+                <span class="footer__base-badge">Built on Base</span>
+            </div>
+            <p class="footer__copy">&copy; 2026 Chain-Assassin. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script src="js/main.js"></script>
+</body>
+</html>
