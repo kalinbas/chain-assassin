@@ -183,10 +183,12 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         if (config.bps2nd > 0) {
             require(winner2 != address(0), "Winner2 zero address");
             require(isRegistered[gameId][winner2], "Winner2 not registered");
+            require(winner2 != winner1, "Winner2 same as winner1");
         }
         if (config.bps3rd > 0) {
             require(winner3 != address(0), "Winner3 zero address");
             require(isRegistered[gameId][winner3], "Winner3 not registered");
+            require(winner3 != winner1 && winner3 != winner2, "Winner3 not unique");
         }
         if (config.bpsKills > 0) {
             require(topKiller != address(0), "TopKiller zero address");

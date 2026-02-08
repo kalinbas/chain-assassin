@@ -102,23 +102,34 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         assertApproxEqAbs(sum, total, 4); // at most 4 wei dust from rounding
     }
 
-    function test_samePlayerAllThreeWinnerSlots() public {
-        // player1 is winner1, winner2, winner3, and topKiller
+    function test_endGame_revertsIfWinner2SameAsWinner1() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         vm.prank(operator);
         game.startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player1, player1, player1);
+        vm.expectRevert("Winner2 same as winner1");
+        game.endGame(gameId, player1, player1, player3, player1);
+    }
 
-        // player1 gets 40% + 15% + 10% + 25% = 90%
-        uint256 total = 0.15 ether; // 3 * 0.05
-        uint256 expected = total * (4000 + 1500 + 1000 + 2500) / 10000;
+    function test_endGame_revertsIfWinner3SameAsWinner1() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        vm.prank(operator);
+        game.startGame(gameId);
 
-        uint256 balBefore = player1.balance;
-        vm.prank(player1);
-        game.claimPrize(gameId);
-        assertEq(player1.balance - balBefore, expected);
+        vm.prank(operator);
+        vm.expectRevert("Winner3 not unique");
+        game.endGame(gameId, player1, player2, player1, player1);
+    }
+
+    function test_endGame_revertsIfWinner3SameAsWinner2() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        vm.prank(operator);
+        game.startGame(gameId);
+
+        vm.prank(operator);
+        vm.expectRevert("Winner3 not unique");
+        game.endGame(gameId, player1, player2, player2, player1);
     }
 
     // ============ Platform Fee Tests ============
