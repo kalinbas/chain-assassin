@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Game Details — Chain-Assassin</title>
+    <meta name="description" content="View game details, prize breakdown, and zone schedule for this Chain-Assassin game.">
+
+    <!-- Open Graph -->
+    <meta property="og:title" content="Chain-Assassin — Game Details">
+    <meta property="og:description" content="Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on Base.">
+    <meta property="og:image" content="media/banner.png">
+    <meta property="og:type" content="website">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <!-- Leaflet map -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" crossorigin="">
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" crossorigin=""></script>
+
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+    <!-- ==================== NAV ==================== -->
+    <header class="nav" id="nav">
+        <div class="nav__inner">
+            <a href="index.html" class="nav__logo">
+                <span class="nav__logo-chain">CHAIN</span><span class="nav__logo-assassin">ASSASSIN</span>
+            </a>
+            <nav class="nav__links" id="navLinks">
+                <a href="index.html#games">Games</a>
+                <a href="index.html#how-it-works">How It Works</a>
+                <a href="index.html#features">Features</a>
+                <a href="index.html#screenshots">Screenshots</a>
+                <a href="index.html#prizes">Prizes</a>
+                <a href="index.html#faq">FAQ</a>
+            </nav>
+            <a href="#" class="btn btn--primary nav__cta">Download App</a>
+            <button class="nav__hamburger" id="hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="game-detail" id="gameDetail">
+            <!-- Content populated by JS -->
+        </div>
+    </main>
+
+    <!-- ==================== FOOTER ==================== -->
+    <footer class="footer">
+        <div class="container footer__inner">
+            <div class="footer__brand">
+                <div class="nav__logo">
+                    <span class="nav__logo-chain">CHAIN</span><span class="nav__logo-assassin">ASSASSIN</span>
+                </div>
+                <p class="footer__tagline">Hunt or be hunted. On-chain.</p>
+            </div>
+            <div class="footer__links">
+                <a href="https://x.com/assassin_chain" target="_blank" rel="noopener">Twitter / X</a>
+                <a href="https://discord.gg/SayMP2cJsp" target="_blank" rel="noopener">Discord</a>
+                <a href="https://github.com/kalinbas/chain-assassin" target="_blank" rel="noopener">GitHub</a>
+            </div>
+            <div class="footer__base">
+                <span class="footer__base-badge">Built on Base</span>
+            </div>
+            <p class="footer__copy">&copy; 2026 Chain-Assassin. All rights reserved.</p>
+        </div>
+    </footer>
+
+    <script>
+    /* ========================================
+       Chain-Assassin — Game Detail Page
+       ======================================== */
+
+    const GAMES = {
+        1: {
+            title: "Chain-Assassin CDMX #48",
+            entryFee: 0.05,
+            location: "Mexico City Centro",
+            date: "Feb 15, 2026 · 16:00",
+            players: 87,
+            maxPlayers: 100,
+            minPlayers: 10,
+            registrationDeadline: "Feb 15, 2026 · 15:30",
+            expiryDeadline: "Feb 15, 2026 · 18:00",
+            centerLat: 19.4326,
+            centerLng: -99.1332,
+            bps: { first: 4000, second: 1500, third: 1000, kills: 2500, platform: 1000 },
+            zoneShrinks: [
+                { atSecond: 0, radiusMeters: 2000 },
+                { atSecond: 600, radiusMeters: 1500 },
+                { atSecond: 1200, radiusMeters: 1000 },
+                { atSecond: 1800, radiusMeters: 500 },
+                { atSecond: 2400, radiusMeters: 250 },
+                { atSecond: 3000, radiusMeters: 100 },
+            ],
+            phase: "registration",
+            creator: "0x1234567890abcdef1234567890abcdef12345678",
+            activity: [
+                { date: "Feb 9, 12:34", text: "0xA3f1...9c02 registered", type: "register", txHash: "0xa3f19c02e8b7d6c5a4b3e2f1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1" },
+                { date: "Feb 9, 11:18", text: "0x7bE2...4d11 registered", type: "register", txHash: "0x7be24d11c3a2b1e0f9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6" },
+                { date: "Feb 8, 22:05", text: "0xCd94...a8f3 registered", type: "register", txHash: "0xcd94a8f3b7e6d5c4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0" },
+                { date: "Feb 8, 19:41", text: "0x52aB...1e77 registered", type: "register", txHash: "0x52ab1e77d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1" },
+                { date: "Feb 8, 16:12", text: "0xFe08...b5c2 registered", type: "register", txHash: "0xfe08b5c2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4" },
+                { date: "Feb 8, 14:30", text: "0x91D3...7a4e registered", type: "register", txHash: "0x91d37a4ef6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9" },
+                { date: "Feb 7, 09:15", text: "Game created", type: "create", txHash: "0x0001a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1" }
+            ]
+        },
+        2: {
+            title: "Chain-Assassin NYC #12",
+            entryFee: 0.10,
+            location: "Midtown Manhattan",
+            date: "Feb 16, 2026 · 14:00",
+            players: 62,
+            maxPlayers: 100,
+            minPlayers: 10,
+            registrationDeadline: "Feb 16, 2026 · 13:30",
+            expiryDeadline: "Feb 16, 2026 · 16:00",
+            centerLat: 40.7549,
+            centerLng: -73.9840,
+            bps: { first: 4000, second: 1500, third: 1000, kills: 2500, platform: 1000 },
+            zoneShrinks: [
+                { atSecond: 0, radiusMeters: 1500 },
+                { atSecond: 600, radiusMeters: 1000 },
+                { atSecond: 1200, radiusMeters: 700 },
+                { atSecond: 1800, radiusMeters: 400 },
+                { atSecond: 2400, radiusMeters: 200 },
+                { atSecond: 3000, radiusMeters: 80 },
+            ],
+            phase: "registration",
+            creator: "0xabcdef1234567890abcdef1234567890abcdef12",
+            activity: [
+                { date: "Feb 9, 10:02", text: "0x4Fa9...2c81 registered", type: "register", txHash: "0x4fa92c81b3e6d5c4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0" },
+                { date: "Feb 9, 08:45", text: "0xB1c7...e3f0 registered", type: "register", txHash: "0xb1c7e3f0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2" },
+                { date: "Feb 8, 23:30", text: "0x8De5...6b19 registered", type: "register", txHash: "0x8de56b19c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0" },
+                { date: "Feb 8, 20:11", text: "0x3Af2...d047 registered", type: "register", txHash: "0x3af2d047e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8" },
+                { date: "Feb 8, 17:55", text: "0xE6b8...9a23 registered", type: "register", txHash: "0xe6b89a23d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5" },
+                { date: "Feb 7, 14:20", text: "Game created", type: "create", txHash: "0x0002f1e2d3c4b5a6f7e8d9c0b1a2f3e4d5c6b7a8f9e0d1c2b3a4f5e6d7c8b9a0" }
+            ]
+        },
+        3: {
+            title: "Chain-Assassin Berlin #5",
+            entryFee: 0.02,
+            location: "Berlin Mitte",
+            date: "Feb 17, 2026 · 10:00",
+            players: 34,
+            maxPlayers: 50,
+            minPlayers: 8,
+            registrationDeadline: "Feb 17, 2026 · 09:30",
+            expiryDeadline: "Feb 17, 2026 · 12:00",
+            centerLat: 52.5200,
+            centerLng: 13.4050,
+            bps: { first: 4000, second: 1500, third: 1000, kills: 2500, platform: 1000 },
+            zoneShrinks: [
+                { atSecond: 0, radiusMeters: 2000 },
+                { atSecond: 900, radiusMeters: 1200 },
+                { atSecond: 1800, radiusMeters: 600 },
+                { atSecond: 2700, radiusMeters: 300 },
+                { atSecond: 3600, radiusMeters: 100 },
+            ],
+            phase: "registration",
+            creator: "0x9876543210fedcba9876543210fedcba98765432",
+            activity: [
+                { date: "Feb 9, 09:12", text: "0x2Cb6...f194 registered", type: "register", txHash: "0x2cb6f194a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8" },
+                { date: "Feb 8, 21:48", text: "0xD7e1...3a85 registered", type: "register", txHash: "0xd7e13a85f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3" },
+                { date: "Feb 8, 18:33", text: "0x5Fc9...b2d6 registered", type: "register", txHash: "0x5fc9b2d6c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4" },
+                { date: "Feb 8, 15:07", text: "0xA4d2...8e71 registered", type: "register", txHash: "0xa4d28e71b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1" },
+                { date: "Feb 7, 11:45", text: "Game created", type: "create", txHash: "0x0003c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3" }
+            ]
+        }
+    };
+
+    const PHASE_LABELS = {
+        registration: { label: "Registration Open", class: "registration" },
+        active: { label: "Active", class: "active" },
+        ended: { label: "Ended", class: "ended" },
+        cancelled: { label: "Cancelled", class: "cancelled" }
+    };
+
+    // SVG icon helpers
+    const ICONS = {
+        eth: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+        players: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+        minPlayers: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>',
+        clock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+        calendar: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+        trophy: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polygon points="12,2 15.09,8.26 22,9.27 17,14.14 18.18,21.02 12,17.77 5.82,21.02 7,14.14 2,9.27 8.91,8.26"/></svg>',
+        pin: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>',
+        user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>',
+        share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
+        back: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><polyline points="15 18 9 12 15 6"/></svg>'
+    };
+
+    function formatSeconds(s) {
+        const m = Math.floor(s / 60);
+        const sec = s % 60;
+        return m + ':' + String(sec).padStart(2, '0');
+    }
+
+    function truncateAddress(addr) {
+        return addr.slice(0, 6) + '...' + addr.slice(-4);
+    }
+
+    function renderGame(game, gameId) {
+        const phase = PHASE_LABELS[game.phase] || PHASE_LABELS.registration;
+        const prizePool = (game.players * game.entryFee * 0.9).toFixed(3);
+        const fillPct = Math.round((game.players / game.maxPlayers) * 100);
+
+        // Calculate prize amounts
+        const totalPool = game.players * game.entryFee;
+        const prizes = {
+            first: (totalPool * game.bps.first / 10000).toFixed(4),
+            second: (totalPool * game.bps.second / 10000).toFixed(4),
+            third: (totalPool * game.bps.third / 10000).toFixed(4),
+            kills: (totalPool * game.bps.kills / 10000).toFixed(4),
+            platform: (totalPool * game.bps.platform / 10000).toFixed(4)
+        };
+
+        return `
+            <a href="index.html#games" class="game-detail__back">${ICONS.back} Back to Games</a>
+
+            <div class="game-detail__header">
+                <h1 class="game-detail__title">${game.title}</h1>
+                <span class="game-detail__badge game-detail__badge--${phase.class}">${phase.label}</span>
+            </div>
+
+            <div class="game-detail__grid">
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.eth} Entry Fee</div>
+                    <div class="game-detail__stat-value game-detail__stat-value--primary">${game.entryFee} ETH</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.trophy} Prize Pool</div>
+                    <div class="game-detail__stat-value game-detail__stat-value--primary">${prizePool} ETH</div>
+                </div>
+                <div class="game-detail__stat game-detail__stat--wide">
+                    <div class="game-detail__stat-label">${ICONS.players} Players</div>
+                    <div class="game-detail__stat-value">${game.players} / ${game.maxPlayers}</div>
+                    <div class="game-detail__players-bar">
+                        <div class="game-detail__players-bar-fill" style="width: ${fillPct}%"></div>
+                    </div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.minPlayers} Min Players</div>
+                    <div class="game-detail__stat-value">${game.minPlayers}</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.pin} Location</div>
+                    <div class="game-detail__stat-value">${game.location}</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.calendar} Game Date</div>
+                    <div class="game-detail__stat-value">${game.date}</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.clock} Registration Deadline</div>
+                    <div class="game-detail__stat-value">${game.registrationDeadline}</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.clock} Expiry Deadline</div>
+                    <div class="game-detail__stat-value">${game.expiryDeadline}</div>
+                </div>
+                <div class="game-detail__stat">
+                    <div class="game-detail__stat-label">${ICONS.user} Creator</div>
+                    <div class="game-detail__stat-value">${truncateAddress(game.creator)}</div>
+                </div>
+            </div>
+
+            <div class="game-detail__map-section">
+                <h3 class="game-detail__section-title">Game Zone</h3>
+                <div class="game-detail__map" id="gameMap"></div>
+                <p class="game-detail__map-caption">${game.location} — ${game.zoneShrinks[0].radiusMeters >= 1000 ? (game.zoneShrinks[0].radiusMeters / 1000).toFixed(1) + ' km' : game.zoneShrinks[0].radiusMeters + ' m'} initial radius</p>
+            </div>
+
+            <div class="game-detail__two-col">
+                <div class="game-detail__prizes">
+                    <h3 class="game-detail__section-title">Prize Breakdown</h3>
+                    ${renderPrizeRow('1st Place', game.bps.first, prizes.first, '1st')}
+                    ${renderPrizeRow('2nd Place', game.bps.second, prizes.second, '2nd')}
+                    ${renderPrizeRow('3rd Place', game.bps.third, prizes.third, '3rd')}
+                    ${renderPrizeRow('Top Killer', game.bps.kills, prizes.kills, 'kills')}
+                    ${renderPrizeRow('Platform', game.bps.platform, prizes.platform, 'platform')}
+                </div>
+                <div class="game-detail__schedule">
+                    <h3 class="game-detail__section-title">Zone Schedule</h3>
+                    <table class="game-detail__schedule-table">
+                        <thead>
+                            <tr>
+                                <th>Time</th>
+                                <th>Radius</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${game.zoneShrinks.map(z => `
+                                <tr>
+                                    <td>${formatSeconds(z.atSecond)}</td>
+                                    <td>${z.radiusMeters >= 1000 ? (z.radiusMeters / 1000).toFixed(1) + ' km' : z.radiusMeters + ' m'}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="game-detail__activity">
+                <h3 class="game-detail__section-title">Latest Activity</h3>
+                <div class="game-detail__activity-list">
+                    ${game.activity.map(a => `
+                        <div class="game-detail__activity-item">
+                            <span class="game-detail__activity-dot game-detail__activity-dot--${a.type}"></span>
+                            <span class="game-detail__activity-text">${a.text}</span>
+                            <span class="game-detail__activity-time">${a.date}</span>
+                            <a href="https://sepolia.basescan.org/tx/${a.txHash}" class="game-detail__activity-tx" target="_blank" rel="noopener">tx &#8599;</a>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+
+            <div class="game-detail__actions">
+                <a href="#" class="btn btn--primary btn--lg">Download App to Join</a>
+                <button class="game-detail__share" onclick="shareGame()">
+                    ${ICONS.share} Share Game
+                </button>
+            </div>
+        `;
+    }
+
+    function renderPrizeRow(label, bps, amount, modifier) {
+        const pct = (bps / 100).toFixed(0);
+        return `
+            <div class="game-detail__prize-row">
+                <span class="game-detail__prize-label">${label}</span>
+                <div class="game-detail__prize-bar">
+                    <div class="game-detail__prize-fill game-detail__prize-fill--${modifier}" style="width: ${pct}%">${pct}%</div>
+                </div>
+                <span class="game-detail__prize-amount">${amount} ETH</span>
+            </div>
+        `;
+    }
+
+    function renderNotFound() {
+        return `
+            <div class="game-detail__not-found">
+                <h2>Game Not Found</h2>
+                <p>This game doesn't exist or the link may be incorrect.</p>
+                <a href="index.html#games" class="btn btn--primary">Browse Games</a>
+            </div>
+        `;
+    }
+
+    function initMap(game) {
+        const mapEl = document.getElementById('gameMap');
+        if (!mapEl || typeof L === 'undefined') return;
+
+        const initialRadius = game.zoneShrinks[0].radiusMeters;
+
+        const map = L.map('gameMap', {
+            center: [game.centerLat, game.centerLng],
+            zoom: 14,
+            scrollWheelZoom: false,
+            attributionControl: true
+        });
+
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/">CARTO</a>',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(map);
+
+        // Initial zone circle
+        L.circle([game.centerLat, game.centerLng], {
+            radius: initialRadius,
+            color: '#00FF88',
+            weight: 2,
+            opacity: 0.8,
+            fillColor: '#00FF88',
+            fillOpacity: 0.08
+        }).addTo(map);
+
+        // Final zone circle
+        const finalRadius = game.zoneShrinks[game.zoneShrinks.length - 1].radiusMeters;
+        if (finalRadius !== initialRadius) {
+            L.circle([game.centerLat, game.centerLng], {
+                radius: finalRadius,
+                color: '#FF3B3B',
+                weight: 1,
+                opacity: 0.5,
+                dashArray: '6, 4',
+                fillColor: '#FF3B3B',
+                fillOpacity: 0.05
+            }).addTo(map);
+        }
+
+        // Center marker
+        L.circleMarker([game.centerLat, game.centerLng], {
+            radius: 5,
+            color: '#00FF88',
+            fillColor: '#00FF88',
+            fillOpacity: 1,
+            weight: 0
+        }).addTo(map);
+
+        // Fit map to show the full initial zone with some padding
+        const bounds = L.latLng(game.centerLat, game.centerLng).toBounds(initialRadius * 2.5);
+        map.fitBounds(bounds);
+    }
+
+    function shareGame() {
+        const url = window.location.href;
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(url).then(() => {
+                const btn = document.querySelector('.game-detail__share');
+                const original = btn.innerHTML;
+                btn.innerHTML = ICONS.share + ' Copied!';
+                setTimeout(() => { btn.innerHTML = original; }, 2000);
+            });
+        }
+    }
+
+    // Init
+    document.addEventListener('DOMContentLoaded', () => {
+        const container = document.getElementById('gameDetail');
+        const params = new URLSearchParams(window.location.search);
+        const gameId = params.get('id');
+        const game = GAMES[gameId];
+
+        if (game) {
+            document.title = game.title + ' — Chain-Assassin';
+            container.innerHTML = renderGame(game, gameId);
+            initMap(game);
+        } else {
+            container.innerHTML = renderNotFound();
+        }
+
+        // Hamburger menu
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.getElementById('navLinks');
+        if (hamburger && navLinks) {
+            hamburger.addEventListener('click', () => {
+                hamburger.classList.toggle('active');
+                navLinks.classList.toggle('open');
+                document.body.style.overflow = navLinks.classList.contains('open') ? 'hidden' : '';
+            });
+            navLinks.querySelectorAll('a').forEach(link => {
+                link.addEventListener('click', () => {
+                    hamburger.classList.remove('active');
+                    navLinks.classList.remove('open');
+                    document.body.style.overflow = '';
+                });
+            });
+        }
+    });
+    </script>
+</body>
+</html>

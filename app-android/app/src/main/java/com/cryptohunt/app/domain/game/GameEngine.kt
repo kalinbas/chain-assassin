@@ -158,7 +158,7 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return KillResult.NoGame
         val target = current.currentTarget ?: return KillResult.NoTarget
 
-        // Parse payload: "cryptohunt:gameId:playerId"
+        // Parse payload: "ca:gameId:playerNumber"
         val parts = scannedPayload.split(":")
         val scannedPlayerId = if (parts.size >= 3) parts[2] else scannedPayload
 
@@ -237,13 +237,13 @@ class GameEngine @Inject constructor() {
     fun debugVerifyCheckIn(): CheckInResult {
         val current = _state.value ?: return CheckInResult.NoGame
         val checkedInPlayer = checkedInPlayerIds.firstOrNull() ?: return CheckInResult.NoGame
-        return processCheckInScan("cryptohunt:debug:$checkedInPlayer")
+        return processCheckInScan(checkedInPlayer)
     }
 
     fun debugScanTarget(): KillResult {
         val current = _state.value ?: return KillResult.NoGame
         val target = current.currentTarget ?: return KillResult.NoTarget
-        return processKill("cryptohunt:debug:${target.player.id}")
+        return processKill(target.player.id)
     }
 
     // --- Debug Controls ---

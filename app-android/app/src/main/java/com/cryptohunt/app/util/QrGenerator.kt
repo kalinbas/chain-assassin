@@ -24,15 +24,33 @@ object QrGenerator {
         return bitmap
     }
 
-    /** Build a QR payload for this player. */
-    fun buildPayload(gameId: String, playerId: String): String {
-        return "cryptohunt:$gameId:$playerId"
+    // QR encoding: gameId * 10000 + playerNumber, obfuscated with multiplicative cipher
+    private const val QR_MULTIPLIER = 10000L
+    private const val QR_PRIME = 2147483647L       // 2^31 - 1
+    private const val QR_SCRAMBLE = 1588635695L    // multiplier
+    private const val QR_UNSCRAMBLE = 1799631288L  // modular inverse
+
+    /**
+     * Build an obfuscated pure numeric QR payload.
+     * Output is a random-looking 9-10 digit number in QR numeric mode.
+     */
+    fun buildPayload(gameId: Int, playerNumber: Int): String {
+        val n = gameId.toLong() * QR_MULTIPLIER + playerNumber
+        val scrambled = (n * QR_SCRAMBLE) % QR_PRIME
+        return scrambled.toString()
     }
 
-    /** Parse a scanned QR payload. Returns (gameId, playerId) or null. */
+    /**
+     * Parse an obfuscated numeric QR payload.
+     * Returns (gameId, playerNumber) as strings, or null if invalid.
+     */
     fun parsePayload(raw: String): Pair<String, String>? {
-        val parts = raw.split(":")
-        if (parts.size < 3 || parts[0] != "cryptohunt") return null
-        return parts[1] to parts[2]
+        val scrambled = raw.toLongOrNull() ?: return null
+        if (scrambled < 1) return null
+        val original = (scrambled * QR_UNSCRAMBLE) % QR_PRIME
+        val playerNumber = (original % QR_MULTIPLIER).toInt()
+        val gameId = (original / QR_MULTIPLIER).toInt()
+        if (gameId < 1 || playerNumber < 1) return null
+        return gameId.toString() to playerNumber.toString()
     }
 }

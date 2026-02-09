@@ -25,12 +25,11 @@ object QrPdfGenerator {
      */
     fun generatePdf(
         context: Context,
-        gameId: String,
-        playerId: String,
+        gameId: Int,
         playerNumber: Int,
         gameName: String
     ): Uri {
-        val payload = QrGenerator.buildPayload(gameId, playerId)
+        val payload = QrGenerator.buildPayload(gameId, playerNumber)
         val qrBitmap = QrGenerator.generateQrBitmap(
             payload, 1024,
             foreground = Color.BLACK,

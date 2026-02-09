@@ -104,8 +104,8 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         vm.prank(operator);
         uint256 game2 = game.createGame(_defaultParams(), _defaultShrinks());
 
-        assertEq(game1, 0);
-        assertEq(game2, 1);
+        assertEq(game1, 1);
+        assertEq(game2, 2);
 
         // Register in both
         _registerPlayer(game1, player1);
@@ -254,7 +254,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
     function test_ownerCanActAsOperator() public {
         // Owner should be able to call operator functions directly
         uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
-        assertEq(gameId, 0);
+        assertEq(gameId, 1);
     }
 
     // ============ 1-Player Game (Only 1st Place) ============

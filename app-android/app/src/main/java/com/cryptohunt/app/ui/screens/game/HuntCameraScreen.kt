@@ -126,7 +126,7 @@ fun HuntCameraScreen(
                                     for (barcode in barcodes) {
                                         if (barcode.format == Barcode.FORMAT_QR_CODE) {
                                             val raw = barcode.rawValue ?: continue
-                                            if (raw.startsWith("cryptohunt:") && !scannedTarget && !killConfirmed) {
+                                            if (!scannedTarget && !killConfirmed) {
                                                 val parsed = QrGenerator.parsePayload(raw)
                                                 if (parsed != null) {
                                                     val targetId = gameState?.currentTarget?.player?.id ?: ""

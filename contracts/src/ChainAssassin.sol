@@ -12,7 +12,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
 
     // ============ Storage ============
 
-    uint256 public nextGameId;
+    uint256 public nextGameId = 1;
 
     mapping(uint256 => GameConfig) internal _gameConfigs;
     mapping(uint256 => GameState) internal _gameStates;

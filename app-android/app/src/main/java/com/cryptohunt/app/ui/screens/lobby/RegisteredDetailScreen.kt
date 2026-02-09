@@ -182,8 +182,7 @@ fun RegisteredDetailScreen(
                 onClick = {
                     val uri = QrPdfGenerator.generatePdf(
                         context = context,
-                        gameId = config.id,
-                        playerId = player.id,
+                        gameId = config.id.toIntOrNull() ?: 0,
                         playerNumber = player.number,
                         gameName = config.name
                     )

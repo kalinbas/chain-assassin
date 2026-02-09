@@ -103,7 +103,7 @@ fun CheckInCameraScreen(
                                     for (barcode in barcodes) {
                                         if (barcode.format == Barcode.FORMAT_QR_CODE) {
                                             val raw = barcode.rawValue ?: continue
-                                            if (raw.startsWith("cryptohunt:") && !verified) {
+                                            if (!verified && QrGenerator.parsePayload(raw) != null) {
                                                 val result = viewModel.processCheckInScan(raw)
                                                 when (result) {
                                                     is CheckInResult.Verified -> {
