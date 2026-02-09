@@ -30,12 +30,12 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     // ============ Modifiers ============
 
     modifier onlyOperator() {
-        require(isOperator[msg.sender] || msg.sender == owner(), "Not operator");
+        if (!isOperator[msg.sender] && msg.sender != owner()) revert NotOperator();
         _;
     }
 
     modifier inPhase(uint256 gameId, GamePhase phase) {
-        require(_gameStates[gameId].phase == phase, "Wrong phase");
+        if (_gameStates[gameId].phase != phase) revert WrongPhase();
         _;
     }
 
@@ -46,7 +46,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     // ============ Admin Functions ============
 
     function addOperator(address op) external onlyOwner {
-        require(op != address(0), "Zero address");
+        if (op == address(0)) revert ZeroAddress();
         isOperator[op] = true;
         emit OperatorAdded(op);
     }
@@ -57,12 +57,12 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     }
 
     function withdrawPlatformFees(address to) external onlyOwner nonReentrant {
-        require(to != address(0), "Zero address");
+        if (to == address(0)) revert ZeroAddress();
         uint256 amount = platformFeesAccrued;
-        require(amount > 0, "No fees");
+        if (amount == 0) revert NoFees();
         platformFeesAccrued = 0;
         (bool success,) = to.call{value: amount}("");
-        require(success, "Transfer failed");
+        if (!success) revert TransferFailed();
         emit PlatformFeesWithdrawn(to, amount);
     }
 
@@ -72,28 +72,27 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         CreateGameParams calldata params,
         ZoneShrink[] calldata shrinks
     ) external onlyOperator returns (uint256 gameId) {
-        require(params.maxPlayers >= params.minPlayers, "Max < min");
-        require(params.registrationDeadline > block.timestamp, "Deadline in past");
-        require(params.expiryDeadline > params.registrationDeadline, "Expiry before deadline");
-        require(
-            uint256(params.bps1st) + params.bps2nd + params.bps3rd + params.bpsKills + params.bpsPlatform == BPS_TOTAL,
-            "BPS must sum to 10000"
-        );
-        require(shrinks.length > 0, "Need shrink schedule");
+        if (params.maxPlayers < params.minPlayers) revert MaxLessThanMin();
+        if (params.registrationDeadline <= block.timestamp) revert DeadlineInPast();
+        if (params.expiryDeadline <= params.registrationDeadline) revert ExpiryBeforeDeadline();
+        if (uint256(params.bps1st) + params.bps2nd + params.bps3rd + params.bpsKills + params.bpsPlatform != BPS_TOTAL) {
+            revert BpsSumNot10000();
+        }
+        if (shrinks.length == 0) revert NoShrinkSchedule();
 
         // Validate prize tier hierarchy: higher tiers require lower tiers
-        require(params.bps1st > 0, "Need 1st place prize");
-        if (params.bps3rd > 0) require(params.bps2nd > 0, "Need 2nd if 3rd set");
+        if (params.bps1st == 0) revert NeedFirstPrize();
+        if (params.bps3rd > 0 && params.bps2nd == 0) revert Need2ndIf3rdSet();
 
         // Derive minimum required winners from BPS config
         uint16 requiredWinners = 1;
         if (params.bps2nd > 0) requiredWinners = 2;
         if (params.bps3rd > 0) requiredWinners = 3;
-        require(params.minPlayers >= requiredWinners, "Min players < prize slots");
+        if (params.minPlayers < requiredWinners) revert MinPlayersLessThanPrizeSlots();
 
         // Validate shrink schedule is ordered
         for (uint256 i = 1; i < shrinks.length; i++) {
-            require(shrinks[i].atSecond > shrinks[i - 1].atSecond, "Shrinks not ordered");
+            if (shrinks[i].atSecond <= shrinks[i - 1].atSecond) revert ShrinksNotOrdered();
         }
 
         gameId = nextGameId++;
@@ -131,7 +130,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     function startGame(uint256 gameId) external onlyOperator inPhase(gameId, GamePhase.REGISTRATION) {
         GameState storage state = _gameStates[gameId];
         GameConfig storage config = _gameConfigs[gameId];
-        require(state.playerCount >= config.minPlayers, "Not enough players");
+        if (state.playerCount < config.minPlayers) revert NotEnoughPlayers();
 
         state.phase = GamePhase.ACTIVE;
         emit GameStarted(gameId, state.playerCount);
@@ -142,11 +141,11 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         address hunter,
         address target
     ) external onlyOperator inPhase(gameId, GamePhase.ACTIVE) {
-        require(isRegistered[gameId][hunter], "Hunter not registered");
-        require(isRegistered[gameId][target], "Target not registered");
-        require(isAlive[gameId][hunter], "Hunter not alive");
-        require(isAlive[gameId][target], "Target not alive");
-        require(hunter != target, "Cannot self-kill");
+        if (!isRegistered[gameId][hunter]) revert HunterNotRegistered();
+        if (!isRegistered[gameId][target]) revert TargetNotRegistered();
+        if (!isAlive[gameId][hunter]) revert HunterNotAlive();
+        if (!isAlive[gameId][target]) revert TargetNotAlive();
+        if (hunter == target) revert CannotSelfKill();
 
         killCount[gameId][hunter]++;
         isAlive[gameId][target] = false;
@@ -159,8 +158,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         uint256 gameId,
         address player
     ) external onlyOperator inPhase(gameId, GamePhase.ACTIVE) {
-        require(isRegistered[gameId][player], "Not registered");
-        require(isAlive[gameId][player], "Not alive");
+        if (!isRegistered[gameId][player]) revert PlayerNotRegistered();
+        if (!isAlive[gameId][player]) revert PlayerNotAlive();
 
         isAlive[gameId][player] = false;
 
@@ -177,22 +176,22 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         GameConfig storage config = _gameConfigs[gameId];
 
         // Winner required when their BPS > 0, address(0) allowed when BPS == 0
-        require(winner1 != address(0), "Winner1 zero address");
-        require(isRegistered[gameId][winner1], "Winner1 not registered");
+        if (winner1 == address(0)) revert WinnerZeroAddress();
+        if (!isRegistered[gameId][winner1]) revert WinnerNotRegistered();
 
         if (config.bps2nd > 0) {
-            require(winner2 != address(0), "Winner2 zero address");
-            require(isRegistered[gameId][winner2], "Winner2 not registered");
-            require(winner2 != winner1, "Winner2 same as winner1");
+            if (winner2 == address(0)) revert WinnerZeroAddress();
+            if (!isRegistered[gameId][winner2]) revert WinnerNotRegistered();
+            if (winner2 == winner1) revert WinnersNotUnique();
         }
         if (config.bps3rd > 0) {
-            require(winner3 != address(0), "Winner3 zero address");
-            require(isRegistered[gameId][winner3], "Winner3 not registered");
-            require(winner3 != winner1 && winner3 != winner2, "Winner3 not unique");
+            if (winner3 == address(0)) revert WinnerZeroAddress();
+            if (!isRegistered[gameId][winner3]) revert WinnerNotRegistered();
+            if (winner3 == winner1 || winner3 == winner2) revert WinnersNotUnique();
         }
         if (config.bpsKills > 0) {
-            require(topKiller != address(0), "TopKiller zero address");
-            require(isRegistered[gameId][topKiller], "TopKiller not registered");
+            if (topKiller == address(0)) revert TopKillerZeroAddress();
+            if (!isRegistered[gameId][topKiller]) revert TopKillerNotRegistered();
         }
 
         GameState storage state = _gameStates[gameId];
@@ -217,10 +216,10 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         GameConfig storage config = _gameConfigs[gameId];
         GameState storage state = _gameStates[gameId];
 
-        require(block.timestamp <= config.registrationDeadline, "Registration closed");
-        require(msg.value == config.entryFee, "Wrong entry fee");
-        require(state.playerCount < config.maxPlayers, "Game full");
-        require(!isRegistered[gameId][msg.sender], "Already registered");
+        if (block.timestamp > config.registrationDeadline) revert RegistrationClosed();
+        if (msg.value != config.entryFee) revert WrongEntryFee();
+        if (state.playerCount >= config.maxPlayers) revert GameFull();
+        if (isRegistered[gameId][msg.sender]) revert AlreadyRegistered();
 
         isRegistered[gameId][msg.sender] = true;
         isAlive[gameId][msg.sender] = true;
@@ -234,8 +233,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         GameConfig storage config = _gameConfigs[gameId];
         GameState storage state = _gameStates[gameId];
 
-        require(block.timestamp > config.registrationDeadline, "Deadline not passed");
-        require(state.playerCount < config.minPlayers, "Enough players");
+        if (block.timestamp <= config.registrationDeadline) revert DeadlineNotPassed();
+        if (state.playerCount >= config.minPlayers) revert EnoughPlayers();
 
         state.phase = GamePhase.CANCELLED;
         emit GameCancelled(gameId);
@@ -244,29 +243,29 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     function triggerExpiry(uint256 gameId) external inPhase(gameId, GamePhase.ACTIVE) {
         GameConfig storage config = _gameConfigs[gameId];
 
-        require(block.timestamp > config.expiryDeadline, "Not expired yet");
+        if (block.timestamp <= config.expiryDeadline) revert NotExpiredYet();
 
         _gameStates[gameId].phase = GamePhase.CANCELLED;
         emit GameCancelled(gameId);
     }
 
     function claimPrize(uint256 gameId) external nonReentrant inPhase(gameId, GamePhase.ENDED) {
-        require(!hasClaimed[gameId][msg.sender], "Already claimed");
+        if (hasClaimed[gameId][msg.sender]) revert AlreadyClaimed();
 
         uint256 amount = getClaimableAmount(gameId, msg.sender);
-        require(amount > 0, "No prize");
+        if (amount == 0) revert NoPrize();
 
         hasClaimed[gameId][msg.sender] = true;
 
         (bool success,) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
+        if (!success) revert TransferFailed();
 
         emit PrizeClaimed(gameId, msg.sender, amount);
     }
 
     function claimRefund(uint256 gameId) external nonReentrant inPhase(gameId, GamePhase.CANCELLED) {
-        require(isRegistered[gameId][msg.sender], "Not registered");
-        require(!hasClaimed[gameId][msg.sender], "Already claimed");
+        if (!isRegistered[gameId][msg.sender]) revert PlayerNotRegistered();
+        if (hasClaimed[gameId][msg.sender]) revert AlreadyClaimed();
 
         GameConfig storage config = _gameConfigs[gameId];
         uint256 amount = config.entryFee;
@@ -274,7 +273,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         hasClaimed[gameId][msg.sender] = true;
 
         (bool success,) = msg.sender.call{value: amount}("");
-        require(success, "Transfer failed");
+        if (!success) revert TransferFailed();
 
         emit RefundClaimed(gameId, msg.sender, amount);
     }

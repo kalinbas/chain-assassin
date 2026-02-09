@@ -40,7 +40,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
     function test_createGame_revertsIfNotOperator() public {
         vm.prank(player1);
-        vm.expectRevert("Not operator");
+        vm.expectRevert(IChainAssassin.NotOperator.selector);
         game.createGame(_defaultParams(), _defaultShrinks());
     }
 
@@ -48,14 +48,14 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         IChainAssassin.CreateGameParams memory params = _defaultParams();
         params.bps1st = 5000; // sum = 11000
         vm.prank(operator);
-        vm.expectRevert("BPS must sum to 10000");
+        vm.expectRevert(IChainAssassin.BpsSumNot10000.selector);
         game.createGame(params, _defaultShrinks());
     }
 
     function test_createGame_revertsIfNoShrinks() public {
         IChainAssassin.ZoneShrink[] memory empty = new IChainAssassin.ZoneShrink[](0);
         vm.prank(operator);
-        vm.expectRevert("Need shrink schedule");
+        vm.expectRevert(IChainAssassin.NoShrinkSchedule.selector);
         game.createGame(_defaultParams(), empty);
     }
 
@@ -67,7 +67,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         params.bpsKills = 0;
         params.bpsPlatform = 10000;
         vm.prank(operator);
-        vm.expectRevert("Need 1st place prize");
+        vm.expectRevert(IChainAssassin.NeedFirstPrize.selector);
         game.createGame(params, _defaultShrinks());
     }
 
@@ -79,7 +79,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         params.bpsKills = 1000;
         params.bpsPlatform = 1000;
         vm.prank(operator);
-        vm.expectRevert("Need 2nd if 3rd set");
+        vm.expectRevert(IChainAssassin.Need2ndIf3rdSet.selector);
         game.createGame(params, _defaultShrinks());
     }
 
@@ -88,7 +88,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         IChainAssassin.CreateGameParams memory params = _defaultParams();
         params.minPlayers = 2; // too low for 3-tier prizes
         vm.prank(operator);
-        vm.expectRevert("Min players < prize slots");
+        vm.expectRevert(IChainAssassin.MinPlayersLessThanPrizeSlots.selector);
         game.createGame(params, _defaultShrinks());
     }
 
@@ -135,7 +135,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         params.minPlayers = 1;
         params.maxPlayers = 10;
         vm.prank(operator);
-        vm.expectRevert("Min players < prize slots");
+        vm.expectRevert(IChainAssassin.MinPlayersLessThanPrizeSlots.selector);
         game.createGame(params, _defaultShrinks());
     }
 
@@ -157,7 +157,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
     function test_register_revertsWrongFee() public {
         uint256 gameId = _createDefaultGame();
         vm.prank(player1);
-        vm.expectRevert("Wrong entry fee");
+        vm.expectRevert(IChainAssassin.WrongEntryFee.selector);
         game.register{value: 0.01 ether}(gameId);
     }
 
@@ -172,7 +172,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _registerPlayer(gameId, player3);
 
         vm.prank(player4);
-        vm.expectRevert("Game full");
+        vm.expectRevert(IChainAssassin.GameFull.selector);
         game.register{value: ENTRY_FEE}(gameId);
     }
 
@@ -181,7 +181,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _registerPlayer(gameId, player1);
 
         vm.prank(player1);
-        vm.expectRevert("Already registered");
+        vm.expectRevert(IChainAssassin.AlreadyRegistered.selector);
         game.register{value: ENTRY_FEE}(gameId);
     }
 
@@ -191,7 +191,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(player4);
-        vm.expectRevert("Wrong phase");
+        vm.expectRevert(IChainAssassin.WrongPhase.selector);
         game.register{value: ENTRY_FEE}(gameId);
     }
 
@@ -201,7 +201,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.warp(block.timestamp + 2 days);
 
         vm.prank(player1);
-        vm.expectRevert("Registration closed");
+        vm.expectRevert(IChainAssassin.RegistrationClosed.selector);
         game.register{value: ENTRY_FEE}(gameId);
     }
 
@@ -238,14 +238,14 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _registerPlayer(gameId, player2); // only 2, need 3
 
         vm.prank(operator);
-        vm.expectRevert("Not enough players");
+        vm.expectRevert(IChainAssassin.NotEnoughPlayers.selector);
         game.startGame(gameId);
     }
 
     function test_startGame_revertsIfNotOperator() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         vm.prank(player1);
-        vm.expectRevert("Not operator");
+        vm.expectRevert(IChainAssassin.NotOperator.selector);
         game.startGame(gameId);
     }
 
@@ -276,7 +276,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.recordKill(gameId, player1, player2);
 
         vm.prank(operator);
-        vm.expectRevert("Target not alive");
+        vm.expectRevert(IChainAssassin.TargetNotAlive.selector);
         game.recordKill(gameId, player3, player2);
     }
 
@@ -286,7 +286,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Cannot self-kill");
+        vm.expectRevert(IChainAssassin.CannotSelfKill.selector);
         game.recordKill(gameId, player1, player1);
     }
 
@@ -299,7 +299,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.recordKill(gameId, player2, player1);
 
         vm.prank(operator);
-        vm.expectRevert("Hunter not alive");
+        vm.expectRevert(IChainAssassin.HunterNotAlive.selector);
         game.recordKill(gameId, player1, player3);
     }
 
@@ -328,7 +328,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.eliminatePlayer(gameId, player1);
 
         vm.prank(operator);
-        vm.expectRevert("Not alive");
+        vm.expectRevert(IChainAssassin.PlayerNotAlive.selector);
         game.eliminatePlayer(gameId, player1);
     }
 
@@ -357,7 +357,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         address unregistered = address(0x99);
         vm.prank(operator);
-        vm.expectRevert("Winner1 not registered");
+        vm.expectRevert(IChainAssassin.WinnerNotRegistered.selector);
         game.endGame(gameId, unregistered, player2, player3, player1);
     }
 
@@ -367,7 +367,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner1 zero address");
+        vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
         game.endGame(gameId, address(0), player2, player3, player1);
     }
 
@@ -378,7 +378,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner2 zero address");
+        vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
         game.endGame(gameId, player1, address(0), player3, player1);
     }
 
@@ -389,7 +389,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner3 zero address");
+        vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
         game.endGame(gameId, player1, player2, address(0), player1);
     }
 
@@ -400,7 +400,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("TopKiller zero address");
+        vm.expectRevert(IChainAssassin.TopKillerZeroAddress.selector);
         game.endGame(gameId, player1, player2, player3, address(0));
     }
 

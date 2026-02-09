@@ -164,7 +164,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         // Can't register a 4th
         vm.prank(player4);
-        vm.expectRevert("Game full");
+        vm.expectRevert(IChainAssassin.GameFull.selector);
         game.register{value: ENTRY_FEE}(gameId);
 
         // Can start
@@ -203,7 +203,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         vm.prank(operator);
         game.startGame(gameId);
 
-        vm.expectRevert("Not expired yet");
+        vm.expectRevert(IChainAssassin.NotExpiredYet.selector);
         game.triggerExpiry(gameId);
     }
 
@@ -213,7 +213,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         vm.warp(block.timestamp + 3 days);
 
-        vm.expectRevert("Wrong phase");
+        vm.expectRevert(IChainAssassin.WrongPhase.selector);
         game.triggerExpiry(gameId);
     }
 
@@ -230,7 +230,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         // Now try to trigger expiry after deadline
         vm.warp(block.timestamp + 3 days);
 
-        vm.expectRevert("Wrong phase");
+        vm.expectRevert(IChainAssassin.WrongPhase.selector);
         game.triggerExpiry(gameId);
     }
 
@@ -247,7 +247,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         assertFalse(game.isOperator(operator));
 
         vm.prank(operator);
-        vm.expectRevert("Not operator");
+        vm.expectRevert(IChainAssassin.NotOperator.selector);
         game.createGame(_defaultParams(), _defaultShrinks());
     }
 

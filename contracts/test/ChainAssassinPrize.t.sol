@@ -75,7 +75,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.claimPrize(gameId);
 
         vm.prank(player1);
-        vm.expectRevert("Already claimed");
+        vm.expectRevert(IChainAssassin.AlreadyClaimed.selector);
         game.claimPrize(gameId);
     }
 
@@ -83,7 +83,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         uint256 gameId = _setupEndedGame();
 
         vm.prank(player5);
-        vm.expectRevert("No prize");
+        vm.expectRevert(IChainAssassin.NoPrize.selector);
         game.claimPrize(gameId);
     }
 
@@ -108,7 +108,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner2 same as winner1");
+        vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
         game.endGame(gameId, player1, player1, player3, player1);
     }
 
@@ -118,7 +118,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner3 not unique");
+        vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
         game.endGame(gameId, player1, player2, player1, player1);
     }
 
@@ -128,7 +128,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.startGame(gameId);
 
         vm.prank(operator);
-        vm.expectRevert("Winner3 not unique");
+        vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
         game.endGame(gameId, player1, player2, player2, player1);
     }
 
@@ -197,7 +197,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
         _registerPlayer(gameId, player1);
 
-        vm.expectRevert("Deadline not passed");
+        vm.expectRevert(IChainAssassin.DeadlineNotPassed.selector);
         game.triggerCancellation(gameId);
     }
 
@@ -210,7 +210,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         vm.warp(block.timestamp + 2 days);
 
-        vm.expectRevert("Enough players");
+        vm.expectRevert(IChainAssassin.EnoughPlayers.selector);
         game.triggerCancellation(gameId);
     }
 
@@ -227,7 +227,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         vm.warp(block.timestamp + 2 days);
 
-        vm.expectRevert("Enough players");
+        vm.expectRevert(IChainAssassin.EnoughPlayers.selector);
         game.triggerCancellation(gameId);
     }
 
@@ -257,7 +257,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.claimRefund(gameId);
 
         vm.prank(player1);
-        vm.expectRevert("Already claimed");
+        vm.expectRevert(IChainAssassin.AlreadyClaimed.selector);
         game.claimRefund(gameId);
     }
 
@@ -270,7 +270,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.triggerCancellation(gameId);
 
         vm.prank(player2); // not registered
-        vm.expectRevert("Not registered");
+        vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
         game.claimRefund(gameId);
     }
 }

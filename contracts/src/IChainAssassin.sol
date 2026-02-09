@@ -62,6 +62,70 @@ interface IChainAssassin {
         uint16  bpsPlatform;
     }
 
+    // ============ Errors ============
+
+    // Access
+    error NotOperator();
+
+    // Phase
+    error WrongPhase();
+
+    // General
+    error ZeroAddress();
+    error TransferFailed();
+
+    // createGame
+    error MaxLessThanMin();
+    error DeadlineInPast();
+    error ExpiryBeforeDeadline();
+    error BpsSumNot10000();
+    error NoShrinkSchedule();
+    error NeedFirstPrize();
+    error Need2ndIf3rdSet();
+    error MinPlayersLessThanPrizeSlots();
+    error ShrinksNotOrdered();
+
+    // startGame
+    error NotEnoughPlayers();
+
+    // recordKill
+    error HunterNotRegistered();
+    error TargetNotRegistered();
+    error HunterNotAlive();
+    error TargetNotAlive();
+    error CannotSelfKill();
+
+    // eliminatePlayer
+    error PlayerNotRegistered();
+    error PlayerNotAlive();
+
+    // endGame
+    error WinnerZeroAddress();
+    error WinnerNotRegistered();
+    error WinnersNotUnique();
+    error TopKillerZeroAddress();
+    error TopKillerNotRegistered();
+
+    // register
+    error RegistrationClosed();
+    error WrongEntryFee();
+    error GameFull();
+    error AlreadyRegistered();
+
+    // triggerCancellation
+    error DeadlineNotPassed();
+    error EnoughPlayers();
+
+    // triggerExpiry
+    error NotExpiredYet();
+
+    // claimPrize / claimRefund
+    error AlreadyClaimed();
+    error NoPrize();
+
+    // withdrawPlatformFees
+    error NoFees();
+
     // ============ Events ============
 
     event GameCreated(
