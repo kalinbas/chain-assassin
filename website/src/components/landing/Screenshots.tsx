@@ -1,13 +1,15 @@
 import { Section } from '../layout/Section';
 import { useCarousel } from '../../hooks/useCarousel';
 
+const base = import.meta.env.BASE_URL;
+
 const SLIDES = [
-  { src: '/media/screen-welcome.jpg', alt: 'Welcome screen', label: 'Welcome' },
-  { src: '/media/screen-browser.jpg', alt: 'Game browser', label: 'Browse Games' },
-  { src: '/media/screen-detail.jpg', alt: 'Game details', label: 'Game Details' },
-  { src: '/media/screen-game.jpg', alt: 'Main game screen', label: 'In-Game HUD' },
-  { src: '/media/screen-items.jpg', alt: 'Tactical items', label: 'Tactical Items' },
-  { src: '/media/screen-spectator.jpg', alt: 'Spectator mode', label: 'Spectator Mode' },
+  { src: `${base}media/screen-welcome.jpg`, alt: 'Welcome screen', label: 'Welcome' },
+  { src: `${base}media/screen-browser.jpg`, alt: 'Game browser', label: 'Browse Games' },
+  { src: `${base}media/screen-detail.jpg`, alt: 'Game details', label: 'Game Details' },
+  { src: `${base}media/screen-game.jpg`, alt: 'Main game screen', label: 'In-Game HUD' },
+  { src: `${base}media/screen-items.jpg`, alt: 'Tactical items', label: 'Tactical Items' },
+  { src: `${base}media/screen-spectator.jpg`, alt: 'Spectator mode', label: 'Spectator Mode' },
 ];
 
 export function Screenshots() {

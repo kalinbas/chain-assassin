@@ -1,8 +1,10 @@
+const base = import.meta.env.BASE_URL;
+
 export function Hero() {
   return (
     <section className="hero" id="hero">
       <div className="hero__bg">
-        <img src="/media/banner.png" alt="Players hunting in a park with QR codes" className="hero__img" />
+        <img src={`${base}media/banner.png`} alt="Players hunting in a park with QR codes" className="hero__img" />
         <div className="hero__overlay" />
       </div>
       <div className="hero__content">
