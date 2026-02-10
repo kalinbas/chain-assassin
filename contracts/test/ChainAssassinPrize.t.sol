@@ -9,8 +9,8 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
     function test_claimPrize_winner1() public {
         uint256 gameId = _setupEndedGame();
         // 4 players * 0.05 ETH = 0.2 ETH total
-        // 1st = 40% of 0.2 = 0.08 ETH
-        uint256 expected = 0.2 ether * 4000 / 10000;
+        // 1st = 35% of 0.2 = 0.07 ETH
+        uint256 expected = 0.2 ether * 3500 / 10000;
 
         uint256 balBefore = player1.balance;
         vm.prank(player1);
@@ -40,7 +40,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
     function test_claimPrize_topKiller() public {
         uint256 gameId = _setupEndedGame();
-        uint256 expected = 0.2 ether * 2500 / 10000;
+        uint256 expected = 0.2 ether * 2000 / 10000;
 
         uint256 balBefore = player4.balance;
         vm.prank(player4);
@@ -51,16 +51,15 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
     function test_claimPrize_combinedWinner1AndTopKiller() public {
         uint256 gameId = _createAndRegisterPlayers(3);
 
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
 
         // player1 is both winner1 AND topKiller
         vm.prank(operator);
         game.endGame(gameId, player1, player2, player3, player1);
 
         // 3 players * 0.05 = 0.15 ETH total
-        // player1 gets 40% + 25% = 65%
-        uint256 expected = 0.15 ether * (4000 + 2500) / 10000;
+        // player1 gets 35% + 20% = 55%
+        uint256 expected = 0.15 ether * (3500 + 2000) / 10000;
 
         uint256 balBefore = player1.balance;
         vm.prank(player1);
@@ -87,7 +86,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.claimPrize(gameId);
     }
 
-    function test_allPrizesPlusPlatformSumCorrectly() public {
+    function test_allPrizesPlusFeesSumCorrectly() public {
         uint256 gameId = _setupEndedGame();
         uint256 total = 0.2 ether; // 4 * 0.05
 
@@ -95,17 +94,17 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         uint256 p2 = game.getClaimableAmount(gameId, player2);
         uint256 p3 = game.getClaimableAmount(gameId, player3);
         uint256 p4 = game.getClaimableAmount(gameId, player4);
-        uint256 platform = total * 1000 / 10000;
+        uint256 platform = game.platformFeesAccrued();
+        uint256 creator = game.creatorFeesAccrued(operator);
 
-        // Sum should equal total (with possible dust of a few wei)
-        uint256 sum = p1 + p2 + p3 + p4 + platform;
-        assertApproxEqAbs(sum, total, 4); // at most 4 wei dust from rounding
+        // Platform fee absorbs rounding dust, so sum must be exactly total
+        uint256 sum = p1 + p2 + p3 + p4 + platform + creator;
+        assertEq(sum, total);
     }
 
     function test_endGame_revertsIfWinner2SameAsWinner1() public {
         uint256 gameId = _createAndRegisterPlayers(3);
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
@@ -114,8 +113,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
     function test_endGame_revertsIfWinner3SameAsWinner1() public {
         uint256 gameId = _createAndRegisterPlayers(3);
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
@@ -124,8 +122,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
     function test_endGame_revertsIfWinner3SameAsWinner2() public {
         uint256 gameId = _createAndRegisterPlayers(3);
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
@@ -136,7 +133,14 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
     function test_platformFeeWithdraw() public {
         _setupEndedGame();
-        uint256 expectedFee = 0.2 ether * 1000 / 10000; // 10% of 0.2 ETH
+        // Platform fee is the remainder: total - prizes - creatorFee (absorbs rounding dust)
+        uint256 total = 0.2 ether; // 4 players * 0.05 ETH
+        uint256 prizes = total * 3500 / 10000  // bps1st
+                       + total * 1500 / 10000  // bps2nd
+                       + total * 1000 / 10000  // bps3rd
+                       + total * 2000 / 10000; // bpsKills
+        uint256 creatorFee = total * 1000 / 10000; // bpsCreator
+        uint256 expectedFee = total - prizes - creatorFee;
 
         assertEq(game.platformFeesAccrued(), expectedFee);
 
@@ -154,10 +158,10 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.withdrawPlatformFees(player1);
     }
 
-    function test_zeroPlatformFeeGame() public {
+    function test_zeroCreatorFeeGame() public {
         IChainAssassin.CreateGameParams memory params = _defaultParams();
-        params.bpsPlatform = 0;
-        params.bps1st = 5000; // adjust to sum 10000
+        params.bpsCreator = 0;
+        params.bps1st = 4500; // adjust to sum 9000 (+ 1000 platform = 10000)
         vm.prank(operator);
         uint256 gameId = game.createGame(params, _defaultShrinks());
 
@@ -165,12 +169,14 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         _registerPlayer(gameId, player2);
         _registerPlayer(gameId, player3);
 
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
         vm.prank(operator);
         game.endGame(gameId, player1, player2, player3, player1);
 
-        assertEq(game.platformFeesAccrued(), 0);
+        // Creator fees should be 0 (operator is the game creator)
+        assertEq(game.creatorFeesAccrued(operator), 0);
+        // Platform fees should still be accrued
+        assertTrue(game.platformFeesAccrued() > 0);
     }
 
     // ============ Refund Tests ============
@@ -272,5 +278,159 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         vm.prank(player2); // not registered
         vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
         game.claimRefund(gameId);
+    }
+
+    // ============ Creator Fee Tests ============
+
+    function test_creatorFeeAccrued() public {
+        _setupEndedGame();
+        // operator created the game; bpsCreator = 1000, total = 0.2 ETH
+        uint256 expectedCreatorFee = 0.2 ether * 1000 / 10000;
+        assertEq(game.creatorFeesAccrued(operator), expectedCreatorFee);
+    }
+
+    function test_creatorFeeWithdraw() public {
+        _setupEndedGame();
+        uint256 expectedCreatorFee = 0.2 ether * 1000 / 10000;
+
+        address feeRecipient = address(0xCCC);
+        uint256 balBefore = feeRecipient.balance;
+
+        vm.prank(operator);
+        game.withdrawCreatorFees(feeRecipient);
+
+        assertEq(feeRecipient.balance - balBefore, expectedCreatorFee);
+        assertEq(game.creatorFeesAccrued(operator), 0);
+    }
+
+    function test_creatorFeeWithdraw_revertsZeroAddress() public {
+        _setupEndedGame();
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.ZeroAddress.selector);
+        game.withdrawCreatorFees(address(0));
+    }
+
+    function test_creatorFeeWithdraw_revertsWhenNoFees() public {
+        vm.prank(player1);
+        vm.expectRevert(IChainAssassin.NoFees.selector);
+        game.withdrawCreatorFees(player1);
+    }
+
+    function test_creatorFeeWithdraw_multipleGames() public {
+        // Create and end two games, both by same operator
+        _setupEndedGame();                // game 1: 4 players × 0.05 = 0.2 ETH
+        uint256 gameId2 = _createAndRegisterPlayers(3);
+        _startGame(gameId2);
+        vm.prank(operator);
+        game.endGame(gameId2, player1, player2, player3, player1);
+
+        // game 2: 3 players × 0.05 = 0.15 ETH
+        uint256 expectedFee = (0.2 ether * 1000 / 10000) + (0.15 ether * 1000 / 10000);
+        assertEq(game.creatorFeesAccrued(operator), expectedFee);
+    }
+
+    // ============ Platform Fee BPS Management Tests ============
+
+    function test_setPlatformFeeBps() public {
+        assertEq(game.platformFeeBps(), PLATFORM_FEE_BPS);
+
+        game.setPlatformFeeBps(500);
+        assertEq(game.platformFeeBps(), 500);
+    }
+
+    function test_setPlatformFeeBps_revertsNonOwner() public {
+        vm.prank(player1);
+        vm.expectRevert();
+        game.setPlatformFeeBps(500);
+    }
+
+    function test_setPlatformFeeBps_revertsTooHigh() public {
+        vm.expectRevert(IChainAssassin.PlatformFeeTooHigh.selector);
+        game.setPlatformFeeBps(5001);
+    }
+
+    function test_setPlatformFeeBps_affectsNewGames() public {
+        // Change platform fee to 500
+        game.setPlatformFeeBps(500);
+
+        // Old default params sum to 9000 game BPS, but now platform is 500
+        // So we need game BPS = 9500
+        IChainAssassin.CreateGameParams memory params = _defaultParams();
+        params.bps1st = 4000; // increase to compensate for lower platform
+        vm.prank(operator);
+        uint256 gameId = game.createGame(params, _defaultShrinks());
+
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player1);
+
+        // Platform fee is the remainder (absorbs dust)
+        uint256 total = 0.15 ether; // 3 players * 0.05 ETH
+        // Game BPS: 4000 + 1500 + 1000 + 2000 + 1000 = 9500 → platform = 500
+        uint256 prizes = total * 4000 / 10000
+                       + total * 1500 / 10000
+                       + total * 1000 / 10000
+                       + total * 2000 / 10000;
+        uint256 creatorFee = total * 1000 / 10000;
+        uint256 expectedPlatformFee = total - prizes - creatorFee;
+        assertEq(game.platformFeesAccrued(), expectedPlatformFee);
+    }
+
+    function test_platformFeeLockedAtCreationTime() public {
+        // Create a game while platformFeeBps = 1000 (default).
+        // Game BPS: 3500+1500+1000+2000+1000 = 9000, implicit platform = 1000.
+        uint256 gameId = _createDefaultGame();
+
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+
+        _startGame(gameId);
+
+        // Owner changes platform fee to 500 AFTER the game was created.
+        game.setPlatformFeeBps(500);
+
+        // End the game — platform fee should still be 1000 (locked at creation).
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player1);
+
+        // Verify: platform fee is derived from stored game BPS, not current global rate.
+        uint256 total = 0.15 ether; // 3 players * 0.05 ETH
+        uint256 prizes = total * 3500 / 10000
+                       + total * 1500 / 10000
+                       + total * 1000 / 10000
+                       + total * 2000 / 10000;
+        uint256 creatorFee = total * 1000 / 10000;
+        uint256 expectedPlatformFee = total - prizes - creatorFee;
+        assertEq(game.platformFeesAccrued(), expectedPlatformFee);
+
+        // Also verify the fee corresponds to ~10% (1000 BPS), not ~5% (500 BPS).
+        uint256 approx10pct = total * 1000 / 10000;
+        assertApproxEqAbs(game.platformFeesAccrued(), approx10pct, 5);
+    }
+
+    function test_noDustLockedInContract() public {
+        // End a game, claim all prizes and withdraw all fees, verify zero balance.
+        uint256 gameId = _setupEndedGame();
+
+        // Claim all prizes
+        vm.prank(player1); game.claimPrize(gameId); // winner1
+        vm.prank(player2); game.claimPrize(gameId); // winner2
+        vm.prank(player3); game.claimPrize(gameId); // winner3
+        vm.prank(player4); game.claimPrize(gameId); // topKiller
+
+        // Withdraw creator fees
+        vm.prank(operator);
+        game.withdrawCreatorFees(operator);
+
+        // Withdraw platform fees
+        game.withdrawPlatformFees(address(0xFEE));
+
+        // Contract should have zero balance — no dust locked
+        assertEq(address(game).balance, 0);
     }
 }

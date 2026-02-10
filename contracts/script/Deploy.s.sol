@@ -1,14 +1,17 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-import "forge-std/Script.sol";
-import "../src/ChainAssassin.sol";
+import {Script, console} from "forge-std/Script.sol";
+import {ChainAssassin} from "../src/ChainAssassin.sol";
 
+/// @title DeployChainAssassin — Foundry deployment script
+/// @notice Deploys ChainAssassin and adds the deployer as the first operator.
 contract DeployChainAssassin is Script {
     function run() external {
         vm.startBroadcast();
 
-        ChainAssassin game = new ChainAssassin();
+        uint16 platformFeeBps = 1000; // 10% platform fee
+        ChainAssassin game = new ChainAssassin(platformFeeBps);
 
         // Add deployer as operator
         game.addOperator(msg.sender);

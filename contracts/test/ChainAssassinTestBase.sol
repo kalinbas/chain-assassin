@@ -18,8 +18,10 @@ abstract contract ChainAssassinTestBase is Test {
     uint16 constant MIN_PLAYERS = 3;
     uint16 constant MAX_PLAYERS = 100;
 
+    uint16 constant PLATFORM_FEE_BPS = 1000; // 10%
+
     function setUp() public virtual {
-        game = new ChainAssassin();
+        game = new ChainAssassin(PLATFORM_FEE_BPS);
         game.addOperator(operator);
 
         vm.deal(player1, 10 ether);
@@ -36,14 +38,15 @@ abstract contract ChainAssassinTestBase is Test {
             minPlayers: MIN_PLAYERS,
             maxPlayers: MAX_PLAYERS,
             registrationDeadline: uint40(block.timestamp + 1 days),
-            expiryDeadline: uint40(block.timestamp + 2 days),
+            gameDate: uint40(block.timestamp + 1 days + 1),
+            maxDuration: 1 days,
             centerLat: 19435244,
             centerLng: -99128056,
-            bps1st: 4000,
+            bps1st: 3500,
             bps2nd: 1500,
             bps3rd: 1000,
-            bpsKills: 2500,
-            bpsPlatform: 1000
+            bpsKills: 2000,
+            bpsCreator: 1000
         });
     }
 
@@ -83,13 +86,20 @@ abstract contract ChainAssassinTestBase is Test {
         }
     }
 
+    /// @dev Warps to gameDate and starts the game.
+    function _startGame(uint256 gameId) internal {
+        IChainAssassin.GameConfig memory config = game.getGameConfig(gameId);
+        vm.warp(config.gameDate);
+        vm.prank(operator);
+        game.startGame(gameId);
+    }
+
     /// @dev Creates a game, registers 4 players, starts, and ends with all winners set.
     /// player1=winner1, player2=winner2, player3=winner3, player4=topKiller
     function _setupEndedGame() internal returns (uint256 gameId) {
         gameId = _createAndRegisterPlayers(4);
 
-        vm.prank(operator);
-        game.startGame(gameId);
+        _startGame(gameId);
 
         vm.prank(operator);
         game.endGame(gameId, player1, player2, player3, player4);

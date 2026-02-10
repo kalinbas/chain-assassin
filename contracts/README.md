@@ -51,11 +51,31 @@ forge test -vvv
 
 ```bash
 # Base Sepolia (testnet)
-forge script script/Deploy.s.sol --rpc-url $BASE_SEPOLIA_RPC --broadcast --verify
+forge script script/Deploy.s.sol \
+  --rpc-url https://sepolia.base.org \
+  --private-key $PRIVATE_KEY \
+  --broadcast \
+  --verify \
+  --verifier etherscan \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  --verifier-url "https://api.etherscan.io/v2/api?chainid=84532"
 
 # Base Mainnet
-forge script script/Deploy.s.sol --rpc-url $BASE_RPC --broadcast --verify
+forge script script/Deploy.s.sol \
+  --rpc-url $BASE_RPC \
+  --private-key $PRIVATE_KEY \
+  --broadcast \
+  --verify \
+  --verifier etherscan \
+  --etherscan-api-key $ETHERSCAN_API_KEY \
+  --verifier-url "https://api.etherscan.io/v2/api?chainid=8453"
 ```
+
+## Deployments
+
+| Network | Address | Explorer |
+|---------|---------|----------|
+| Base Sepolia | `0xa2d0728743Afa575cEA658BD6c05478F5c0A1080` | [BaseScan](https://sepolia.basescan.org/address/0xa2d0728743Afa575cEA658BD6c05478F5c0A1080) |
 
 ## Dependencies
 
