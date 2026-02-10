@@ -129,10 +129,16 @@ export interface WsBleProximityMessage {
   nearbyAddresses: string[];
 }
 
+export interface WsSpectateMessage {
+  type: "spectate";
+  gameId: number;
+}
+
 export type WsClientMessage =
   | WsAuthMessage
   | WsLocationMessage
-  | WsBleProximityMessage;
+  | WsBleProximityMessage
+  | WsSpectateMessage;
 
 export interface WsServerMessage {
   type: string;

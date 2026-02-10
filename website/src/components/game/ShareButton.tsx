@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { ShareIcon } from '../icons/Icons';
+import { gameUrl } from '../../lib/url';
 
-export function ShareButton({ gameId }: { gameId: number }) {
+export function ShareButton({ gameId, title }: { gameId: number; title: string }) {
   const [copied, setCopied] = useState(false);
 
   const handleShare = () => {
-    const url = `${window.location.origin}/game/${gameId}`;
+    const url = `${window.location.origin}${gameUrl(gameId, title)}`;
     navigator.clipboard.writeText(url).then(() => {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);

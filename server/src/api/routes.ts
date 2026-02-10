@@ -1,8 +1,12 @@
 import { Router } from "express";
 import { walletAuth } from "./middleware.js";
 import { healthCheck, gameStatus, submitKill, submitLocation, submitCheckin, triggerAutoStart } from "./handlers.js";
+import { simulationRouter } from "./simulationRoutes.js";
 
 const router = Router();
+
+// Simulation (no auth)
+router.use(simulationRouter);
 
 // Public
 router.get("/health", healthCheck);

@@ -1,4 +1,5 @@
 import { Hero } from '../components/landing/Hero';
+import { ActiveGame } from '../components/landing/ActiveGame';
 import { GamesGrid } from '../components/landing/GamesGrid';
 import { PastGamesGrid } from '../components/landing/PastGamesGrid';
 import { HowItWorks } from '../components/landing/HowItWorks';
@@ -12,6 +13,7 @@ export function LandingPage() {
   return (
     <>
       <Hero />
+      <ActiveGame />
       <GamesGrid />
       <PastGamesGrid />
       <HowItWorks />

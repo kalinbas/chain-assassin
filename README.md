@@ -78,7 +78,7 @@ Game coordination server with:
 
 ## Links
 
-- [Website](https://kalinbas.github.io/chain-assassin/)
+- [Website](https://chainassassin.xyz/)
 - [Twitter / X](https://x.com/assassin_chain)
 - [Discord](https://discord.gg/SayMP2cJsp)
 

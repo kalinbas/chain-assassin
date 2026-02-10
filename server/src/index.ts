@@ -1,5 +1,6 @@
 import { createServer } from "http";
 import express from "express";
+import cors from "cors";
 import { config } from "./config.js";
 import { createLogger } from "./utils/logger.js";
 import { initDb } from "./db/queries.js";
@@ -19,6 +20,7 @@ async function main(): Promise<void> {
 
   // 2. Set up Express app
   const app = express();
+  app.use(cors());
   app.use(express.json());
   app.use(router);
 
@@ -39,7 +41,11 @@ async function main(): Promise<void> {
   }
 
   // 7. Start live event listener
-  await startEventListener();
+  try {
+    await startEventListener();
+  } catch (err) {
+    log.warn({ error: (err as Error).message }, "Event listener failed to start (simulation-only mode still works)");
+  }
 
   // 8. Start HTTP server
   server.listen(config.port, config.host, () => {

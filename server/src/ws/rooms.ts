@@ -15,6 +15,12 @@ const rooms = new Map<number, Map<string, PlayerConnection>>();
 // ws -> PlayerConnection (reverse lookup)
 const connectionMap = new WeakMap<WebSocket, PlayerConnection>();
 
+// Spectator rooms: gameId -> Set<WebSocket>
+const spectatorRooms = new Map<number, Set<WebSocket>>();
+
+// ws -> gameId (reverse lookup for spectators)
+const spectatorMap = new WeakMap<WebSocket, number>();
+
 /**
  * Add a player to a game room.
  */
@@ -39,27 +45,57 @@ export function joinRoom(gameId: number, address: string, ws: WebSocket): void {
 }
 
 /**
- * Remove a player from their game room.
+ * Remove a player or spectator from their room.
  */
 export function leaveRoom(ws: WebSocket): void {
+  // Check if it's a player connection
   const conn = connectionMap.get(ws);
-  if (!conn) return;
-
-  const room = rooms.get(conn.gameId);
-  if (room) {
-    // Only remove if this is still the active connection for this player
-    const current = room.get(conn.address);
-    if (current && current.ws === ws) {
-      room.delete(conn.address);
+  if (conn) {
+    const room = rooms.get(conn.gameId);
+    if (room) {
+      const current = room.get(conn.address);
+      if (current && current.ws === ws) {
+        room.delete(conn.address);
+      }
+      if (room.size === 0) {
+        rooms.delete(conn.gameId);
+      }
     }
-
-    // Cleanup empty rooms
-    if (room.size === 0) {
-      rooms.delete(conn.gameId);
-    }
+    log.info({ gameId: conn.gameId, address: conn.address }, "Player left room");
+    return;
   }
 
-  log.info({ gameId: conn.gameId, address: conn.address }, "Player left room");
+  // Check if it's a spectator connection
+  leaveSpectator(ws);
+}
+
+/**
+ * Add a spectator to a game room (no auth required).
+ */
+export function joinSpectator(gameId: number, ws: WebSocket): void {
+  if (!spectatorRooms.has(gameId)) {
+    spectatorRooms.set(gameId, new Set());
+  }
+  spectatorRooms.get(gameId)!.add(ws);
+  spectatorMap.set(ws, gameId);
+  log.info({ gameId, spectators: spectatorRooms.get(gameId)!.size }, "Spectator joined");
+}
+
+/**
+ * Remove a spectator from their room.
+ */
+export function leaveSpectator(ws: WebSocket): void {
+  const gameId = spectatorMap.get(ws);
+  if (gameId === undefined) return;
+
+  const room = spectatorRooms.get(gameId);
+  if (room) {
+    room.delete(ws);
+    if (room.size === 0) {
+      spectatorRooms.delete(gameId);
+    }
+  }
+  log.info({ gameId }, "Spectator left");
 }
 
 /**
@@ -73,6 +109,21 @@ export function broadcastToRoom(gameId: number, message: Record<string, unknown>
   for (const [, conn] of room) {
     if (conn.ws.readyState === WebSocket.OPEN) {
       conn.ws.send(payload);
+    }
+  }
+}
+
+/**
+ * Broadcast a message to all spectators in a game room.
+ */
+export function broadcastToSpectators(gameId: number, message: Record<string, unknown>): void {
+  const room = spectatorRooms.get(gameId);
+  if (!room) return;
+
+  const payload = JSON.stringify(message);
+  for (const ws of room) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(payload);
     }
   }
 }

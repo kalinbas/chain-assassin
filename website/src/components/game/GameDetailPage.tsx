@@ -7,15 +7,37 @@ import { PrizeBreakdown } from './PrizeBreakdown';
 import { ActivityFeed } from './ActivityFeed';
 import { ShareButton } from './ShareButton';
 import { Leaderboard } from './Leaderboard';
+import { SpectatorView } from './SpectatorView';
+import { useSpectatorSocket } from '../../hooks/useSpectatorSocket';
 
 function PhaseBadge({ phase }: { phase: string }) {
   return <span className={`game-detail__phase game-detail__phase--${phase}`}>{phase}</span>;
+}
+
+function LiveContent({ game }: { game: Game }) {
+  const spectator = useSpectatorSocket(game.id);
+
+  if (!spectator.connected) {
+    return (
+      <>
+        <p style={{ color: 'var(--text-sec)', textAlign: 'center', padding: '2rem 0' }}>
+          Connecting to live game...
+        </p>
+        {game.zoneShrinks.length > 0 && <GameMap game={game} />}
+        <PrizeBreakdown game={game} />
+      </>
+    );
+  }
+
+  return <SpectatorView state={spectator} />;
 }
 
 export function GameDetailPage({ game }: { game: Game }) {
   const backLink = game.phase === 'ended' || game.phase === 'cancelled'
     ? '/#past-games'
     : '/#games';
+
+  const isLive = game.phase === 'active';
 
   return (
     <main className="game-detail">
@@ -28,7 +50,7 @@ export function GameDetailPage({ game }: { game: Game }) {
             <h1 className="game-detail__title">{game.title}</h1>
             <PhaseBadge phase={game.phase} />
           </div>
-          <ShareButton gameId={game.id} />
+          <ShareButton gameId={game.id} title={game.title} />
         </div>
 
         {game.phase === 'cancelled' && (
@@ -37,17 +59,22 @@ export function GameDetailPage({ game }: { game: Game }) {
           </div>
         )}
 
-        <GameStatsGrid game={game} />
+        {!isLive && <GameStatsGrid game={game} />}
 
-        {game.phase === 'ended' && <Leaderboard game={game} />}
-
-        {game.zoneShrinks.length > 0 && <GameMap game={game} />}
-
-        {game.phase !== 'ended' && game.phase !== 'cancelled' && (
+        {isLive ? (
+          <LiveContent game={game} />
+        ) : (
           <>
-            <PrizeBreakdown game={game} />
+            {game.phase === 'ended' && <Leaderboard game={game} />}
 
-            <ActivityFeed events={game.activity} />
+            {game.zoneShrinks.length > 0 && <GameMap game={game} />}
+
+            {game.phase !== 'ended' && game.phase !== 'cancelled' && (
+              <>
+                <PrizeBreakdown game={game} />
+                <ActivityFeed events={game.activity} />
+              </>
+            )}
           </>
         )}
       </div>

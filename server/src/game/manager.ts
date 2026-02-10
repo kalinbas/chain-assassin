@@ -27,7 +27,7 @@ import {
   getGamesInPhase,
   pruneLocationPings,
 } from "../db/queries.js";
-import { initializeTargetChain, processKill, removeFromChain, getChainSize } from "./targetChain.js";
+import { initializeTargetChain, processKill, removeFromChain, getChainSize, getChainMap } from "./targetChain.js";
 import { ZoneTracker } from "./zoneTracker.js";
 import { verifyKill } from "./killVerifier.js";
 import { getLeaderboard, determineWinners } from "./leaderboard.js";
@@ -45,9 +45,25 @@ const activeGames = new Map<number, {
 // Per-game deadline timers (replaces 10s polling interval)
 const deadlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
+// Simulated game IDs — skip on-chain operator calls for these
+const simulatedGames = new Set<number>();
+
+export function addSimulatedGame(gameId: number): void {
+  simulatedGames.add(gameId);
+}
+
+export function removeSimulatedGame(gameId: number): void {
+  simulatedGames.delete(gameId);
+}
+
+export function isSimulatedGame(gameId: number): boolean {
+  return simulatedGames.has(gameId);
+}
+
 // Broadcast function — injected from WebSocket server
 let broadcastFn: ((gameId: number, message: Record<string, unknown>) => void) | null = null;
 let sendToPlayerFn: ((gameId: number, address: string, message: Record<string, unknown>) => void) | null = null;
+let spectatorBroadcastFn: ((gameId: number, message: Record<string, unknown>) => void) | null = null;
 
 /**
  * Set the broadcast function (called by WebSocket server on init).
@@ -60,8 +76,25 @@ export function setBroadcast(
   sendToPlayerFn = sendToPlayer;
 }
 
+/**
+ * Set the spectator broadcast function (called by WebSocket server on init).
+ */
+export function setSpectatorBroadcast(
+  fn: (gameId: number, message: Record<string, unknown>) => void
+): void {
+  spectatorBroadcastFn = fn;
+}
+
 function broadcast(gameId: number, message: Record<string, unknown>): void {
   if (broadcastFn) broadcastFn(gameId, message);
+  if (spectatorBroadcastFn) spectatorBroadcastFn(gameId, message);
+}
+
+/**
+ * Public broadcast — used by simulator for item events.
+ */
+export function broadcastToGame(gameId: number, message: Record<string, unknown>): void {
+  broadcast(gameId, message);
 }
 
 function sendToPlayer(gameId: number, address: string, message: Record<string, unknown>): void {
@@ -211,14 +244,16 @@ export async function handleKillSubmission(
   }
 
   // Submit on-chain (fire and forget — don't block the response)
-  operator
-    .recordKill(gameId, hunterAddress, targetAddress)
-    .then((tx) => {
-      updateKillTxHash(killId, tx.txHash);
-    })
-    .catch((err) => {
-      log.error({ gameId, killId, error: err.message }, "Failed to record kill on-chain");
-    });
+  if (!isSimulatedGame(gameId)) {
+    operator
+      .recordKill(gameId, hunterAddress, targetAddress)
+      .then((tx) => {
+        updateKillTxHash(killId, tx.txHash);
+      })
+      .catch((err) => {
+        log.error({ gameId, killId, error: err.message }, "Failed to record kill on-chain");
+      });
+  }
 
   // Get updated hunter stats
   const hunter = getPlayer(gameId, hunterAddress);
@@ -409,6 +444,37 @@ async function gameTick(gameId: number): Promise<void> {
     await handleZoneElimination(gameId, address);
   }
 
+  // Broadcast player positions to spectators every 2 seconds
+  if (now % 2 === 0 && spectatorBroadcastFn) {
+    const alivePlayers = getAlivePlayers(gameId);
+    const positions = alivePlayers.map((p) => {
+      const ping = getLatestLocationPing(gameId, p.address);
+      return {
+        address: p.address,
+        playerNumber: p.playerNumber,
+        lat: ping?.lat ?? null,
+        lng: ping?.lng ?? null,
+        isAlive: true,
+        kills: p.kills,
+      };
+    });
+
+    // Build hunt links from target chain
+    const chainMap = getChainMap(gameId);
+    const huntLinks: { hunter: string; target: string }[] = [];
+    for (const [hunter, target] of chainMap) {
+      huntLinks.push({ hunter, target });
+    }
+
+    spectatorBroadcastFn(gameId, {
+      type: "spectator:positions",
+      players: positions,
+      zone: active.zoneTracker.getZoneState(),
+      aliveCount: alivePlayers.length,
+      huntLinks,
+    });
+  }
+
   // Prune old location pings every 60 seconds
   if (now % 60 === 0) {
     pruneLocationPings(gameId, 300); // keep last 5 minutes
@@ -442,9 +508,11 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
   active?.zoneTracker.clearPlayer(address);
 
   // Submit on-chain
-  operator.eliminatePlayer(gameId, address).catch((err) => {
-    log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain");
-  });
+  if (!isSimulatedGame(gameId)) {
+    operator.eliminatePlayer(gameId, address).catch((err) => {
+      log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain");
+    });
+  }
 
   // Broadcast elimination
   broadcast(gameId, {
@@ -501,7 +569,9 @@ async function endGameWithWinners(gameId: number): Promise<void> {
   );
 
   try {
-    await operator.endGame(gameId, winner1, winner2, winner3, topKiller);
+    if (!isSimulatedGame(gameId)) {
+      await operator.endGame(gameId, winner1, winner2, winner3, topKiller);
+    }
     updateGamePhase(gameId, GamePhase.ENDED, {
       endedAt: now,
       winner1,

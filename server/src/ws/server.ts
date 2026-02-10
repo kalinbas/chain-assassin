@@ -1,8 +1,8 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { Server as HttpServer } from "http";
 import { handleWsMessage } from "./handlers.js";
-import { leaveRoom, broadcastToRoom, sendToPlayer } from "./rooms.js";
-import { setBroadcast } from "../game/manager.js";
+import { leaveRoom, broadcastToRoom, broadcastToSpectators, sendToPlayer } from "./rooms.js";
+import { setBroadcast, setSpectatorBroadcast } from "../game/manager.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("ws");
@@ -50,6 +50,7 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
 
   // Wire up broadcast functions to game manager
   setBroadcast(broadcastToRoom, sendToPlayer);
+  setSpectatorBroadcast(broadcastToSpectators);
 
   log.info("WebSocket server initialized on /ws");
   return wss;

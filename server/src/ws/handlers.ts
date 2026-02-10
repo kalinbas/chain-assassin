@@ -1,8 +1,8 @@
 import { WebSocket } from "ws";
 import { verifySignature, validateAuthMessage } from "../utils/crypto.js";
-import { getPlayer, getTargetAssignment } from "../db/queries.js";
-import { handleLocationUpdate } from "../game/manager.js";
-import { joinRoom, getConnection } from "./rooms.js";
+import { getPlayer, getTargetAssignment, getAlivePlayers, getLatestLocationPing } from "../db/queries.js";
+import { handleLocationUpdate, getGameStatus } from "../game/manager.js";
+import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
 
@@ -30,8 +30,10 @@ export function handleWsMessage(ws: WebSocket, raw: string): void {
       break;
 
     case "ble_proximity":
-      // BLE data is stored in-memory temporarily — used during kill verification
-      // For now just acknowledge receipt
+      break;
+
+    case "spectate":
+      handleSpectate(ws, message as { type: "spectate"; gameId: number });
       break;
 
     default:
@@ -48,30 +50,25 @@ function handleAuth(
 ): void {
   const { gameId, address, signature, message } = msg;
 
-  // Validate message format and freshness
   const validation = validateAuthMessage(message, gameId);
   if (!validation.valid) {
     sendError(ws, `Auth failed: ${validation.error}`);
     return;
   }
 
-  // Verify signature
   if (!verifySignature(message, signature, address)) {
     sendError(ws, "Auth failed: invalid signature");
     return;
   }
 
-  // Verify player is registered for this game
   const player = getPlayer(gameId, address);
   if (!player) {
     sendError(ws, "Auth failed: not registered for this game");
     return;
   }
 
-  // Join the game room
   joinRoom(gameId, address.toLowerCase(), ws);
 
-  // Send auth success with current game state
   const targetAssignment = getTargetAssignment(gameId, address.toLowerCase());
 
   ws.send(
@@ -109,6 +106,56 @@ function handleLocation(
   }
 
   handleLocationUpdate(conn.gameId, conn.address, msg.lat, msg.lng);
+}
+
+/**
+ * Handle spectator join (no auth required).
+ */
+function handleSpectate(
+  ws: WebSocket,
+  msg: { type: "spectate"; gameId: number }
+): void {
+  const { gameId } = msg;
+
+  const status = getGameStatus(gameId);
+  if (!status) {
+    sendError(ws, "Game not found");
+    return;
+  }
+
+  joinSpectator(gameId, ws);
+
+  const alivePlayers = getAlivePlayers(gameId);
+  const players = alivePlayers.map((p) => {
+    const ping = getLatestLocationPing(gameId, p.address);
+    return {
+      address: p.address,
+      playerNumber: p.playerNumber,
+      lat: ping?.lat ?? null,
+      lng: ping?.lng ?? null,
+      isAlive: p.isAlive,
+      kills: p.kills,
+    };
+  });
+
+  ws.send(
+    JSON.stringify({
+      type: "spectate:init",
+      gameId,
+      phase: status.phase,
+      playerCount: status.playerCount,
+      aliveCount: status.aliveCount,
+      leaderboard: status.leaderboard,
+      zone: status.zone,
+      players,
+      winner1: status.winner1,
+      winner2: status.winner2,
+      winner3: status.winner3,
+      topKiller: status.topKiller,
+    })
+  );
+
+  log.info({ gameId }, "Spectator connected");
 }
 
 function sendError(ws: WebSocket, message: string): void {

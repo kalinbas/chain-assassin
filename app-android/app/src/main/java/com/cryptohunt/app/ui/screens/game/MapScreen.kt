@@ -2,12 +2,20 @@ package com.cryptohunt.app.ui.screens.game
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.MyLocation
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -20,7 +28,6 @@ import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
-import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -64,6 +71,26 @@ fun MapScreen(
     val primaryStrokeArgb = Primary.copy(alpha = 0.8f).toArgb()  // zone stroke
     val meetingArgb = Warning.toArgb()                            // #FFBB00 — meeting point
     val meetingFillArgb = Warning.copy(alpha = 0.9f).toArgb()
+
+    // Player marker colors (cyan = Shield)
+    val shieldArgb = Shield.toArgb()
+    val whiteArgb = Color.White.toArgb()
+
+    // Pulse animation for player marker outer ring
+    val infiniteTransition = rememberInfiniteTransition(label = "playerPulse")
+    val pulseAlpha by infiniteTransition.animateFloat(
+        initialValue = 0.15f,
+        targetValue = 0.35f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1500),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseAlpha"
+    )
+    val pulseAlphaInt = (pulseAlpha * 255).toInt()
+
+    // Hold a reference to the MapView so the FAB can access it
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
 
     Scaffold(
         topBar = {
@@ -109,7 +136,7 @@ fun MapScreen(
                         controller.setZoom(15.0)
                         controller.setCenter(GeoPoint(zoneCenterLat, zoneCenterLng))
                         setBuiltInZoomControls(false)
-                    }
+                    }.also { mapViewRef.value = it }
                 },
                 update = { mapView ->
                     mapView.overlays.clear()
@@ -196,20 +223,73 @@ fun MapScreen(
                         })
                     }
 
-                    // Current location marker
+                    // Active player marker — cyan pulsing "radar blip" with white center
                     if (locationState.isTracking) {
-                        val locMarker = Marker(mapView).apply {
-                            position = GeoPoint(locationState.lat, locationState.lng)
-                            title = "You"
-                            setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER)
-                        }
-                        mapView.overlays.add(locMarker)
+                        val playerGeo = GeoPoint(locationState.lat, locationState.lng)
+                        mapView.overlays.add(object : Overlay() {
+                            override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+                                if (shadow) return
+                                val projection = mapView.projection
+                                val pt = android.graphics.Point()
+                                projection.toPixels(playerGeo, pt)
+                                val px = pt.x.toFloat()
+                                val py = pt.y.toFloat()
+
+                                // Outer pulse ring (cyan, animated alpha)
+                                canvas.drawCircle(px, py, 22f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = shieldArgb
+                                        alpha = pulseAlphaInt
+                                    })
+
+                                // Middle glow (cyan, 35% opacity)
+                                canvas.drawCircle(px, py, 14f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = shieldArgb
+                                        alpha = 90
+                                    })
+
+                                // Inner solid dot (white)
+                                canvas.drawCircle(px, py, 7f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = whiteArgb
+                                    })
+
+                                // Cyan border on inner dot
+                                canvas.drawCircle(px, py, 7f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.STROKE
+                                        color = shieldArgb
+                                        strokeWidth = 1.5f
+                                    })
+                            }
+                        })
                     }
 
                     mapView.invalidate()
                 }
             )
 
+            // Center-on-me button (bottom-right corner)
+            if (locationState.isTracking) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        mapViewRef.value?.controller?.animateTo(
+                            GeoPoint(locationState.lat, locationState.lng)
+                        )
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp),
+                    containerColor = Surface,
+                    contentColor = Primary
+                ) {
+                    Icon(Icons.Default.MyLocation, contentDescription = "Center on my location")
+                }
+            }
         }
     }
 }

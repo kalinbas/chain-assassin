@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom';
 import { PinIcon, ClockIcon } from '../icons/Icons';
 import type { Game } from '../../types/game';
+import { gameUrl } from '../../lib/url';
 
 export function GameCard({ game }: { game: Game }) {
   const fillPct = game.maxPlayers > 0 ? Math.round((game.players / game.maxPlayers) * 100) : 0;
@@ -9,7 +10,7 @@ export function GameCard({ game }: { game: Game }) {
   const prizePool = (playerCount * game.entryFee * prizePoolBps / 10000).toFixed(4);
 
   return (
-    <Link to={`/game/${game.id}`} className="game-card__link">
+    <Link to={gameUrl(game.id, game.title)} className="game-card__link">
       <div className="game-card">
         <div className="game-card__header">
           <h3 className="game-card__name">{game.title}</h3>

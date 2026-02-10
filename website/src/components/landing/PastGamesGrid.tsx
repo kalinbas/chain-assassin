@@ -3,6 +3,7 @@ import { Section } from '../layout/Section';
 import { PinIcon, ClockIcon, TrophyIcon } from '../icons/Icons';
 import { truncAddr } from '../../lib/contract';
 import { MOCK_GAMES } from '../../data/mockGames';
+import { gameUrl } from '../../lib/url';
 
 const ZERO = '0x0000000000000000000000000000000000000000';
 
@@ -14,7 +15,7 @@ function PastGameCard({ game }: { game: typeof MOCK_GAMES[number] }) {
   const hasWinner = game.winner1 !== ZERO;
 
   return (
-    <Link to={`/game/${game.id}`} className="game-card__link">
+    <Link to={gameUrl(game.id, game.title)} className="game-card__link">
       <div className="past-game-card">
         <div className="past-game-card__header">
           <h3 className="past-game-card__name">{game.title}</h3>

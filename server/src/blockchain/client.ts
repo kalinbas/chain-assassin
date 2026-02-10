@@ -25,6 +25,13 @@ export function getHttpProvider(): ethers.JsonRpcProvider {
 export function getWsProvider(): ethers.WebSocketProvider {
   if (!wsProvider) {
     wsProvider = new ethers.WebSocketProvider(config.rpcWsUrl, config.chainId);
+    // Prevent unhandled WS error from crashing the process
+    const ws = wsProvider.websocket as unknown as { on?: (event: string, handler: (err: Error) => void) => void };
+    if (ws.on) {
+      ws.on("error", (err: Error) => {
+        log.warn({ error: err.message }, "WebSocket provider error (non-fatal)");
+      });
+    }
     log.info({ rpcWsUrl: config.rpcWsUrl }, "WebSocket provider initialized");
   }
   return wsProvider;

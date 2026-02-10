@@ -160,3 +160,102 @@ export function QrIcon(props: IconProps) {
     </svg>
   );
 }
+
+export function SkullIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <circle cx="12" cy="10" r="8" />
+      <circle cx="9" cy="9" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="9" r="1.5" fill="currentColor" stroke="none" />
+      <path d="M8 14h8" />
+      <path d="M10 14v3" />
+      <path d="M14 14v3" />
+    </svg>
+  );
+}
+
+export function GhostIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" />
+      <circle cx="9" cy="10" r="1.5" fill="currentColor" stroke="none" />
+      <circle cx="15" cy="10" r="1.5" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function RadarIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 12l6-6" />
+      <path d="M12 2a10 10 0 0 1 7.07 2.93" />
+      <path d="M12 6a6 6 0 0 1 4.24 1.76" />
+    </svg>
+  );
+}
+
+export function EmpIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <circle cx="12" cy="12" r="10" />
+      <path d="M12 2v4" />
+      <path d="M12 18v4" />
+      <path d="M2 12h4" />
+      <path d="M18 12h4" />
+      <path d="M4.93 4.93l2.83 2.83" />
+      <path d="M16.24 16.24l2.83 2.83" />
+      <path d="M4.93 19.07l2.83-2.83" />
+      <path d="M16.24 7.76l2.83-2.83" />
+    </svg>
+  );
+}
+
+export function DecoyIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <circle cx="12" cy="12" r="3" />
+      <circle cx="12" cy="12" r="7" strokeDasharray="4 3" />
+      <circle cx="12" cy="12" r="10" strokeDasharray="2 3" />
+    </svg>
+  );
+}
+
+export function SoundOnIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
+  );
+}
+
+export function SoundOffIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <line x1="23" y1="9" x2="17" y2="15" />
+      <line x1="17" y1="9" x2="23" y2="15" />
+    </svg>
+  );
+}
+
+export function EyeIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon(props: IconProps) {
+  return (
+    <svg {...defaults} {...props}>
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  );
+}
