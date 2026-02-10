@@ -1,7 +1,6 @@
 package com.cryptohunt.app.ui.screens.lobby
 
 import android.graphics.Canvas
-import android.graphics.DashPathEffect
 import android.graphics.Paint
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -96,10 +95,10 @@ fun GameDetailScreen(
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
-    val dangerArgb = Danger.toArgb()
-    val dangerFillArgb = Danger.copy(alpha = 0.1f).toArgb()
-    val warningArgb = Warning.copy(alpha = 0.7f).toArgb()
-    val warningFillArgb = Warning.copy(alpha = 0.08f).toArgb()
+    val zoneArgb = Primary.toArgb()
+    val zoneFillArgb = Primary.copy(alpha = 0.08f).toArgb()
+    val meetingArgb = Warning.toArgb()
+    val meetingFillArgb = Warning.copy(alpha = 0.9f).toArgb()
 
     Scaffold(
         topBar = {
@@ -252,7 +251,7 @@ fun GameDetailScreen(
                         val center = GeoPoint(config.zoneCenterLat, config.zoneCenterLng)
                         val radius = config.initialRadiusMeters
 
-                        // Zone circle
+                        // Zone circle (green, matching website)
                         mapView.overlays.add(object : Overlay() {
                             override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
                                 if (shadow) return
@@ -268,43 +267,36 @@ fun GameDetailScreen(
                                 canvas.drawCircle(centerPx.x.toFloat(), centerPx.y.toFloat(), pxRadius,
                                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                         style = Paint.Style.FILL
-                                        color = dangerFillArgb
+                                        color = zoneFillArgb
                                     })
                                 canvas.drawCircle(centerPx.x.toFloat(), centerPx.y.toFloat(), pxRadius,
                                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                         style = Paint.Style.STROKE
-                                        color = dangerArgb
+                                        color = zoneArgb
                                         strokeWidth = 3f
                                     })
                             }
                         })
 
-                        // Final zone circle (smallest shrink)
-                        val finalShrink = config.shrinkSchedule.lastOrNull()
-                        if (finalShrink != null) {
+                        // Meeting point marker — yellow circle
+                        if (config.meetingLat != 0.0 && config.meetingLng != 0.0) {
+                            val meetingPoint = GeoPoint(config.meetingLat, config.meetingLng)
                             mapView.overlays.add(object : Overlay() {
                                 override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
                                     if (shadow) return
                                     val projection = mapView.projection
-                                    val centerPx = android.graphics.Point()
-                                    projection.toPixels(center, centerPx)
-
-                                    val edgeGeo = center.destinationPoint(finalShrink.newRadiusMeters, 90.0)
-                                    val edgePx = android.graphics.Point()
-                                    projection.toPixels(GeoPoint(edgeGeo.latitude, edgeGeo.longitude), edgePx)
-                                    val pxRadius = Math.abs(edgePx.x - centerPx.x).toFloat()
-
-                                    canvas.drawCircle(centerPx.x.toFloat(), centerPx.y.toFloat(), pxRadius,
+                                    val pt = android.graphics.Point()
+                                    projection.toPixels(meetingPoint, pt)
+                                    canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
                                         Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                             style = Paint.Style.FILL
-                                            color = warningFillArgb
+                                            color = meetingFillArgb
                                         })
-                                    canvas.drawCircle(centerPx.x.toFloat(), centerPx.y.toFloat(), pxRadius,
+                                    canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
                                         Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                             style = Paint.Style.STROKE
-                                            color = warningArgb
+                                            color = meetingArgb
                                             strokeWidth = 2f
-                                            pathEffect = DashPathEffect(floatArrayOf(15f, 8f), 0f)
                                         })
                                 }
                             })
@@ -322,13 +314,9 @@ fun GameDetailScreen(
                     color = Surface.copy(alpha = 0.85f),
                     shape = RoundedCornerShape(6.dp)
                 ) {
-                    val finalRadius = config.shrinkSchedule.lastOrNull()?.newRadiusMeters?.toInt()
+                    val r = config.initialRadiusMeters
                     Text(
-                        if (finalRadius != null) {
-                            "Zone: ${config.initialRadiusMeters.toInt()}m → ${finalRadius}m"
-                        } else {
-                            "Zone: ${config.initialRadiusMeters.toInt()}m radius"
-                        },
+                        if (r >= 1000) "%.1f km radius".format(r / 1000) else "${r.toInt()}m radius",
                         modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
                         style = MaterialTheme.typography.labelSmall,
                         color = TextPrimary
@@ -348,7 +336,6 @@ fun GameDetailScreen(
             InfoRow("Players", "${config.minPlayers} – ${config.maxPlayers}")
             InfoRow("Duration", "${config.durationMinutes} minutes")
             InfoRow("Check-in", "${config.checkInDurationMinutes} min before start")
-            InfoRow("Zone Shrinks", "${config.shrinkSchedule.size} stages")
 
             Spacer(Modifier.height(24.dp))
 
@@ -364,7 +351,8 @@ fun GameDetailScreen(
             // Prize breakdown — use real BPS from contract
             Text("Prize Distribution", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
-            val totalPool = config.entryFee * config.maxPlayers
+            val playerCount = maxOf(game?.currentPlayers ?: 0, config.minPlayers)
+            val totalPool = config.entryFee * playerCount
             InfoRow("1st Place (${config.bps1st / 100}%)", "%.4f ETH".format(totalPool * config.bps1st / 10000.0))
             InfoRow("Most Kills (${config.bpsKills / 100}%)", "%.4f ETH".format(totalPool * config.bpsKills / 10000.0))
             InfoRow("2nd Place (${config.bps2nd / 100}%)", "%.4f ETH".format(totalPool * config.bps2nd / 10000.0))

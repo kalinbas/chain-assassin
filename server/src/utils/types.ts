@@ -19,6 +19,8 @@ export interface GameConfig {
   creator: string;
   centerLat: number; // int32 (÷1e6 = degrees)
   centerLng: number;
+  meetingLat: number; // int32 (÷1e6 = degrees)
+  meetingLng: number;
   bps1st: number;
   bps2nd: number;
   bps3rd: number;

@@ -41,10 +41,10 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
       `INSERT INTO games (
         game_id, title, entry_fee, min_players, max_players,
         registration_deadline, expiry_deadline, created_at, creator,
-        center_lat, center_lng,
+        center_lat, center_lng, meeting_lat, meeting_lng,
         bps_1st, bps_2nd, bps_3rd, bps_kills, bps_platform, phase
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )`
     )
     .run(
@@ -59,6 +59,8 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
       game.creator,
       game.centerLat,
       game.centerLng,
+      game.meetingLat,
+      game.meetingLng,
       game.bps1st,
       game.bps2nd,
       game.bps3rd,
@@ -93,6 +95,8 @@ export function getGame(gameId: number): (GameConfig & {
     creator: row.creator as string,
     centerLat: row.center_lat as number,
     centerLng: row.center_lng as number,
+    meetingLat: (row.meeting_lat as number) ?? 0,
+    meetingLng: (row.meeting_lng as number) ?? 0,
     bps1st: row.bps_1st as number,
     bps2nd: row.bps_2nd as number,
     bps3rd: row.bps_3rd as number,
@@ -163,6 +167,8 @@ export function getGamesInPhase(phase: GamePhase): GameConfig[] {
     creator: row.creator as string,
     centerLat: row.center_lat as number,
     centerLng: row.center_lng as number,
+    meetingLat: (row.meeting_lat as number) ?? 0,
+    meetingLng: (row.meeting_lng as number) ?? 0,
     bps1st: row.bps_1st as number,
     bps2nd: row.bps_2nd as number,
     bps3rd: row.bps_3rd as number,

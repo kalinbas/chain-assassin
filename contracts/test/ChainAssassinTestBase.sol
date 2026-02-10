@@ -42,6 +42,8 @@ abstract contract ChainAssassinTestBase is Test {
             maxDuration: 1 days,
             centerLat: 19435244,
             centerLng: -99128056,
+            meetingLat: 19436000,
+            meetingLng: -99127000,
             bps1st: 3500,
             bps2nd: 1500,
             bps3rd: 1000,

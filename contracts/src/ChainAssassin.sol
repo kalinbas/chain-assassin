@@ -198,6 +198,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
             creator: msg.sender,
             centerLat: params.centerLat,
             centerLng: params.centerLng,
+            meetingLat: params.meetingLat,
+            meetingLng: params.meetingLng,
             bps1st: params.bps1st,
             bps2nd: params.bps2nd,
             bps3rd: params.bps3rd,

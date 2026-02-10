@@ -66,6 +66,9 @@ class LobbyViewModel @Inject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
 
@@ -96,113 +99,118 @@ class LobbyViewModel @Inject constructor(
     fun loadGames() {
         viewModelScope.launch {
             _isLoading.value = true
-            _error.value = null
-            try {
-                val nextId = contractService.getNextGameId()
-                val address = walletManager.getAddress()
-                val items = mutableListOf<GameListItem>()
-                for (gameId in 1 until nextId) {
-                    try {
-                        val config = contractService.getGameConfig(gameId)
-                        val state = contractService.getGameState(gameId)
-                        val shrinks = contractService.getZoneShrinks(gameId)
-                        val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
+            loadGamesInternal()
+            _isLoading.value = false
+        }
+    }
 
-                        // Only show games in REGISTRATION phase in the upcoming list
-                        if (state.phase == OnChainPhase.REGISTRATION) {
-                            val playerInfo = if (address.isNotEmpty()) {
-                                try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
-                            } else null
+    private suspend fun loadGamesInternal() {
+        _error.value = null
+        try {
+            val nextId = contractService.getNextGameId()
+            val address = walletManager.getAddress()
+            val items = mutableListOf<GameListItem>()
+            for (gameId in 1 until nextId) {
+                try {
+                    val config = contractService.getGameConfig(gameId)
+                    val state = contractService.getGameState(gameId)
+                    val shrinks = contractService.getZoneShrinks(gameId)
+                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
 
-                            items.add(
-                                GameListItem(
-                                    config = appConfig,
-                                    currentPlayers = state.playerCount,
-                                    locationName = appConfig.name,
-                                    startTime = appConfig.gameDate,
-                                    onChainPhase = state.phase,
-                                    totalCollected = state.totalCollected,
-                                    isPlayerRegistered = playerInfo?.registered == true,
-                                    playerNumber = playerInfo?.number ?: 0
-                                )
+                    // Only show games in REGISTRATION phase in the upcoming list
+                    if (state.phase == OnChainPhase.REGISTRATION) {
+                        val playerInfo = if (address.isNotEmpty()) {
+                            try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
+                        } else null
+
+                        items.add(
+                            GameListItem(
+                                config = appConfig,
+                                currentPlayers = state.playerCount,
+                                locationName = appConfig.name,
+                                startTime = appConfig.gameDate,
+                                onChainPhase = state.phase,
+                                totalCollected = state.totalCollected,
+                                isPlayerRegistered = playerInfo?.registered == true,
+                                playerNumber = playerInfo?.number ?: 0
                             )
-                        }
-                    } catch (_: Exception) {
-                        // Skip games that fail to load
+                        )
                     }
+                } catch (_: Exception) {
+                    // Skip games that fail to load
                 }
-                _games.value = items
-            } catch (e: Exception) {
-                _error.value = "Failed to load games: ${e.message}"
-            } finally {
-                _isLoading.value = false
             }
+            _games.value = items
+        } catch (e: Exception) {
+            _error.value = "Failed to load games: ${e.message}"
         }
     }
 
     fun loadGameHistory() {
-        viewModelScope.launch {
-            val address = walletManager.getAddress()
-            if (address.isEmpty()) return@launch
-            try {
-                val nextId = contractService.getNextGameId()
-                val items = mutableListOf<GameHistoryItem>()
-                for (gameId in 1 until nextId) {
-                    try {
-                        val playerInfo = contractService.getPlayerInfo(gameId, address)
-                        if (!playerInfo.registered) continue
+        viewModelScope.launch { loadGameHistoryInternal() }
+    }
 
-                        val config = contractService.getGameConfig(gameId)
-                        val state = contractService.getGameState(gameId)
-                        val shrinks = contractService.getZoneShrinks(gameId)
-                        val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
+    private suspend fun loadGameHistoryInternal() {
+        val address = walletManager.getAddress()
+        if (address.isEmpty()) return
+        try {
+            val nextId = contractService.getNextGameId()
+            val items = mutableListOf<GameHistoryItem>()
+            for (gameId in 1 until nextId) {
+                try {
+                    val playerInfo = contractService.getPlayerInfo(gameId, address)
+                    if (!playerInfo.registered) continue
 
-                        // Only include ended or cancelled games in history
-                        if (state.phase != OnChainPhase.ENDED && state.phase != OnChainPhase.CANCELLED) continue
+                    val config = contractService.getGameConfig(gameId)
+                    val state = contractService.getGameState(gameId)
+                    val shrinks = contractService.getZoneShrinks(gameId)
+                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
 
-                        val claimable = contractService.getClaimableAmount(gameId, address)
-                        val claimableEth = org.web3j.utils.Convert.fromWei(
-                            java.math.BigDecimal(claimable),
-                            org.web3j.utils.Convert.Unit.ETHER
-                        ).toDouble()
+                    // Only include ended or cancelled games in history
+                    if (state.phase != OnChainPhase.ENDED && state.phase != OnChainPhase.CANCELLED) continue
 
-                        val isCancelled = state.phase == OnChainPhase.CANCELLED
-                        val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
+                    val claimable = contractService.getClaimableAmount(gameId, address)
+                    val claimableEth = org.web3j.utils.Convert.fromWei(
+                        java.math.BigDecimal(claimable),
+                        org.web3j.utils.Convert.Unit.ETHER
+                    ).toDouble()
 
-                        // Determine rank based on winners
-                        val rank = when (address.lowercase()) {
-                            state.winner1.lowercase() -> 1
-                            state.winner2.lowercase() -> 2
-                            state.winner3.lowercase() -> 3
-                            else -> 0
-                        }
+                    val isCancelled = state.phase == OnChainPhase.CANCELLED
+                    val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
 
-                        items.add(
-                            GameHistoryItem(
-                                config = appConfig,
-                                phase = gamePhase,
-                                kills = playerInfo.kills,
-                                rank = rank,
-                                survivalSeconds = 0L,
-                                playersTotal = state.playerCount,
-                                leaderboard = emptyList(),
-                                playedAt = config.gameDate * 1000,
-                                prizeEth = claimableEth,
-                                claimed = playerInfo.claimed || claimable == BigInteger.ZERO,
-                                claimableWei = claimable,
-                                isCancelled = isCancelled,
-                                gameId = gameId
-                            )
-                        )
-                    } catch (_: Exception) {
-                        // Skip games that fail to load
+                    // Determine rank based on winners
+                    val rank = when (address.lowercase()) {
+                        state.winner1.lowercase() -> 1
+                        state.winner2.lowercase() -> 2
+                        state.winner3.lowercase() -> 3
+                        else -> 0
                     }
+
+                    items.add(
+                        GameHistoryItem(
+                            config = appConfig,
+                            phase = gamePhase,
+                            kills = playerInfo.kills,
+                            rank = rank,
+                            survivalSeconds = 0L,
+                            playersTotal = state.playerCount,
+                            leaderboard = emptyList(),
+                            playedAt = config.gameDate * 1000,
+                            prizeEth = claimableEth,
+                            claimed = playerInfo.claimed || claimable == BigInteger.ZERO,
+                            claimableWei = claimable,
+                            isCancelled = isCancelled,
+                            gameId = gameId
+                        )
+                    )
+                } catch (_: Exception) {
+                    // Skip games that fail to load
                 }
-                // Sort by date descending
-                _gameHistory.value = items.sortedByDescending { it.playedAt }
-            } catch (_: Exception) {
-                // Silently fail — history stays empty
             }
+            // Sort by date descending
+            _gameHistory.value = items.sortedByDescending { it.playedAt }
+        } catch (_: Exception) {
+            // Silently fail — history stays empty
         }
     }
 
@@ -371,6 +379,22 @@ class LobbyViewModel @Inject constructor(
     }
 
     fun shortenedAddress(): String = walletManager.shortenedAddress()
+
+    fun refresh() {
+        viewModelScope.launch {
+            _isRefreshing.value = true
+            try {
+                // Reload games and history in parallel
+                val gamesJob = launch { loadGamesInternal() }
+                val historyJob = launch { loadGameHistoryInternal() }
+                gamesJob.join()
+                historyJob.join()
+                walletManager.refreshBalance()
+            } finally {
+                _isRefreshing.value = false
+            }
+        }
+    }
 
     fun clearError() {
         _error.value = null

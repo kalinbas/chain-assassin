@@ -8,6 +8,10 @@ export function useGame(id: number) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (id <= 0) {
+      setLoading(false);
+      return;
+    }
     Promise.all([loadGame(id), loadGameEvents(id)])
       .then(([gameData, events]) => {
         if (gameData) {

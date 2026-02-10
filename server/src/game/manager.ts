@@ -325,14 +325,18 @@ export function handleCheckin(
   if (!player) return { success: false, error: "Not registered" };
   if (player.checkedIn) return { success: false, error: "Already checked in" };
 
-  // Verify player is near the game center
-  const centerLatDeg = contractCoordToDegrees(game.centerLat);
-  const centerLngDeg = contractCoordToDegrees(game.centerLng);
-  const dist = haversineDistance(lat, lng, centerLatDeg, centerLngDeg);
+  // Verify player is near the meeting point (or zone center as fallback)
+  const meetLatDeg = game.meetingLat !== 0
+    ? contractCoordToDegrees(game.meetingLat)
+    : contractCoordToDegrees(game.centerLat);
+  const meetLngDeg = game.meetingLng !== 0
+    ? contractCoordToDegrees(game.meetingLng)
+    : contractCoordToDegrees(game.centerLng);
+  const dist = haversineDistance(lat, lng, meetLatDeg, meetLngDeg);
 
-  // Allow check-in within initial zone radius (generous)
-  if (dist > 5000) { // 5km max check-in distance
-    return { success: false, error: "Too far from game area" };
+  // Allow check-in within 5km of meeting point (generous)
+  if (dist > 5000) {
+    return { success: false, error: "Too far from meeting point" };
   }
 
   // Viral check-in: first 5% of players (min 1) are GPS-only, rest need QR

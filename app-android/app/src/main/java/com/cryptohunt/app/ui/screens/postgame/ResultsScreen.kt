@@ -117,7 +117,8 @@ fun ResultsScreen(
             Text("PRIZE DISTRIBUTION", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
             Spacer(Modifier.height(12.dp))
 
-            val prizePool = (state?.config?.entryFee ?: 0.0) * (state?.config?.maxPlayers ?: 100) * 0.9
+            val playerCount = maxOf(state?.config?.maxPlayers ?: 0, state?.config?.minPlayers ?: 0)
+            val prizePool = (state?.config?.entryFee ?: 0.0) * playerCount * 0.9
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),

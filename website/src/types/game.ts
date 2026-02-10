@@ -38,6 +38,8 @@ export interface Game {
   expiryDeadline: string;
   centerLat: number;
   centerLng: number;
+  meetingLat: number;
+  meetingLng: number;
   bps: GameBps;
   zoneShrinks: ZoneShrink[];
   phase: Phase;

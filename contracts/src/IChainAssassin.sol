@@ -31,6 +31,8 @@ interface IChainAssassin {
         address creator;                // operator that created the game
         int32   centerLat;              // centre latitude  (× 1e6, e.g. 19435244 → 19.435244°)
         int32   centerLng;              // centre longitude (× 1e6)
+        int32   meetingLat;             // meeting-point latitude  (× 1e6)
+        int32   meetingLng;             // meeting-point longitude (× 1e6)
         uint16  bps1st;                 // 1st-place share  (e.g. 4000 = 40%)
         uint16  bps2nd;                 // 2nd-place share
         uint16  bps3rd;                 // 3rd-place share
@@ -68,6 +70,8 @@ interface IChainAssassin {
         uint32  maxDuration;
         int32   centerLat;
         int32   centerLng;
+        int32   meetingLat;
+        int32   meetingLng;
         uint16  bps1st;
         uint16  bps2nd;
         uint16  bps3rd;

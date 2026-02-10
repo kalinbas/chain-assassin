@@ -16,7 +16,8 @@ function PrizeRow({ label, bps, amount, modifier }: { label: string; bps: number
 }
 
 export function PrizeBreakdown({ game }: { game: Game }) {
-  const totalPool = game.players * game.entryFee;
+  const playerCount = Math.max(game.players, game.minPlayers);
+  const totalPool = playerCount * game.entryFee;
   const prizes = {
     first: (totalPool * game.bps.first / 10000).toFixed(4),
     second: (totalPool * game.bps.second / 10000).toFixed(4),

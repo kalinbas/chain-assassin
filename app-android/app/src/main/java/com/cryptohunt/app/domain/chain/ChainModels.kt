@@ -25,6 +25,8 @@ data class OnChainGameConfig(
     val creator: String,
     val centerLat: Int,
     val centerLng: Int,
+    val meetingLat: Int,
+    val meetingLng: Int,
     val bps1st: Int,
     val bps2nd: Int,
     val bps3rd: Int,

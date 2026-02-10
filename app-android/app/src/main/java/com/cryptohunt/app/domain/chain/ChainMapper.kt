@@ -31,6 +31,8 @@ object ChainMapper {
             maxPlayers = config.maxPlayers,
             zoneCenterLat = config.centerLat / 1_000_000.0,
             zoneCenterLng = config.centerLng / 1_000_000.0,
+            meetingLat = config.meetingLat / 1_000_000.0,
+            meetingLng = config.meetingLng / 1_000_000.0,
             initialRadiusMeters = initialRadius,
             shrinkSchedule = shrinks.drop(1).map { s ->
                 ZoneShrink(

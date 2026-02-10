@@ -48,7 +48,11 @@ export function runMigrations(db: Database.Database): void {
     log.info({ version: SCHEMA_VERSION }, "Database schema created");
   }
 
-  // Future migrations go here:
-  // if (currentVersion < 2) { migrate_v1_to_v2(db); }
-  // if (currentVersion < 3) { migrate_v2_to_v3(db); }
+  // Migrations
+  if (currentVersion < 2 && currentVersion > 0) {
+    db.exec(`ALTER TABLE games ADD COLUMN meeting_lat INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE games ADD COLUMN meeting_lng INTEGER NOT NULL DEFAULT 0`);
+    db.prepare("UPDATE schema_version SET version = ?").run(2);
+    log.info("Migrated to v2: added meeting_lat/meeting_lng");
+  }
 }

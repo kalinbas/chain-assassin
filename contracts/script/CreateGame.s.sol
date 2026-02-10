@@ -8,7 +8,7 @@ import {IChainAssassin} from "../src/IChainAssassin.sol";
 /// @title CreateGame — Creates a test game on the deployed contract
 contract CreateGame is Script {
     function run() external {
-        address gameContract = 0xe9cFc825a66780651A7844f470E70DfdbabC9636;
+        address gameContract = 0x0ABfD376Bd339A6dcd885F37aB0A9cE761c2F99e;
         ChainAssassin game = ChainAssassin(gameContract);
 
         // --- Game parameters ---
@@ -22,6 +22,8 @@ contract CreateGame is Script {
             maxDuration: 7200, // 2 hours
             centerLat: 19420456,   // 19.420456° (Chapultepec Park)
             centerLng: -99189554,  // -99.189554°
+            meetingLat: 19421200,  // 19.421200° (park entrance)
+            meetingLng: -99187800, // -99.187800°
             bps1st: 3500,
             bps2nd: 1500,
             bps3rd: 1000,

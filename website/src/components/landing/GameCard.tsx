@@ -5,7 +5,8 @@ import type { Game } from '../../types/game';
 export function GameCard({ game }: { game: Game }) {
   const fillPct = game.maxPlayers > 0 ? Math.round((game.players / game.maxPlayers) * 100) : 0;
   const prizePoolBps = game.bps.first + game.bps.second + game.bps.third + game.bps.kills;
-  const prizePool = (game.players * game.entryFee * prizePoolBps / 10000).toFixed(4);
+  const playerCount = Math.max(game.players, game.minPlayers);
+  const prizePool = (playerCount * game.entryFee * prizePoolBps / 10000).toFixed(4);
 
   return (
     <Link to={`/game/${game.id}`} className="game-card__link">

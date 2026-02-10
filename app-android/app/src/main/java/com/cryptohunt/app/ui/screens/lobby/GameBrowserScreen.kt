@@ -9,9 +9,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,6 +43,7 @@ fun GameBrowserScreen(
     val gameState by viewModel.gameState.collectAsState()
     val gameHistory by viewModel.gameHistory.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
     val error by viewModel.error.collectAsState()
 
     val activePhase = gameState?.phase
@@ -87,10 +91,22 @@ fun GameBrowserScreen(
         },
         containerColor = Background
     ) { padding ->
+        val pullToRefreshState = rememberPullToRefreshState()
+        if (pullToRefreshState.isRefreshing) {
+            LaunchedEffect(true) {
+                viewModel.refresh()
+            }
+        }
+        LaunchedEffect(isRefreshing) {
+            if (!isRefreshing) {
+                pullToRefreshState.endRefresh()
+            }
+        }
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
             LazyColumn(
                 modifier = Modifier
@@ -258,6 +274,12 @@ fun GameBrowserScreen(
                     }
                 }
             }
+            PullToRefreshContainer(
+                state = pullToRefreshState,
+                modifier = Modifier.align(Alignment.TopCenter),
+                containerColor = Surface,
+                contentColor = Primary
+            )
         }
     }
 }
@@ -401,7 +423,8 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
             Spacer(modifier = Modifier.height(12.dp))
 
             // Prize pool — use real BPS from contract
-            val totalPool = game.config.entryFee * game.config.maxPlayers
+            val playerCount = maxOf(game.currentPlayers, game.config.minPlayers)
+            val totalPool = game.config.entryFee * playerCount
             val creatorBps = 10000 - game.config.bps1st - game.config.bps2nd - game.config.bps3rd - game.config.bpsKills
             val prizePool = totalPool * (10000 - creatorBps) / 10000.0
             Row(

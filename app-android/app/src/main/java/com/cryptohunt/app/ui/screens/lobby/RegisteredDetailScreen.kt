@@ -338,7 +338,8 @@ fun RegisteredDetailScreen(
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("PRIZE POOL", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(8.dp))
-                    val prizePool = config.entryFee * config.maxPlayers * 0.9
+                    val playerCount = maxOf(selectedGame?.currentPlayers ?: 0, config.minPlayers)
+                    val prizePool = config.entryFee * playerCount * 0.9
                     PrizeRow("Winner (40%)", "%.3f ETH".format(prizePool * 0.4))
                     PrizeRow("Most Kills (20%)", "%.3f ETH".format(prizePool * 0.2))
                     PrizeRow("2nd Place (15%)", "%.3f ETH".format(prizePool * 0.15))

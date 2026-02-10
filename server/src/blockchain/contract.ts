@@ -90,6 +90,8 @@ export async function fetchGameConfig(gameId: number): Promise<GameConfig> {
     creator: raw.creator,
     centerLat: Number(raw.centerLat),
     centerLng: Number(raw.centerLng),
+    meetingLat: Number(raw.meetingLat),
+    meetingLng: Number(raw.meetingLng),
     bps1st: Number(raw.bps1st),
     bps2nd: Number(raw.bps2nd),
     bps3rd: Number(raw.bps3rd),

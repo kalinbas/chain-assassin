@@ -2,7 +2,6 @@ package com.cryptohunt.app.ui.screens.game
 
 import android.graphics.Canvas
 import android.graphics.Paint
-import android.graphics.DashPathEffect
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
@@ -56,12 +55,15 @@ fun MapScreen(
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
-    // Colors matching the website's green/red scheme
+    val meetingLat = config?.meetingLat ?: 0.0
+    val meetingLng = config?.meetingLng ?: 0.0
+
+    // Colors matching the website's green scheme
     val primaryArgb = Primary.toArgb()                           // #00FF88 — heatmap
     val primaryFillArgb = Primary.copy(alpha = 0.08f).toArgb()   // zone fill
     val primaryStrokeArgb = Primary.copy(alpha = 0.8f).toArgb()  // zone stroke
-    val dangerStrokeArgb = Danger.copy(alpha = 0.5f).toArgb()    // final zone stroke
-    val dangerFillArgb = Danger.copy(alpha = 0.05f).toArgb()     // final zone fill
+    val meetingArgb = Warning.toArgb()                            // #FFBB00 — meeting point
+    val meetingFillArgb = Warning.copy(alpha = 0.9f).toArgb()
 
     Scaffold(
         topBar = {
@@ -144,54 +146,6 @@ fun MapScreen(
                         }
                     })
 
-                    // Future zone shrink previews
-                    val futureShrinks = gameState?.config?.shrinkSchedule?.filter {
-                        it.newRadiusMeters < zoneRadius
-                    } ?: emptyList()
-                    val finalShrinkRadius = gameState?.config?.shrinkSchedule?.lastOrNull()?.newRadiusMeters
-                    futureShrinks.forEach { shrink ->
-                        val isFinal = shrink.newRadiusMeters == finalShrinkRadius
-                        mapView.overlays.add(object : Overlay() {
-                            override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
-                                if (shadow) return
-                                val projection = mapView.projection
-                                val centerPoint = android.graphics.Point()
-                                projection.toPixels(center, centerPoint)
-
-                                val edgePoint = center.destinationPoint(shrink.newRadiusMeters, 90.0)
-                                val edgePixel = android.graphics.Point()
-                                projection.toPixels(GeoPoint(edgePoint.latitude, edgePoint.longitude), edgePixel)
-                                val pixelRadius = Math.abs(edgePixel.x - centerPoint.x).toFloat()
-
-                                if (isFinal) {
-                                    // Final zone: red dashed + light fill (matches website)
-                                    canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
-                                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                            style = Paint.Style.FILL
-                                            color = dangerFillArgb
-                                        })
-                                    canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
-                                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                            style = Paint.Style.STROKE
-                                            color = dangerStrokeArgb
-                                            strokeWidth = 1f
-                                            pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
-                                        })
-                                } else {
-                                    // Intermediate shrinks: green dashed stroke
-                                    canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
-                                        Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                            style = Paint.Style.STROKE
-                                            color = primaryStrokeArgb
-                                            strokeWidth = 1f
-                                            alpha = 100
-                                            pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
-                                        })
-                                }
-                            }
-                        })
-                    }
-
                     // Heatmap blobs — green glow
                     blobsState.forEach { blob ->
                         mapView.overlays.add(object : Overlay() {
@@ -218,20 +172,29 @@ fun MapScreen(
                         })
                     }
 
-                    // Center marker — small green dot (matches website)
-                    mapView.overlays.add(object : Overlay() {
-                        override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
-                            if (shadow) return
-                            val projection = mapView.projection
-                            val centerPoint = android.graphics.Point()
-                            projection.toPixels(center, centerPoint)
-                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), 6f,
-                                Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                    style = Paint.Style.FILL
-                                    color = primaryArgb
-                                })
-                        }
-                    })
+                    // Meeting point marker — yellow circle (matches website)
+                    if (meetingLat != 0.0 && meetingLng != 0.0) {
+                        val meetingPoint = GeoPoint(meetingLat, meetingLng)
+                        mapView.overlays.add(object : Overlay() {
+                            override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+                                if (shadow) return
+                                val projection = mapView.projection
+                                val pt = android.graphics.Point()
+                                projection.toPixels(meetingPoint, pt)
+                                canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = meetingFillArgb
+                                    })
+                                canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.STROKE
+                                        color = meetingArgb
+                                        strokeWidth = 2f
+                                    })
+                            }
+                        })
+                    }
 
                     // Current location marker
                     if (locationState.isTracking) {
@@ -247,27 +210,6 @@ fun MapScreen(
                 }
             )
 
-            // Zone info card
-            Card(
-                modifier = Modifier.padding(16.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface.copy(alpha = 0.9f)),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        "Zone: ${zoneRadius.toInt()}m radius",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = TextPrimary
-                    )
-                    gameState?.let { state ->
-                        Text(
-                            "${state.playersRemaining} players remaining",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = TextSecondary
-                        )
-                    }
-                }
-            }
         }
     }
 }

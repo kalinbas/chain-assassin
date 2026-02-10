@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 
 const NAV_LINKS = [
   { href: '#games', label: 'Games' },
+  { href: '#past-games', label: 'Past Games' },
   { href: '#how-it-works', label: 'How It Works' },
   { href: '#features', label: 'Features' },
   { href: '#screenshots', label: 'Screenshots' },

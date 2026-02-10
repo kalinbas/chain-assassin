@@ -71,6 +71,8 @@ function formatGameData(gameId: number, config: any, state: any, shrinks: any[])
     expiryDeadline: formatDate(gameDate + maxDuration),
     centerLat: Number(config.centerLat) / 1e6,
     centerLng: Number(config.centerLng) / 1e6,
+    meetingLat: Number(config.meetingLat) / 1e6,
+    meetingLng: Number(config.meetingLng) / 1e6,
     bps: {
       first: bps1st,
       second: bps2nd,

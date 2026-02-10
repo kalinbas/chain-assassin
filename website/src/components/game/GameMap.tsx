@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Circle, CircleMarker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, CircleMarker, Tooltip, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { Game } from '../../types/game';
@@ -17,7 +17,6 @@ function FitBounds({ center, radius }: { center: [number, number]; radius: numbe
 export function GameMap({ game }: { game: Game }) {
   const center: LatLngExpression = [game.centerLat, game.centerLng];
   const initialRadius = game.zoneShrinks[0].radiusMeters;
-  const finalRadius = game.zoneShrinks[game.zoneShrinks.length - 1].radiusMeters;
 
   return (
     <div className="game-detail__map-section">
@@ -40,18 +39,17 @@ export function GameMap({ game }: { game: Game }) {
             radius={initialRadius}
             pathOptions={{ color: '#00FF88', weight: 2, opacity: 0.8, fillColor: '#00FF88', fillOpacity: 0.08 }}
           />
-          {finalRadius !== initialRadius && (
-            <Circle
-              center={center}
-              radius={finalRadius}
-              pathOptions={{ color: '#FF3B3B', weight: 1, opacity: 0.5, dashArray: '6, 4', fillColor: '#FF3B3B', fillOpacity: 0.05 }}
-            />
+          {game.meetingLat !== 0 && game.meetingLng !== 0 && (
+            <CircleMarker
+              center={[game.meetingLat, game.meetingLng]}
+              radius={8}
+              pathOptions={{ color: '#FFBB00', fillColor: '#FFBB00', fillOpacity: 0.9, weight: 2 }}
+            >
+              <Tooltip direction="top" permanent className="meeting-point-tooltip">
+                Meeting Point
+              </Tooltip>
+            </CircleMarker>
           )}
-          <CircleMarker
-            center={center}
-            radius={5}
-            pathOptions={{ color: '#00FF88', fillColor: '#00FF88', fillOpacity: 1, weight: 0 }}
-          />
           <FitBounds center={[game.centerLat, game.centerLng]} radius={initialRadius} />
         </MapContainer>
       </div>

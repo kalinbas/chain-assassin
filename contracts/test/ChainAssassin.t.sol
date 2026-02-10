@@ -26,6 +26,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         assertEq(config.bps1st, 3500);
         assertEq(config.bpsCreator, 1000);
         assertEq(config.centerLat, 19435244);
+        assertEq(config.meetingLat, 19436000);
     }
 
     function test_createGame_storesZoneShrinks() public {

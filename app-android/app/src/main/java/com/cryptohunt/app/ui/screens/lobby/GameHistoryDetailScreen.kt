@@ -294,7 +294,8 @@ fun GameHistoryDetailScreen(
                     Text("PRIZE DISTRIBUTION", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
 
-                    val totalPool = item.config.entryFee * item.config.maxPlayers
+                    val playerCount = maxOf(item.playersTotal, item.config.minPlayers)
+                    val totalPool = item.config.entryFee * playerCount
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CardBackground),

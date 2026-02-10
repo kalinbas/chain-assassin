@@ -1,7 +1,7 @@
 package com.cryptohunt.app.domain.chain
 
 object ChainConfig {
-    const val CONTRACT_ADDRESS = "0xe9cFc825a66780651A7844f470E70DfdbabC9636"
+    const val CONTRACT_ADDRESS = "0x0ABfD376Bd339A6dcd885F37aB0A9cE761c2F99e"
     const val RPC_URL = "https://sepolia.base.org"
     const val CHAIN_ID = 84532L
     const val EXPLORER_URL = "https://sepolia.basescan.org"

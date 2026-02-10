@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -19,6 +19,8 @@ CREATE TABLE IF NOT EXISTS games (
   creator               TEXT NOT NULL,
   center_lat            INTEGER NOT NULL,
   center_lng            INTEGER NOT NULL,
+  meeting_lat           INTEGER NOT NULL DEFAULT 0,
+  meeting_lng           INTEGER NOT NULL DEFAULT 0,
   bps_1st               INTEGER NOT NULL,
   bps_2nd               INTEGER NOT NULL,
   bps_3rd               INTEGER NOT NULL,

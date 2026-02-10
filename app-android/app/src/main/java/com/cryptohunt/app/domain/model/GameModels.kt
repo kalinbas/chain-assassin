@@ -10,6 +10,8 @@ data class GameConfig(
     val maxPlayers: Int,
     val zoneCenterLat: Double,
     val zoneCenterLng: Double,
+    val meetingLat: Double = 0.0,
+    val meetingLng: Double = 0.0,
     val initialRadiusMeters: Double,
     val shrinkSchedule: List<ZoneShrink>,
     val durationMinutes: Int,
