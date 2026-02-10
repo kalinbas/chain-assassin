@@ -77,6 +77,8 @@ class LobbyViewModel @Inject constructor(
     init {
         loadGames()
         loadGameHistory()
+        // Fetch wallet balance on startup so the lobby balance chip is populated
+        viewModelScope.launch { walletManager.refreshBalance() }
 
         // Watch for game-over events from active gameplay to save to history
         viewModelScope.launch {
@@ -310,6 +312,12 @@ class LobbyViewModel @Inject constructor(
                     val playerInfo = contractService.getPlayerInfo(gameIdInt, walletManager.getAddress())
                     // Register in local game engine for gameplay simulation
                     gameEngine.registerForGame(game.config, walletManager.getAddress(), game.startTime, assignedPlayerNumber = playerInfo.number)
+                    // Update selected game immediately so UI reflects registration
+                    _selectedGame.value = game.copy(
+                        isPlayerRegistered = true,
+                        playerNumber = playerInfo.number,
+                        currentPlayers = game.currentPlayers + 1
+                    )
                     // Refresh games list to update player count
                     loadGames()
                     onSuccess()

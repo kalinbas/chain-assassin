@@ -7,6 +7,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -28,6 +30,7 @@ import com.cryptohunt.app.ui.screens.onboarding.WalletSetupScreen
 import com.cryptohunt.app.ui.screens.onboarding.WelcomeScreen
 import com.cryptohunt.app.ui.screens.postgame.EliminatedScreen
 import com.cryptohunt.app.ui.screens.postgame.ResultsScreen
+import com.cryptohunt.app.ui.viewmodel.WalletViewModel
 
 private val enterSlide: EnterTransition = slideInHorizontally(initialOffsetX = { it }) + fadeIn()
 private val exitSlide: ExitTransition = slideOutHorizontally(targetOffsetX = { -it / 3 }) + fadeOut()
@@ -35,12 +38,24 @@ private val popEnter: EnterTransition = slideInHorizontally(initialOffsetX = { -
 private val popExit: ExitTransition = slideOutHorizontally(targetOffsetX = { it }) + fadeOut()
 
 @Composable
-fun AppNavHost() {
+fun AppNavHost(
+    walletViewModel: WalletViewModel = hiltViewModel()
+) {
     val navController = rememberNavController()
+
+    // Compute start destination only once — don't react to wallet state changes
+    // (creating a wallet during onboarding must not skip the setup screen)
+    val startDestination = remember {
+        if (walletViewModel.walletState.value.isConnected) {
+            NavRoutes.GameBrowser.route
+        } else {
+            NavRoutes.Welcome.route
+        }
+    }
 
     NavHost(
         navController = navController,
-        startDestination = NavRoutes.Welcome.route,
+        startDestination = startDestination,
         enterTransition = { enterSlide },
         exitTransition = { exitSlide },
         popEnterTransition = { popEnter },
@@ -105,7 +120,12 @@ fun AppNavHost() {
 
         composable(NavRoutes.Deposit.route) {
             DepositScreen(
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onLogout = {
+                    navController.navigate(NavRoutes.Welcome.route) {
+                        popUpTo(0) { inclusive = true }
+                    }
+                }
             )
         }
 

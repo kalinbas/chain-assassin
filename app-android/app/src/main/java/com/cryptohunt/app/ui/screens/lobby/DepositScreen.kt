@@ -2,6 +2,9 @@ package com.cryptohunt.app.ui.screens.lobby
 
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -11,9 +14,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -34,6 +41,7 @@ import com.cryptohunt.app.ui.viewmodel.WalletViewModel
 @Composable
 fun DepositScreen(
     onBack: () -> Unit,
+    onLogout: () -> Unit,
     viewModel: WalletViewModel = hiltViewModel()
 ) {
     val walletState by viewModel.walletState.collectAsState()
@@ -41,6 +49,34 @@ fun DepositScreen(
     val context = LocalContext.current
     var copied by remember { mutableStateOf(false) }
     var isRefreshing by remember { mutableStateOf(false) }
+    var showLogoutDialog by remember { mutableStateOf(false) }
+    var keyCopied by remember { mutableStateOf(false) }
+    var keySavedToFile by remember { mutableStateOf(false) }
+
+    // File saver launcher for backup before logout
+    val saveFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("text/plain")
+    ) { uri ->
+        if (uri != null) {
+            val privateKey = viewModel.getPrivateKeyHex()
+            if (privateKey != null) {
+                try {
+                    context.contentResolver.openOutputStream(uri)?.use { stream ->
+                        val content = "Chain-Assassin Wallet Backup\n" +
+                            "========================\n" +
+                            "Address: ${walletState.address}\n" +
+                            "Private Key: $privateKey\n" +
+                            "\n" +
+                            "KEEP THIS FILE SAFE!\n" +
+                            "Anyone with your private key can access your wallet.\n" +
+                            "Use 'Import Wallet' to restore from this key."
+                        stream.write(content.toByteArray())
+                    }
+                    keySavedToFile = true
+                } catch (_: Exception) { }
+            }
+        }
+    }
 
     // Refresh balance when screen opens
     LaunchedEffect(Unit) {
@@ -327,8 +363,156 @@ fun DepositScreen(
                 Text("View on BaseScan", fontWeight = FontWeight.Bold)
             }
 
+            Spacer(modifier = Modifier.height(24.dp))
+
+            Divider(color = DividerColor)
+
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // Logout button
+            OutlinedButton(
+                onClick = { showLogoutDialog = true },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = Danger),
+                border = BorderStroke(1.dp, Danger.copy(alpha = 0.5f))
+            ) {
+                Icon(
+                    Icons.Default.Logout,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text("Logout", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text(
+                "Disconnect wallet from this device",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextDim,
+                textAlign = TextAlign.Center
+            )
+
             Spacer(modifier = Modifier.height(32.dp))
         }
+    }
+
+    // Logout warning dialog
+    if (showLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showLogoutDialog = false },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = Danger,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Logout Warning", color = TextPrimary)
+                }
+            },
+            text = {
+                Column {
+                    Text(
+                        "If you logout without saving your private key, " +
+                            "you will permanently lose access to this wallet " +
+                            "and any funds it contains.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Danger
+                    )
+
+                    Spacer(Modifier.height(16.dp))
+
+                    Text(
+                        "YOUR PRIVATE KEY",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = TextSecondary
+                    )
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Private key display
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(SurfaceVariant, RoundedCornerShape(8.dp))
+                            .border(1.dp, DividerColor, RoundedCornerShape(8.dp))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = viewModel.getPrivateKeyHex() ?: "unavailable",
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = Warning
+                        )
+                    }
+
+                    Spacer(Modifier.height(12.dp))
+
+                    // Copy key button
+                    OutlinedButton(
+                        onClick = {
+                            val key = viewModel.getPrivateKeyHex()
+                            if (key != null) {
+                                clipboardManager.setText(AnnotatedString(key))
+                                keyCopied = true
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary)
+                    ) {
+                        Icon(
+                            Icons.Default.ContentCopy,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (keyCopied) "Copied!" else "Copy Key")
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    // Save to file button
+                    OutlinedButton(
+                        onClick = {
+                            saveFileLauncher.launch("cryptohunt_wallet_backup.txt")
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (keySavedToFile) Primary else Warning
+                        )
+                    ) {
+                        Icon(
+                            if (keySavedToFile) Icons.Default.CheckCircle else Icons.Default.Save,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(if (keySavedToFile) "Key Saved!" else "Save to File")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showLogoutDialog = false
+                        viewModel.logout()
+                        onLogout()
+                    }
+                ) {
+                    Text("Logout", color = Danger, fontWeight = FontWeight.Bold)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showLogoutDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = Surface
+        )
     }
 }
 

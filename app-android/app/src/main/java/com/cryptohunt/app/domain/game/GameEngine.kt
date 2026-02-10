@@ -37,6 +37,17 @@ class GameEngine @Inject constructor() {
 
     // --- Public API ---
 
+    /** Clear all game state (used on logout). */
+    fun reset() {
+        timerJob?.cancel()
+        simulationJob?.cancel()
+        checkInTimerJob?.cancel()
+        mockPlayers.clear()
+        killFeedList.clear()
+        checkedInPlayerIds.clear()
+        _state.value = null
+    }
+
     fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long, assignedPlayerNumber: Int = 0) {
         val maxNum = config.maxPlayers + 1
         val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else Random.nextInt(1, maxNum)

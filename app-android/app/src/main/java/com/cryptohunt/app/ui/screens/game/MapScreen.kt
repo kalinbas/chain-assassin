@@ -17,8 +17,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.MapViewModel
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Overlay
@@ -55,13 +56,12 @@ fun MapScreen(
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
-    // Colors for the canvas overlays
-    val dangerArgb = Danger.toArgb()
-    val dangerFillArgb = Danger.copy(alpha = 0.1f).toArgb()
-    val warningArgb = Warning.copy(alpha = 0.5f).toArgb()
-    val warningStrongArgb = Warning.copy(alpha = 0.7f).toArgb()
-    val warningFillArgb = Warning.copy(alpha = 0.08f).toArgb()
-    val primaryArgb = Primary.toArgb()
+    // Colors matching the website's green/red scheme
+    val primaryArgb = Primary.toArgb()                           // #00FF88 — heatmap
+    val primaryFillArgb = Primary.copy(alpha = 0.08f).toArgb()   // zone fill
+    val primaryStrokeArgb = Primary.copy(alpha = 0.8f).toArgb()  // zone stroke
+    val dangerStrokeArgb = Danger.copy(alpha = 0.5f).toArgb()    // final zone stroke
+    val dangerFillArgb = Danger.copy(alpha = 0.05f).toArgb()     // final zone fill
 
     Scaffold(
         topBar = {
@@ -85,14 +85,28 @@ fun MapScreen(
             AndroidView(
                 modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
+                    val cartoDark = object : OnlineTileSourceBase(
+                        "CartoDB_Dark", 0, 20, 256, ".png",
+                        arrayOf(
+                            "https://a.basemaps.cartocdn.com/dark_all/",
+                            "https://b.basemaps.cartocdn.com/dark_all/",
+                            "https://c.basemaps.cartocdn.com/dark_all/",
+                            "https://d.basemaps.cartocdn.com/dark_all/"
+                        )
+                    ) {
+                        override fun getTileURLString(pMapTileIndex: Long): String {
+                            val z = MapTileIndex.getZoom(pMapTileIndex)
+                            val x = MapTileIndex.getX(pMapTileIndex)
+                            val y = MapTileIndex.getY(pMapTileIndex)
+                            return baseUrl + "$z/$x/$y.png"
+                        }
+                    }
                     MapView(ctx).apply {
-                        setTileSource(TileSourceFactory.MAPNIK)
+                        setTileSource(cartoDark)
                         setMultiTouchControls(true)
                         controller.setZoom(15.0)
                         controller.setCenter(GeoPoint(zoneCenterLat, zoneCenterLng))
-
-                        // Enable built-in zoom controls
-                        setBuiltInZoomControls(true)
+                        setBuiltInZoomControls(false)
                     }
                 },
                 update = { mapView ->
@@ -100,7 +114,7 @@ fun MapScreen(
 
                     val center = GeoPoint(zoneCenterLat, zoneCenterLng)
 
-                    // Current zone circle overlay
+                    // Current zone circle — green stroke + fill (matches website initial zone)
                     mapView.overlays.add(object : Overlay() {
                         override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
                             if (shadow) return
@@ -108,30 +122,29 @@ fun MapScreen(
                             val centerPoint = android.graphics.Point()
                             projection.toPixels(center, centerPoint)
 
-                            // Calculate pixel radius from meters
                             val edgePoint = center.destinationPoint(zoneRadius, 90.0)
                             val edgePixel = android.graphics.Point()
                             projection.toPixels(GeoPoint(edgePoint.latitude, edgePoint.longitude), edgePixel)
                             val pixelRadius = Math.abs(edgePixel.x - centerPoint.x).toFloat()
 
                             // Fill
-                            val fillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                style = Paint.Style.FILL
-                                color = dangerFillArgb
-                            }
-                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius, fillPaint)
+                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
+                                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    style = Paint.Style.FILL
+                                    color = primaryFillArgb
+                                })
 
                             // Stroke
-                            val strokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                style = Paint.Style.STROKE
-                                color = dangerArgb
-                                strokeWidth = 3f
-                            }
-                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius, strokePaint)
+                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
+                                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    style = Paint.Style.STROKE
+                                    color = primaryStrokeArgb
+                                    strokeWidth = 2f
+                                })
                         }
                     })
 
-                    // All future zone shrink previews (dashed circles)
+                    // Future zone shrink previews
                     val futureShrinks = gameState?.config?.shrinkSchedule?.filter {
                         it.newRadiusMeters < zoneRadius
                     } ?: emptyList()
@@ -151,33 +164,35 @@ fun MapScreen(
                                 val pixelRadius = Math.abs(edgePixel.x - centerPoint.x).toFloat()
 
                                 if (isFinal) {
-                                    // Final zone: filled + solid stroke
+                                    // Final zone: red dashed + light fill (matches website)
                                     canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
                                         Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                             style = Paint.Style.FILL
-                                            color = warningFillArgb
+                                            color = dangerFillArgb
                                         })
                                     canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
                                         Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                             style = Paint.Style.STROKE
-                                            color = warningStrongArgb
-                                            strokeWidth = 3f
+                                            color = dangerStrokeArgb
+                                            strokeWidth = 1f
+                                            pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
                                         })
                                 } else {
-                                    // Other shrinks: dashed stroke
+                                    // Intermediate shrinks: green dashed stroke
                                     canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
                                         Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                             style = Paint.Style.STROKE
-                                            color = warningArgb
-                                            strokeWidth = 2f
-                                            pathEffect = DashPathEffect(floatArrayOf(20f, 10f), 0f)
+                                            color = primaryStrokeArgb
+                                            strokeWidth = 1f
+                                            alpha = 100
+                                            pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
                                         })
                                 }
                             }
                         })
                     }
 
-                    // Heatmap blobs
+                    // Heatmap blobs — green glow
                     blobsState.forEach { blob ->
                         mapView.overlays.add(object : Overlay() {
                             override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
@@ -202,6 +217,21 @@ fun MapScreen(
                             }
                         })
                     }
+
+                    // Center marker — small green dot (matches website)
+                    mapView.overlays.add(object : Overlay() {
+                        override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+                            if (shadow) return
+                            val projection = mapView.projection
+                            val centerPoint = android.graphics.Point()
+                            projection.toPixels(center, centerPoint)
+                            canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), 6f,
+                                Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                    style = Paint.Style.FILL
+                                    color = primaryArgb
+                                })
+                        }
+                    })
 
                     // Current location marker
                     if (locationState.isTracking) {

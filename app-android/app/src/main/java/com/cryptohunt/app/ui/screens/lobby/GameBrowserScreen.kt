@@ -170,6 +170,23 @@ fun GameBrowserScreen(
                     )
                 }
 
+                if (isLoading && games.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 16.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "Loading…",
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = Primary
+                            )
+                        }
+                    }
+                }
+
                 if (games.isEmpty() && !isLoading) {
                     item {
                         Card(

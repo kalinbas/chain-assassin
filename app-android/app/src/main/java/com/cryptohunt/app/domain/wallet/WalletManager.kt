@@ -6,6 +6,7 @@ import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.cryptohunt.app.domain.chain.ChainConfig
 import com.cryptohunt.app.domain.chain.ContractService
+import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.model.WalletState
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +26,8 @@ import javax.inject.Singleton
 @Singleton
 class WalletManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val contractService: ContractService
+    private val contractService: ContractService,
+    private val gameEngine: GameEngine
 ) {
 
     private val _state = MutableStateFlow(WalletState())
@@ -153,6 +155,13 @@ class WalletManager @Inject constructor(
         val addr = getAddress()
         if (addr.length < 10) return addr
         return "${addr.take(6)}...${addr.takeLast(4)}"
+    }
+
+    fun logout() {
+        encryptedPrefs.edit().remove("private_key").apply()
+        credentials = null
+        _state.value = WalletState()
+        gameEngine.reset()
     }
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }

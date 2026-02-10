@@ -74,7 +74,8 @@ fun RegisteredDetailScreen(
         }
     }
 
-    val hours = (timeRemainingMs / 3600000).coerceAtLeast(0)
+    val days = (timeRemainingMs / 86400000).coerceAtLeast(0)
+    val hours = ((timeRemainingMs % 86400000) / 3600000).coerceAtLeast(0)
     val minutes = ((timeRemainingMs % 3600000) / 60000).coerceAtLeast(0)
     val seconds = ((timeRemainingMs % 60000) / 1000).coerceAtLeast(0)
 
@@ -139,7 +140,8 @@ fun RegisteredDetailScreen(
             )
             Spacer(Modifier.height(8.dp))
             Text(
-                "%02d:%02d:%02d".format(hours, minutes, seconds),
+                if (days > 0) "%dd %02d:%02d:%02d".format(days, hours, minutes, seconds)
+                else "%02d:%02d:%02d".format(hours, minutes, seconds),
                 style = MaterialTheme.typography.displayMedium.copy(fontSize = 48.sp),
                 color = Warning,
                 fontWeight = FontWeight.Bold

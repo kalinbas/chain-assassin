@@ -25,8 +25,9 @@ import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
 import org.osmdroid.config.Configuration
-import org.osmdroid.tileprovider.tilesource.TileSourceFactory
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
@@ -222,8 +223,24 @@ fun GameDetailScreen(
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
                     factory = { ctx ->
+                        val cartoDark = object : OnlineTileSourceBase(
+                            "CartoDB_Dark", 0, 20, 256, ".png",
+                            arrayOf(
+                                "https://a.basemaps.cartocdn.com/dark_all/",
+                                "https://b.basemaps.cartocdn.com/dark_all/",
+                                "https://c.basemaps.cartocdn.com/dark_all/",
+                                "https://d.basemaps.cartocdn.com/dark_all/"
+                            )
+                        ) {
+                            override fun getTileURLString(pMapTileIndex: Long): String {
+                                val z = MapTileIndex.getZoom(pMapTileIndex)
+                                val x = MapTileIndex.getX(pMapTileIndex)
+                                val y = MapTileIndex.getY(pMapTileIndex)
+                                return baseUrl + "$z/$x/$y.png"
+                            }
+                        }
                         MapView(ctx).apply {
-                            setTileSource(TileSourceFactory.MAPNIK)
+                            setTileSource(cartoDark)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
                             controller.setCenter(GeoPoint(config.zoneCenterLat, config.zoneCenterLng))

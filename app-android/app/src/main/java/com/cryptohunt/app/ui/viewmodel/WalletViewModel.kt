@@ -36,4 +36,8 @@ class WalletViewModel @Inject constructor(
     fun shortenedAddress(): String = walletManager.shortenedAddress()
 
     fun getPrivateKeyHex(): String? = walletManager.getPrivateKeyHex()
+
+    fun logout() {
+        walletManager.logout()
+    }
 }
