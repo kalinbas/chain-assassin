@@ -38,6 +38,8 @@ fun WalletSetupScreen(
     var importError by remember { mutableStateOf(false) }
     var importFileError by remember { mutableStateOf<String?>(null) }
     var keySaved by remember { mutableStateOf(false) }
+    // Track whether user has just successfully imported in this session
+    var importSuccess by remember { mutableStateOf(false) }
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
 
@@ -56,6 +58,7 @@ fun WalletSetupScreen(
                     val key = keyLine.substringAfter("Private Key:").trim().removePrefix("0x")
                     if (viewModel.importWallet(key)) {
                         importFileError = null
+                        importSuccess = true
                     } else {
                         importFileError = "Could not import key from file"
                     }
@@ -130,7 +133,7 @@ fun WalletSetupScreen(
 
         Spacer(modifier = Modifier.height(48.dp))
 
-        if (isImport && !walletState.isConnected) {
+        if (isImport && !importSuccess) {
             // Import from backup file
             Button(
                 onClick = {
@@ -211,7 +214,9 @@ fun WalletSetupScreen(
             OutlinedButton(
                 onClick = {
                     val key = privateKeyInput.removePrefix("0x")
-                    if (!viewModel.importWallet(key)) {
+                    if (viewModel.importWallet(key)) {
+                        importSuccess = true
+                    } else {
                         importError = true
                     }
                 },

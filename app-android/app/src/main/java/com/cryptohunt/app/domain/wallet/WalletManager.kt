@@ -1,6 +1,13 @@
 package com.cryptohunt.app.domain.wallet
 
+import android.content.Context
+import android.content.SharedPreferences
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import com.cryptohunt.app.domain.chain.ChainConfig
+import com.cryptohunt.app.domain.chain.ContractService
 import com.cryptohunt.app.domain.model.WalletState
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -8,13 +15,18 @@ import org.web3j.crypto.Credentials
 import org.web3j.crypto.ECKeyPair
 import org.web3j.crypto.Keys
 import org.web3j.crypto.Sign
+import org.web3j.utils.Convert
+import java.math.BigDecimal
 import java.math.BigInteger
 import java.security.SecureRandom
 import javax.inject.Inject
 import javax.inject.Singleton
 
 @Singleton
-class WalletManager @Inject constructor() {
+class WalletManager @Inject constructor(
+    @ApplicationContext private val context: Context,
+    private val contractService: ContractService
+) {
 
     private val _state = MutableStateFlow(WalletState())
     val state: StateFlow<WalletState> = _state.asStateFlow()
@@ -23,13 +35,32 @@ class WalletManager @Inject constructor() {
 
     val isConnected: Boolean get() = credentials != null
 
+    private val encryptedPrefs: SharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+        EncryptedSharedPreferences.create(
+            context,
+            "cryptohunt_wallet",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    init {
+        // Try to restore saved wallet on startup
+        val savedKey = encryptedPrefs.getString("private_key", null)
+        if (savedKey != null) {
+            importWallet(savedKey)
+        }
+    }
+
     fun createWallet() {
         try {
-            // Try web3j's built-in key generation first
             val keyPair = Keys.createEcKeyPair()
             setupCredentials(keyPair)
         } catch (e: Exception) {
-            // Fallback: generate key manually with SecureRandom
             try {
                 val random = SecureRandom()
                 val privateKeyBytes = ByteArray(32)
@@ -38,7 +69,6 @@ class WalletManager @Inject constructor() {
                 val keyPair = ECKeyPair.create(privateKey)
                 setupCredentials(keyPair)
             } catch (e2: Exception) {
-                // Last resort: use a deterministic mock wallet for demo
                 setupMockWallet()
             }
         }
@@ -57,17 +87,18 @@ class WalletManager @Inject constructor() {
 
     private fun setupCredentials(keyPair: ECKeyPair) {
         credentials = Credentials.create(keyPair)
+        val privateKeyHex = keyPair.privateKey.toString(16)
+        encryptedPrefs.edit().putString("private_key", privateKeyHex).apply()
         _state.value = WalletState(
             isConnected = true,
             address = credentials!!.address,
-            balanceEth = 0.5,
-            balanceUsd = 1250.0,
-            chainName = "Base"
+            balanceEth = 0.0,
+            balanceUsd = 0.0,
+            chainName = ChainConfig.CHAIN_NAME
         )
     }
 
     private fun setupMockWallet() {
-        // Generate a fake address when crypto libs fail entirely
         val random = SecureRandom()
         val bytes = ByteArray(20)
         random.nextBytes(bytes)
@@ -75,16 +106,33 @@ class WalletManager @Inject constructor() {
         _state.value = WalletState(
             isConnected = true,
             address = address,
-            balanceEth = 0.5,
-            balanceUsd = 1250.0,
-            chainName = "Base"
+            balanceEth = 0.0,
+            balanceUsd = 0.0,
+            chainName = ChainConfig.CHAIN_NAME
         )
     }
 
     fun getAddress(): String = credentials?.address ?: _state.value.address
 
+    fun getCredentials(): Credentials? = credentials
+
     fun getPrivateKeyHex(): String? {
         return credentials?.ecKeyPair?.privateKey?.toString(16)?.let { "0x$it" }
+    }
+
+    suspend fun refreshBalance() {
+        val addr = getAddress()
+        if (addr.isEmpty()) return
+        try {
+            val balanceWei = contractService.getBalance(addr)
+            val balanceEth = Convert.fromWei(BigDecimal(balanceWei), Convert.Unit.ETHER).toDouble()
+            _state.value = _state.value.copy(
+                balanceEth = balanceEth,
+                balanceUsd = balanceEth * 2500.0
+            )
+        } catch (e: Exception) {
+            // Silently fail — balance stays at previous value
+        }
     }
 
     fun signMessage(message: String): String {
@@ -99,31 +147,6 @@ class WalletManager @Inject constructor() {
         } catch (e: Exception) {
             "0xmock_signature"
         }
-    }
-
-    fun payEntryFee(amount: Double): Boolean {
-        val current = _state.value
-        if (current.balanceEth < amount) return false
-        _state.value = current.copy(
-            balanceEth = current.balanceEth - amount,
-            balanceUsd = (current.balanceEth - amount) * 2500.0
-        )
-        return true
-    }
-
-    fun withdrawAll(): Double {
-        val current = _state.value
-        val amount = current.balanceEth
-        _state.value = current.copy(balanceEth = 0.0, balanceUsd = 0.0)
-        return amount
-    }
-
-    fun addBalance(ethAmount: Double) {
-        val current = _state.value
-        _state.value = current.copy(
-            balanceEth = current.balanceEth + ethAmount,
-            balanceUsd = (current.balanceEth + ethAmount) * 2500.0
-        )
     }
 
     fun shortenedAddress(): String {

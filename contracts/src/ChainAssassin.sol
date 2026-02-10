@@ -59,6 +59,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     /// @notice gameId → player → number of kills.
     /// @dev uint16 is safe because MAX_PLAYERS (9 999) bounds the maximum possible kills.
     mapping(uint256 => mapping(address => uint16)) public killCount;
+    /// @notice gameId → player → 1-based registration number (order of registration).
+    mapping(uint256 => mapping(address => uint16)) public playerNumber;
 
     /// @notice Accumulated platform fees across all games, withdrawable by owner.
     uint256 public platformFeesAccrued;
@@ -363,6 +365,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         isRegistered[gameId][msg.sender] = true;
         isAlive[gameId][msg.sender] = true;
         state.playerCount++;
+        playerNumber[gameId][msg.sender] = state.playerCount;
         // Safe cast: msg.value == config.entryFee which is uint128, so no truncation.
         state.totalCollected += uint128(msg.value);
 
@@ -464,17 +467,18 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         return _zoneShrinks[gameId];
     }
 
-    /// @notice Return registration status, alive status, kill count, and claim status for a player.
+    /// @notice Return registration status, alive status, kill count, claim status, and player number.
     function getPlayerInfo(uint256 gameId, address player)
         external
         view
-        returns (bool registered, bool alive, uint16 kills, bool claimed)
+        returns (bool registered, bool alive, uint16 kills, bool claimed, uint16 number)
     {
         return (
             isRegistered[gameId][player],
             isAlive[gameId][player],
             killCount[gameId][player],
-            hasClaimed[gameId][player]
+            hasClaimed[gameId][player],
+            playerNumber[gameId][player]
         );
     }
 

@@ -276,9 +276,10 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         emit IChainAssassin.PlayerRegistered(gameId, player1, 1);
         game.register{value: ENTRY_FEE}(gameId);
 
-        (bool registered, bool alive,,) = game.getPlayerInfo(gameId, player1);
+        (bool registered, bool alive,,, uint16 number) = game.getPlayerInfo(gameId, player1);
         assertTrue(registered);
         assertTrue(alive);
+        assertEq(number, 1);
     }
 
     function test_register_revertsWrongFee() public {
@@ -340,7 +341,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(player1);
         game.register{value: ENTRY_FEE}(gameId);
 
-        (bool registered,,,) = game.getPlayerInfo(gameId, player1);
+        (bool registered,,,,) = game.getPlayerInfo(gameId, player1);
         assertTrue(registered);
     }
 
@@ -400,11 +401,11 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(operator);
         game.recordKill(gameId, player1, player2);
 
-        (, bool alive, uint16 kills,) = game.getPlayerInfo(gameId, player1);
+        (, bool alive, uint16 kills,,) = game.getPlayerInfo(gameId, player1);
         assertTrue(alive);
         assertEq(kills, 1);
 
-        (, bool targetAlive,,) = game.getPlayerInfo(gameId, player2);
+        (, bool targetAlive,,,) = game.getPlayerInfo(gameId, player2);
         assertFalse(targetAlive);
     }
 
@@ -478,7 +479,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(operator);
         game.recordKill(gameId, player1, player3);
 
-        (, , uint16 kills,) = game.getPlayerInfo(gameId, player1);
+        (, , uint16 kills,,) = game.getPlayerInfo(gameId, player1);
         assertEq(kills, 2);
     }
 
@@ -493,7 +494,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         emit IChainAssassin.PlayerEliminated(gameId, player1, address(0));
         game.eliminatePlayer(gameId, player1);
 
-        (, bool alive,,) = game.getPlayerInfo(gameId, player1);
+        (, bool alive,,,) = game.getPlayerInfo(gameId, player1);
         assertFalse(alive);
     }
 

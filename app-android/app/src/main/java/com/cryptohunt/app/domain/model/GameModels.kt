@@ -1,5 +1,7 @@
 package com.cryptohunt.app.domain.model
 
+import java.math.BigInteger
+
 data class GameConfig(
     val id: String,
     val name: String,
@@ -11,7 +13,14 @@ data class GameConfig(
     val initialRadiusMeters: Double,
     val shrinkSchedule: List<ZoneShrink>,
     val durationMinutes: Int,
-    val checkInDurationMinutes: Int = 10
+    val checkInDurationMinutes: Int = 10,
+    val bps1st: Int = 4000,
+    val bps2nd: Int = 1500,
+    val bps3rd: Int = 1000,
+    val bpsKills: Int = 2000,
+    val entryFeeWei: BigInteger = BigInteger.ZERO,
+    val registrationDeadline: Long = 0L,
+    val gameDate: Long = 0L
 )
 
 data class ZoneShrink(val atMinute: Int, val newRadiusMeters: Double)

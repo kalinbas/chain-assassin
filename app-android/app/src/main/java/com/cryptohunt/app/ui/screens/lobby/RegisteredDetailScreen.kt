@@ -7,7 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,6 +37,7 @@ fun RegisteredDetailScreen(
     viewModel: LobbyViewModel = hiltViewModel()
 ) {
     val gameState by viewModel.gameState.collectAsState()
+    val selectedGame by viewModel.selectedGame.collectAsState()
     val context = LocalContext.current
 
     LaunchedEffect(gameId) {
@@ -45,9 +46,19 @@ fun RegisteredDetailScreen(
         }
     }
 
-    val config = gameState?.config ?: return
-    val player = gameState?.currentPlayer ?: return
-    val gameStartTime = gameState?.gameStartTime ?: 0L
+    // When selectedGame loads, restore local GameState if needed
+    LaunchedEffect(selectedGame?.config?.id) {
+        if (gameId.isNotEmpty()) {
+            viewModel.ensureRegisteredState(gameId)
+        }
+    }
+
+    // Use gameState if available, otherwise fall back to selectedGame for config
+    val config = gameState?.config ?: selectedGame?.config ?: return
+    val player = gameState?.currentPlayer
+    val gameStartTime = gameState?.gameStartTime
+        ?: selectedGame?.startTime
+        ?: 0L
 
     // Countdown timer
     var timeRemainingMs by remember { mutableStateOf(gameStartTime - System.currentTimeMillis()) }
@@ -77,7 +88,7 @@ fun RegisteredDetailScreen(
                 title = { Text(config.name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                        Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Background)
@@ -143,74 +154,110 @@ fun RegisteredDetailScreen(
             Spacer(Modifier.height(24.dp))
 
             // Player info card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = CardBackground),
-                shape = MaterialTheme.shapes.medium
-            ) {
-                Row(
-                    modifier = Modifier.padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically
+            if (player != null) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    shape = MaterialTheme.shapes.medium
                 ) {
-                    Box(
-                        modifier = Modifier
-                            .size(48.dp)
-                            .clip(CircleShape)
-                            .background(Primary),
-                        contentAlignment = Alignment.Center
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                "#${player.number}",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = Background,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
                         Text(
-                            "#${player.number}",
-                            style = MaterialTheme.typography.labelLarge,
-                            color = Background,
-                            fontWeight = FontWeight.Bold
+                            "Player #${player.number}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary
                         )
                     }
-                    Spacer(Modifier.width(16.dp))
-                    Text(
-                        "Player #${player.number}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextPrimary
-                    )
+                }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(48.dp)
+                                .clip(CircleShape)
+                                .background(Primary),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = Background,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        Spacer(Modifier.width(16.dp))
+                        Text(
+                            "Registered",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary
+                        )
+                    }
                 }
             }
 
             Spacer(Modifier.height(16.dp))
 
-            // Print QR Code button
-            Button(
-                onClick = {
-                    val uri = QrPdfGenerator.generatePdf(
-                        context = context,
-                        gameId = config.id.toIntOrNull() ?: 0,
-                        playerNumber = player.number,
-                        gameName = config.name
+            // Print QR Code button (only when player number is assigned)
+            if (player != null) {
+                Button(
+                    onClick = {
+                        val uri = QrPdfGenerator.generatePdf(
+                            context = context,
+                            gameId = config.id.toIntOrNull() ?: 0,
+                            playerNumber = player.number,
+                            gameName = config.name
+                        )
+                        QrPdfGenerator.sharePdf(context, uri)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(56.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Primary,
+                        contentColor = Background
                     )
-                    QrPdfGenerator.sharePdf(context, uri)
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor = Background
-                )
-            ) {
-                Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(20.dp))
-                Spacer(Modifier.width(8.dp))
+                ) {
+                    Icon(Icons.Default.Print, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        "Print QR Code",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 Text(
-                    "Print QR Code",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
+                    "Print this page twice \u2014 attach to front and back of your shirt",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextDim,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(top = 4.dp)
                 )
             }
-            Text(
-                "Print this page twice \u2014 attach to front and back of your shirt",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextDim,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 4.dp)
-            )
 
             Spacer(Modifier.height(24.dp))
 

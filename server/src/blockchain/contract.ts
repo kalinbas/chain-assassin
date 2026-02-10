@@ -143,13 +143,14 @@ export async function fetchIsAlive(
 export async function fetchPlayerInfo(
   gameId: number,
   address: string
-): Promise<{ registered: boolean; alive: boolean; killCount: number; claimed: boolean }> {
+): Promise<{ registered: boolean; alive: boolean; killCount: number; claimed: boolean; playerNumber: number }> {
   const c = getReadContract();
-  const [registered, alive, killCount, claimed] = await c.getPlayerInfo(gameId, address);
+  const [registered, alive, killCount, claimed, playerNumber] = await c.getPlayerInfo(gameId, address);
   return {
     registered,
     alive,
     killCount: Number(killCount),
     claimed,
+    playerNumber: Number(playerNumber),
   };
 }

@@ -121,6 +121,11 @@ fun AppNavHost() {
                         popUpTo(NavRoutes.GameBrowser.route)
                     }
                 },
+                onViewRegistration = { id ->
+                    navController.navigate(NavRoutes.RegisteredDetail.withId(id)) {
+                        popUpTo(NavRoutes.GameBrowser.route)
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }

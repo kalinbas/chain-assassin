@@ -37,9 +37,9 @@ class GameEngine @Inject constructor() {
 
     // --- Public API ---
 
-    fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long) {
+    fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long, assignedPlayerNumber: Int = 0) {
         val maxNum = config.maxPlayers + 1
-        val playerNumber = Random.nextInt(1, maxNum)
+        val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else Random.nextInt(1, maxNum)
 
         val currentPlayer = Player(
             id = "player_$playerNumber",

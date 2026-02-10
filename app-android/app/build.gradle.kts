@@ -49,6 +49,8 @@ android {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
             excludes += "/META-INF/DISCLAIMER"
+            excludes += "/META-INF/versions/**"
+            excludes += "/META-INF/NOTICE"
         }
     }
 }
@@ -94,8 +96,11 @@ dependencies {
     // Location (still using Play Services for GPS)
     implementation("com.google.android.gms:play-services-location:21.0.1")
 
-    // Web3j for wallet
+    // Web3j for wallet + blockchain
     implementation("org.web3j:core:4.10.3")
+
+    // Encrypted key storage
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     // DataStore
     implementation("androidx.datastore:datastore-preferences:1.0.0")

@@ -1,4 +1,4 @@
-export const CONTRACT_ADDRESS = '0xa2d0728743Afa575cEA658BD6c05478F5c0A1080';
+export const CONTRACT_ADDRESS = '0xe9cFc825a66780651A7844f470E70DfdbabC9636';
 export const RPC_URL = 'https://sepolia.base.org';
 export const EXPLORER_URL = 'https://sepolia.basescan.org';
 

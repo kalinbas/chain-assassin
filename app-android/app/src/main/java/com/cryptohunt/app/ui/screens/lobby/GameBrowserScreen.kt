@@ -1,6 +1,5 @@
 package com.cryptohunt.app.ui.screens.lobby
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -40,6 +39,8 @@ fun GameBrowserScreen(
     val walletState by viewModel.walletState.collectAsState()
     val gameState by viewModel.gameState.collectAsState()
     val gameHistory by viewModel.gameHistory.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
 
     val activePhase = gameState?.phase
     val hasActiveGame = activePhase in listOf(GamePhase.ACTIVE, GamePhase.ELIMINATED)
@@ -86,86 +87,158 @@ fun GameBrowserScreen(
         },
         containerColor = Background
     ) { padding ->
-        LazyColumn(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
         ) {
-            // Active Game section
-            if (hasActiveGame && gameState != null) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(vertical = 16.dp)
+            ) {
+                // Error message
+                if (error != null) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.1f))
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(16.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Warning,
+                                    contentDescription = null,
+                                    tint = Danger,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Text(
+                                    error ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Danger,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                TextButton(onClick = { viewModel.clearError() }) {
+                                    Text("Dismiss", color = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Active Game section
+                if (hasActiveGame && gameState != null) {
+                    item {
+                        Text(
+                            "Active Game",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+                    item {
+                        ActiveGameCard(
+                            gameName = gameState!!.config.name,
+                            phase = activePhase!!,
+                            playersRemaining = gameState!!.playersRemaining,
+                            kills = gameState!!.currentPlayer.killCount,
+                            onClick = {
+                                if (activePhase == GamePhase.ACTIVE) {
+                                    onActiveGameClick()
+                                } else {
+                                    onEliminatedGameClick()
+                                }
+                            }
+                        )
+                    }
+
+                    item { Spacer(Modifier.height(8.dp)) }
+                }
+
+                // Upcoming Games section
                 item {
                     Text(
-                        "Active Game",
+                        "Upcoming Games",
                         style = MaterialTheme.typography.titleMedium,
                         color = TextSecondary,
                         modifier = Modifier.padding(bottom = 4.dp)
                     )
                 }
-                item {
-                    ActiveGameCard(
-                        gameName = gameState!!.config.name,
-                        phase = activePhase!!,
-                        playersRemaining = gameState!!.playersRemaining,
-                        kills = gameState!!.currentPlayer.killCount,
+
+                if (games.isEmpty() && !isLoading) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = CardBackground)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Icon(
+                                    Icons.Default.SportsEsports,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(48.dp),
+                                    tint = TextDim
+                                )
+                                Spacer(Modifier.height(12.dp))
+                                Text(
+                                    "No upcoming games",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = TextSecondary
+                                )
+                                Text(
+                                    "Pull to refresh",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = TextDim
+                                )
+                            }
+                        }
+                    }
+                }
+
+                items(games) { game ->
+                    val isRegistered = game.isPlayerRegistered ||
+                            (gameState?.config?.id == game.config.id &&
+                            gameState?.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN))
+                    GameCard(
+                        game = game,
+                        isRegistered = isRegistered,
                         onClick = {
-                            if (activePhase == GamePhase.ACTIVE) {
-                                onActiveGameClick()
+                            if (isRegistered) {
+                                onRegisteredGameClick(game.config.id)
                             } else {
-                                onEliminatedGameClick()
+                                onGameClick(game.config.id)
                             }
                         }
                     )
                 }
 
-                item { Spacer(Modifier.height(8.dp)) }
-            }
-
-            // Upcoming Games section
-            item {
-                Text(
-                    "Upcoming Games",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = TextSecondary,
-                    modifier = Modifier.padding(bottom = 4.dp)
-                )
-            }
-
-            items(games) { game ->
-                val isRegistered = gameState?.config?.id == game.config.id &&
-                        gameState?.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN)
-                GameCard(
-                    game = game,
-                    isRegistered = isRegistered,
-                    onClick = {
-                        if (isRegistered) {
-                            onRegisteredGameClick(game.config.id)
-                        } else {
-                            onGameClick(game.config.id)
-                        }
+                // Past Games section
+                if (gameHistory.isNotEmpty()) {
+                    item {
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Past Games",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextSecondary,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
                     }
-                )
-            }
 
-            // Past Games section
-            if (gameHistory.isNotEmpty()) {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        "Past Games",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = TextSecondary,
-                        modifier = Modifier.padding(bottom = 4.dp)
-                    )
-                }
-
-                itemsIndexed(gameHistory) { index, historyItem ->
-                    HistoryCard(
-                        item = historyItem,
-                        onClick = { onHistoryGameClick(index) }
-                    )
+                    itemsIndexed(gameHistory) { index, historyItem ->
+                        HistoryCard(
+                            item = historyItem,
+                            onClick = { onHistoryGameClick(index) }
+                        )
+                    }
                 }
             }
         }
@@ -210,7 +283,7 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
                             )
                             Spacer(Modifier.width(4.dp))
                             Text(
-                                "REGISTERED",
+                                if (game.playerNumber > 0) "#${game.playerNumber} REGISTERED" else "REGISTERED",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Primary,
                                 fontWeight = FontWeight.Bold
@@ -249,25 +322,27 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
             Spacer(modifier = Modifier.height(6.dp))
 
             // Date and time
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Schedule,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = TextSecondary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                val dateFormat = SimpleDateFormat("EEE, MMM d · HH:mm", Locale.getDefault())
-                Text(
-                    text = dateFormat.format(Date(game.startTime)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Primary
-                )
-            }
+            if (game.startTime > 0) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Default.Schedule,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = TextSecondary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    val dateFormat = SimpleDateFormat("EEE, MMM d · HH:mm", Locale.getDefault())
+                    Text(
+                        text = dateFormat.format(Date(game.startTime)),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Primary
+                    )
+                }
 
-            Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(12.dp))
+            }
 
             // Player count bar
             val meetsMin = game.currentPlayers >= game.config.minPlayers
@@ -308,8 +383,10 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Prize pool
-            val prizePool = game.config.entryFee * game.config.maxPlayers * 0.9
+            // Prize pool — use real BPS from contract
+            val totalPool = game.config.entryFee * game.config.maxPlayers
+            val creatorBps = 10000 - game.config.bps1st - game.config.bps2nd - game.config.bps3rd - game.config.bpsKills
+            val prizePool = totalPool * (10000 - creatorBps) / 10000.0
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -320,7 +397,7 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
                     color = TextSecondary
                 )
                 Text(
-                    "%.2f ETH".format(prizePool),
+                    "%.4f ETH".format(prizePool),
                     style = MaterialTheme.typography.labelLarge,
                     color = Warning,
                     fontWeight = FontWeight.Bold
@@ -460,7 +537,7 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                                 )
                                 Spacer(Modifier.width(3.dp))
                                 Text(
-                                    "%.3f ETH".format(item.prizeEth),
+                                    "%.4f ETH".format(item.prizeEth),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = Warning,
                                     fontWeight = FontWeight.Bold
@@ -522,7 +599,7 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            "#${item.rank}/${item.playersTotal}",
+                            if (item.rank > 0) "#${item.rank}/${item.playersTotal}" else "#—/${item.playersTotal}",
                             style = MaterialTheme.typography.titleMedium,
                             color = if (isWinner) Warning else TextPrimary,
                             fontWeight = FontWeight.Bold

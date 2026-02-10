@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material3.*
@@ -36,10 +36,17 @@ fun GameHistoryDetailScreen(
     viewModel: LobbyViewModel = hiltViewModel()
 ) {
     val history by viewModel.gameHistory.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsState()
+    val txPending by viewModel.txPending.collectAsState()
+    var txError by remember { mutableStateOf<String?>(null) }
+    var claimSuccess by remember { mutableStateOf(false) }
     val item = history.getOrNull(historyIndex) ?: run {
-        // Fallback if item not found
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text("Game not found", color = TextSecondary)
+            if (isLoading || history.isEmpty()) {
+                Text("Loading…", color = Primary, style = MaterialTheme.typography.bodyLarge)
+            } else {
+                Text("Game not found", color = TextSecondary)
+            }
         }
         return
     }
@@ -55,7 +62,7 @@ fun GameHistoryDetailScreen(
                 title = { Text(item.config.name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
+                        Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Background)
@@ -148,8 +155,8 @@ fun GameHistoryDetailScreen(
                                 horizontalArrangement = Arrangement.SpaceEvenly
                             ) {
                                 StatColumn("KILLS", "${item.kills}", Primary)
-                                StatColumn("SURVIVED", TimeUtils.formatDuration(item.survivalSeconds), TextPrimary)
-                                StatColumn("RANK", "#${item.rank}/${item.playersTotal}", if (isWinner) Warning else TextPrimary)
+                                StatColumn("SURVIVED", if (item.survivalSeconds > 0) TimeUtils.formatDuration(item.survivalSeconds) else "—", TextPrimary)
+                                StatColumn("RANK", if (item.rank > 0) "#${item.rank}/${item.playersTotal}" else "#—/${item.playersTotal}", if (isWinner) Warning else TextPrimary)
                             }
                         }
                     }
@@ -159,7 +166,7 @@ fun GameHistoryDetailScreen(
             }
 
             // Claim prize / refund section — only shown when unclaimed
-            if (hasUnclaimedPrize) {
+            if (hasUnclaimedPrize && !claimSuccess) {
                 item {
                     Card(
                         modifier = Modifier.fillMaxWidth(),
@@ -195,7 +202,14 @@ fun GameHistoryDetailScreen(
                             )
                             Spacer(Modifier.height(16.dp))
                             Button(
-                                onClick = { viewModel.claimPrize(historyIndex) },
+                                onClick = {
+                                    txError = null
+                                    viewModel.claimPrize(
+                                        index = historyIndex,
+                                        onSuccess = { claimSuccess = true },
+                                        onError = { error -> txError = error }
+                                    )
+                                },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(48.dp),
@@ -203,19 +217,70 @@ fun GameHistoryDetailScreen(
                                     containerColor = Warning,
                                     contentColor = Background
                                 ),
-                                shape = RoundedCornerShape(8.dp)
+                                shape = RoundedCornerShape(8.dp),
+                                enabled = !txPending
                             ) {
-                                Icon(
-                                    Icons.Default.AccountBalanceWallet,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(Modifier.width(8.dp))
+                                if (txPending) {
+                                    Text(
+                                        "⏳ Claiming...",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                } else {
+                                    Icon(
+                                        Icons.Default.AccountBalanceWallet,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        if (isCancelled) "Claim Refund" else "Claim to Wallet",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+
+                            if (txError != null) {
+                                Spacer(Modifier.height(12.dp))
                                 Text(
-                                    if (isCancelled) "Claim Refund" else "Claim to Wallet",
-                                    fontWeight = FontWeight.Bold
+                                    txError ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Danger,
+                                    textAlign = TextAlign.Center
                                 )
                             }
+                        }
+                    }
+
+                    Spacer(Modifier.height(24.dp))
+                }
+            }
+
+            // Claim success message
+            if (claimSuccess) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(
+                            containerColor = Primary.copy(alpha = 0.1f)
+                        ),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                if (isCancelled) "Refund claimed!" else "Prize claimed!",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = Primary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "%.4f ETH sent to your wallet".format(item.prizeEth),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = TextSecondary
+                            )
                         }
                     }
 
@@ -229,17 +294,17 @@ fun GameHistoryDetailScreen(
                     Text("PRIZE DISTRIBUTION", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(12.dp))
 
-                    val prizePool = item.config.entryFee * item.config.maxPlayers * 0.9
+                    val totalPool = item.config.entryFee * item.config.maxPlayers
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CardBackground),
                         shape = MaterialTheme.shapes.medium
                     ) {
                         Column(modifier = Modifier.padding(16.dp)) {
-                            PrizeRow("1st Place (40%)", "%.3f ETH".format(prizePool * 0.4), Warning)
-                            PrizeRow("Most Kills (20%)", "%.3f ETH".format(prizePool * 0.2), Primary)
-                            PrizeRow("2nd Place (15%)", "%.3f ETH".format(prizePool * 0.15), TextPrimary)
-                            PrizeRow("3rd Place (10%)", "%.3f ETH".format(prizePool * 0.1), TextPrimary)
+                            PrizeRow("1st Place (${item.config.bps1st / 100}%)", "%.4f ETH".format(totalPool * item.config.bps1st / 10000.0), Warning)
+                            PrizeRow("Most Kills (${item.config.bpsKills / 100}%)", "%.4f ETH".format(totalPool * item.config.bpsKills / 10000.0), Primary)
+                            PrizeRow("2nd Place (${item.config.bps2nd / 100}%)", "%.4f ETH".format(totalPool * item.config.bps2nd / 10000.0), TextPrimary)
+                            PrizeRow("3rd Place (${item.config.bps3rd / 100}%)", "%.4f ETH".format(totalPool * item.config.bps3rd / 10000.0), TextPrimary)
                         }
                     }
 
