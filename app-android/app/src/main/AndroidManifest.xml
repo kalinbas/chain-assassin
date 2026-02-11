@@ -26,6 +26,7 @@
         android:label="Chain-Assassin"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
+        android:extractNativeLibs="true"
         android:theme="@style/Theme.CryptoHunt"
         tools:targetApi="34">
 

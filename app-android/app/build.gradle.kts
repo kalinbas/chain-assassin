@@ -52,6 +52,7 @@ android {
             excludes += "/META-INF/versions/**"
             excludes += "/META-INF/NOTICE"
         }
+        jniLibs.useLegacyPackaging = true
     }
 }
 
@@ -81,14 +82,14 @@ dependencies {
     implementation("androidx.hilt:hilt-navigation-compose:1.1.0")
 
     // CameraX
-    val cameraxVersion = "1.3.1"
+    val cameraxVersion = "1.4.1"
     implementation("androidx.camera:camera-core:$cameraxVersion")
     implementation("androidx.camera:camera-camera2:$cameraxVersion")
     implementation("androidx.camera:camera-lifecycle:$cameraxVersion")
     implementation("androidx.camera:camera-view:$cameraxVersion")
 
     // ML Kit Barcode
-    implementation("com.google.mlkit:barcode-scanning:17.2.0")
+    implementation("com.google.mlkit:barcode-scanning:17.3.0")
 
     // OpenStreetMap (osmdroid) — free, no API key needed
     implementation("org.osmdroid:osmdroid-android:6.1.18")
