@@ -6,7 +6,7 @@ function formatTime(timestamp: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}:${String(d.getSeconds()).padStart(2, '0')}`;
 }
 
-function getEventIcon(type: string, itemId?: string) {
+function getEventIcon(type: string, _itemId?: string) {
   const size = 14;
   switch (type) {
     case 'kill':
