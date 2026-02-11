@@ -15,3 +15,9 @@ local.properties
 node_modules/
 dist/
 .env
+
+# Server data
+server/data/
+
+# TypeScript build info
+*.tsbuildinfo
