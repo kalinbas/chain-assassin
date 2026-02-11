@@ -77,7 +77,7 @@ fun ResultsScreen(
 
             Spacer(Modifier.height(8.dp))
             Text(
-                state?.config?.name ?: "Chain-Assassin",
+                state?.config?.name ?: "Chain Assassin",
                 style = MaterialTheme.typography.titleMedium,
                 color = TextSecondary
             )

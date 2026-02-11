@@ -18,7 +18,7 @@ export function Footer() {
         <div className="footer__base">
           <span className="footer__base-badge">Built on Base</span>
         </div>
-        <p className="footer__copy">&copy; 2026 Chain-Assassin. All rights reserved.</p>
+        <p className="footer__copy">&copy; 2026 Chain Assassin. All rights reserved.</p>
       </div>
     </footer>
   );

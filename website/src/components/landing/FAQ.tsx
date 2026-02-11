@@ -6,12 +6,16 @@ const CONTRACT_ADDRESS = '0x0ABfD376Bd339A6dcd885F37aB0A9cE761c2F99e';
 
 const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   {
-    q: 'What is Chain-Assassin?',
-    a: 'Chain-Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees are paid in ETH on Base blockchain, and the prize pool is split among the top players.',
+    q: 'What is Chain Assassin?',
+    a: 'Chain Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees are paid in ETH on Base blockchain, and the prize pool is split among the top players.',
   },
   {
     q: 'How do kills work?',
     a: "Each player is assigned a random target. Find them in the real world and scan the QR code on their shirt or badge using the app. The kill is verified instantly. You then receive a new random target from the remaining alive players.",
+  },
+  {
+    q: 'What is the heartbeat system?',
+    a: "The heartbeat is a fairplay mechanic that prevents players from hiding their QR code and camping. Every 10 minutes, you must scan any nearby player's QR code (not your target or hunter) to prove you're actively playing. If you miss the deadline, you're automatically eliminated. The heartbeat is disabled in the endgame when 4 or fewer players remain, so the final showdown is pure hunting.",
   },
   {
     q: 'What happens when the zone shrinks?',
@@ -23,11 +27,11 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'What blockchain does it use?',
-    a: 'Chain-Assassin runs on Base, an Ethereum Layer 2 blockchain. Base offers low transaction fees, fast confirmations, and the full security of Ethereum. All entry fees, prize distributions, and game records are on-chain.',
+    a: 'Chain Assassin runs on Base, an Ethereum Layer 2 blockchain. Base offers low transaction fees, fast confirmations, and the full security of Ethereum. All entry fees, prize distributions, and game records are on-chain.',
   },
   {
     q: 'Where is the smart contract?',
-    a: (<>The Chain-Assassin smart contract is deployed on Base Sepolia (testnet) at address <a href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="faq-contract-link"><code>{CONTRACT_ADDRESS}</code></a>. The contract handles game creation, player registration, entry fee escrow, kill verification, prize distribution, and refunds for cancelled games — all fully on-chain and verifiable.</>),
+    a: (<>The Chain Assassin smart contract is deployed on Base Sepolia (testnet) at address <a href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="faq-contract-link"><code>{CONTRACT_ADDRESS}</code></a>. The contract handles game creation, player registration, entry fee escrow, kill verification, prize distribution, and refunds for cancelled games — all fully on-chain and verifiable.</>),
   },
   {
     q: 'What if a game is cancelled?',

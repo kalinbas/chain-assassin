@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
-/// @title IChainAssassin — Interface for the Chain-Assassin on-chain game
+/// @title IChainAssassin — Interface for the Chain Assassin on-chain game
 /// @notice Defines the types, errors, and events used by ChainAssassin.sol
 /// @dev All BPS (basis-point) fields use a base of 10 000 (100%).
 interface IChainAssassin {

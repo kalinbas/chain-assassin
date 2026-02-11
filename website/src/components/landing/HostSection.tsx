@@ -11,7 +11,7 @@ const HOST_ITEMS = [
 
 export function HostSection() {
   return (
-    <Section id="host" title="Create Your Own Game" subtitle="Anyone can host a Chain-Assassin event">
+    <Section id="host" title="Create Your Own Game" subtitle="Anyone can host a Chain Assassin event">
       <div className="host-grid">
         <div className="host-info">
           <p className="host-info__desc">Pick a city, define the play zone, set the stakes. You control every parameter of the game.</p>

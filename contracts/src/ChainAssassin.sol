@@ -6,7 +6,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./IChainAssassin.sol";
 
 /// @title ChainAssassin — On-chain game contract for real-world "Assassin" hunts
-/// @author Chain-Assassin team
+/// @author Chain Assassin team
 /// @notice Manages game lifecycle: creation → registration → active play → end/cancel.
 ///         Funds are held in escrow and distributed as prizes or refunds.
 /// @dev Trust model: operators (set by owner) are trusted to faithfully report kills

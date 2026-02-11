@@ -33,7 +33,7 @@ abstract contract ChainAssassinTestBase is Test {
 
     function _defaultParams() internal view returns (IChainAssassin.CreateGameParams memory) {
         return IChainAssassin.CreateGameParams({
-            title: "Chain-Assassin CDMX #1",
+            title: "Chain Assassin CDMX #1",
             entryFee: ENTRY_FEE,
             minPlayers: MIN_PLAYERS,
             maxPlayers: MAX_PLAYERS,

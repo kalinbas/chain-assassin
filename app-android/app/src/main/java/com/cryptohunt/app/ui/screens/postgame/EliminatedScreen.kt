@@ -160,7 +160,7 @@ fun EliminatedScreen(
                 val survived = TimeUtils.formatDuration(state?.gameTimeElapsedSeconds ?: 0)
                 val totalPlayers = state?.config?.maxPlayers ?: 100
                 val rank = (state?.playersRemaining ?: 1) + 1
-                val gameName = state?.config?.name ?: "Chain-Assassin"
+                val gameName = state?.config?.name ?: "Chain Assassin"
 
                 val shareText = "I was hunted in $gameName!\n" +
                     "Rank: #$rank / $totalPlayers\n" +

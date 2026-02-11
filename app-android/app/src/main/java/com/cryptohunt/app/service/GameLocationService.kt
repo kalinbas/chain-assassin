@@ -40,7 +40,7 @@ class GameLocationService : Service() {
         }
 
         return NotificationCompat.Builder(this, CryptoHuntApp.GAME_CHANNEL_ID)
-            .setContentTitle("Chain-Assassin")
+            .setContentTitle("Chain Assassin")
             .setContentText(text)
             .setSmallIcon(android.R.drawable.ic_menu_mylocation)
             .setContentIntent(pendingIntent)

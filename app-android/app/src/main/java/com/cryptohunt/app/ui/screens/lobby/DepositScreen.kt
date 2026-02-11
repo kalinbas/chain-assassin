@@ -62,7 +62,7 @@ fun DepositScreen(
             if (privateKey != null) {
                 try {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
-                        val content = "Chain-Assassin Wallet Backup\n" +
+                        val content = "Chain Assassin Wallet Backup\n" +
                             "========================\n" +
                             "Address: ${walletState.address}\n" +
                             "Private Key: $privateKey\n" +

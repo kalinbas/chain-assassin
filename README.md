@@ -84,4 +84,4 @@ Game coordination server with:
 
 ## License
 
-All rights reserved. &copy; 2026 Chain-Assassin.
+All rights reserved. &copy; 2026 Chain Assassin.

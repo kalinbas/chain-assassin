@@ -85,7 +85,7 @@ fun PermissionsScreen(onAllGranted: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Chain-Assassin needs these permissions to work",
+            text = "Chain Assassin needs these permissions to work",
             style = MaterialTheme.typography.bodyMedium,
             color = TextSecondary,
             textAlign = TextAlign.Center

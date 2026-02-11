@@ -1,17 +1,18 @@
 import { Section } from '../layout/Section';
-import { WalletIcon, ClockIcon, QrIcon, CrosshairIcon, TrophyIcon } from '../icons/Icons';
+import { WalletIcon, ClockIcon, QrIcon, CrosshairIcon, HeartIcon, TrophyIcon } from '../icons/Icons';
 
 const STEPS = [
   { icon: WalletIcon, title: 'Create Wallet', desc: 'Generate a Base wallet in-app. Deposit ETH to enter games.' },
   { icon: ClockIcon, title: 'Join a Game', desc: 'Browse upcoming games by city. Pay the entry fee to register.' },
   { icon: QrIcon, title: 'Check In', desc: "Arrive at the game zone. Scan another player's QR to verify attendance." },
   { icon: CrosshairIcon, title: 'Hunt Your Target', desc: "Find and scan your target's QR code. Stay inside the shrinking zone." },
+  { icon: HeartIcon, title: 'Stay Alive', desc: 'Scan nearby players every 10 min to prove you\'re not hiding. Miss it and you\'re out.' },
   { icon: TrophyIcon, title: 'Win ETH', desc: 'Last players standing split the prize pool. Claim winnings to your wallet.' },
 ];
 
 export function HowItWorks() {
   return (
-    <Section id="how-it-works" title="How It Works" subtitle="Five steps to the hunt" alt>
+    <Section id="how-it-works" title="How It Works" subtitle="Six steps to the hunt" alt>
       <div className="steps">
         {STEPS.map((step, i) => (
           <div key={step.title} style={{ display: 'contents' }}>

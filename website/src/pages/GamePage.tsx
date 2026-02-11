@@ -26,7 +26,7 @@ function useSimulatedGame(gameId: number) {
           // entryFeeWei comes as string from JSON, convert to bigint
           data.game.entryFeeWei = BigInt(data.game.entryFeeWei || '0');
           setGame(data.game);
-          document.title = `${data.game.title} — Chain-Assassin`;
+          document.title = `${data.game.title} — Chain Assassin`;
         }
       })
       .catch(() => setError('Could not load simulated game.'))

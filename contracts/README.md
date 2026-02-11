@@ -1,6 +1,6 @@
-# Chain-Assassin Smart Contracts
+# Chain Assassin Smart Contracts
 
-Solidity smart contracts for the Chain-Assassin game on Base (Ethereum L2).
+Solidity smart contracts for the Chain Assassin game on Base (Ethereum L2).
 
 ## Architecture
 

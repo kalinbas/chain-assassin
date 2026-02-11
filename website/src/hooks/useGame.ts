@@ -17,7 +17,7 @@ export function useGame(id: number) {
         if (gameData) {
           gameData.activity = events;
           setGame(gameData);
-          document.title = `${gameData.title} — Chain-Assassin`;
+          document.title = `${gameData.title} — Chain Assassin`;
         }
       })
       .catch((err) => {

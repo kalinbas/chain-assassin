@@ -10,6 +10,7 @@ import {
   getTargetAssignment,
   getGame,
   getPlayerByNumber,
+  updateLastHeartbeat,
 } from "../db/queries.js";
 import {
   onGameCreated,
@@ -335,6 +336,17 @@ export class GameSimulator {
 
     // Item simulation — each alive player may use one item per tick
     this.tickCount++;
+
+    // Refresh heartbeats for alive simulated players (~every 100 ticks)
+    if (this.tickCount % 100 === 0) {
+      const hbNow = Math.floor(Date.now() / 1000);
+      for (const p of this.players) {
+        if (p.isAlive) {
+          updateLastHeartbeat(this.gameId, p.address, hbNow);
+        }
+      }
+    }
+
     this.simulateItems();
   }
 
