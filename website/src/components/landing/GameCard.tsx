@@ -24,6 +24,13 @@ export function GameCard({ game }: { game: Game }) {
           <span>{game.players} / {game.maxPlayers}</span>
           <div className="game-card__bar">
             <div className="game-card__bar-fill" style={{ width: `${fillPct}%` }} />
+            {game.minPlayers > 0 && game.minPlayers < game.maxPlayers && (
+              <div
+                className="game-card__bar-min"
+                style={{ left: `${Math.round((game.minPlayers / game.maxPlayers) * 100)}%` }}
+                data-tooltip={`Min ${game.minPlayers} players`}
+              />
+            )}
           </div>
         </div>
         <div className="game-card__pool">Prize Pool <strong>{prizePool} ETH</strong></div>

@@ -12,6 +12,7 @@ import type {
   OperatorTx,
   ZoneShrink,
   LeaderboardEntry,
+  GamePhoto,
 } from "../utils/types.js";
 
 const log = createLogger("db");
@@ -311,6 +312,7 @@ function mapPlayer(row: Record<string, unknown>): Player {
     checkedIn: (row.checked_in as number) === 1,
     eliminatedAt: row.eliminated_at as number | null,
     eliminatedBy: row.eliminated_by as string | null,
+    lastHeartbeatAt: row.last_heartbeat_at as number | null,
   };
 }
 
@@ -546,6 +548,65 @@ export function setSyncState(key: string, value: string): void {
     .run(key, value);
 }
 
+// ============ Heartbeat ============
+
+export function initPlayersHeartbeat(gameId: number, timestamp: number): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND is_alive = 1"
+    )
+    .run(timestamp, gameId);
+}
+
+export function updateLastHeartbeat(gameId: number, address: string, timestamp: number): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND address = ?"
+    )
+    .run(timestamp, gameId, address.toLowerCase());
+}
+
+export function getHeartbeatExpiredPlayers(
+  gameId: number,
+  now: number,
+  intervalSeconds: number
+): Player[] {
+  const rows = getDb()
+    .prepare(
+      `SELECT * FROM players
+       WHERE game_id = ? AND is_alive = 1
+       AND last_heartbeat_at IS NOT NULL
+       AND (? - last_heartbeat_at) > ?`
+    )
+    .all(gameId, now, intervalSeconds) as Record<string, unknown>[];
+  return rows.map(mapPlayer);
+}
+
+export function insertHeartbeatScan(scan: {
+  gameId: number;
+  scannerAddress: string;
+  scannedAddress: string;
+  timestamp: number;
+  scannerLat: number | null;
+  scannerLng: number | null;
+  distanceMeters: number | null;
+}): void {
+  getDb()
+    .prepare(
+      `INSERT INTO heartbeat_scans (game_id, scanner_address, scanned_address, timestamp, scanner_lat, scanner_lng, distance_meters)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    )
+    .run(
+      scan.gameId,
+      scan.scannerAddress.toLowerCase(),
+      scan.scannedAddress.toLowerCase(),
+      scan.timestamp,
+      scan.scannerLat,
+      scan.scannerLng,
+      scan.distanceMeters
+    );
+}
+
 // ============ Leaderboard ============
 
 export function getLeaderboard(gameId: number): LeaderboardEntry[] {
@@ -562,5 +623,39 @@ export function getLeaderboard(gameId: number): LeaderboardEntry[] {
     kills: r.kills as number,
     isAlive: (r.is_alive as number) === 1,
     eliminatedAt: r.eliminated_at as number | null,
+  }));
+}
+
+// ============ Photos ============
+
+export function insertPhoto(
+  gameId: number,
+  address: string,
+  filename: string,
+  caption: string | null,
+  timestamp: number
+): number {
+  const result = getDb()
+    .prepare(
+      `INSERT INTO game_photos (game_id, address, filename, caption, timestamp)
+       VALUES (?, ?, ?, ?, ?)`
+    )
+    .run(gameId, address.toLowerCase(), filename, caption, timestamp);
+  return result.lastInsertRowid as number;
+}
+
+export function getGamePhotos(gameId: number): GamePhoto[] {
+  const rows = getDb()
+    .prepare(
+      "SELECT * FROM game_photos WHERE game_id = ? ORDER BY timestamp ASC"
+    )
+    .all(gameId) as Record<string, unknown>[];
+  return rows.map((r) => ({
+    id: r.id as number,
+    gameId: r.game_id as number,
+    address: r.address as string,
+    filename: r.filename as string,
+    caption: r.caption as string | null,
+    timestamp: r.timestamp as number,
   }));
 }

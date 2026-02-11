@@ -23,6 +23,14 @@ export interface KillFlash {
   timestamp: number;
 }
 
+export interface PingCircle {
+  lat: number;
+  lng: number;
+  radius: number;
+  expiresAt: number;
+  type: 'target' | 'hunter';
+}
+
 export interface SpectatorState {
   connected: boolean;
   phase: string | null;
@@ -42,7 +50,7 @@ export interface SpectatorState {
   killFlashes: KillFlash[];
   trails: Record<string, { lat: number; lng: number; timestamp: number }[]>;
   huntLinks: { hunter: string; target: string }[];
-  ghostedPlayers: Record<string, number>; // address → expiresAt timestamp
+  pingCircles: PingCircle[];
   playerMap: Record<string, number>; // lowercase address → playerNumber
   totalKills: number;
   gameStartedAt: number | null;
@@ -61,7 +69,7 @@ const initialState: SpectatorState = {
   killFlashes: [],
   trails: {},
   huntLinks: [],
-  ghostedPlayers: {},
+  pingCircles: [],
   playerMap: {},
   totalKills: 0,
   gameStartedAt: null,
@@ -147,11 +155,8 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       // Clean up old kill flashes (>3s)
       const killFlashes = state.killFlashes.filter((f) => now - f.timestamp < 3000);
 
-      // Clean up expired ghost effects
-      const ghostedPlayers: Record<string, number> = {};
-      for (const [addr, expiresAt] of Object.entries(state.ghostedPlayers)) {
-        if (expiresAt > now) ghostedPlayers[addr] = expiresAt;
-      }
+      // Clean up expired ping circles
+      const pingCircles = state.pingCircles.filter((c) => c.expiresAt > now);
 
       return {
         ...state,
@@ -161,7 +166,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         huntLinks: (p.huntLinks as SpectatorState['huntLinks']) ?? state.huntLinks,
         trails: newTrails,
         killFlashes,
-        ghostedPlayers,
+        pingCircles,
         playerMap: pMap,
       };
     }
@@ -195,6 +200,12 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         return {
           ...state,
           events: addEvent(state.events, `${player} eliminated by zone`, 'zone_elim'),
+        };
+      }
+      if (reason === 'heartbeat_timeout') {
+        return {
+          ...state,
+          events: addEvent(state.events, `${player} eliminated (missed heartbeat)`, 'heartbeat_elim'),
         };
       }
       return state;
@@ -255,16 +266,27 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       const itemName = p.itemName as string;
       const itemId = p.itemId as string;
 
-      // Track ghost mode effect
-      const ghostedPlayers = { ...state.ghostedPlayers };
-      if (itemId === 'ghost_mode') {
-        ghostedPlayers[p.playerAddress as string] = Date.now() + 120_000; // 2 minutes
+      // Add ping circle if position data is available
+      const pingCircles = [...state.pingCircles];
+      const pingLat = p.pingLat as number | null;
+      const pingLng = p.pingLng as number | null;
+      const pingDurationMs = (p.pingDurationMs as number) || 30000;
+      const pingRadiusMeters = (p.pingRadiusMeters as number) || 50;
+
+      if (pingLat != null && pingLng != null) {
+        pingCircles.push({
+          lat: pingLat,
+          lng: pingLng,
+          radius: pingRadiusMeters,
+          expiresAt: Date.now() + pingDurationMs,
+          type: itemId === 'ping_target' ? 'target' : 'hunter',
+        });
       }
 
       return {
         ...state,
         events: addEvent(state.events, `${player} used ${itemName}`, 'item', { itemId }),
-        ghostedPlayers,
+        pingCircles,
       };
     }
 

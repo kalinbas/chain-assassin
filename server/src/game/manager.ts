@@ -26,6 +26,12 @@ import {
   getPlayerByNumber,
   getGamesInPhase,
   pruneLocationPings,
+  initPlayersHeartbeat,
+  updateLastHeartbeat,
+  getHeartbeatExpiredPlayers,
+  insertHeartbeatScan,
+  getTargetAssignment,
+  findHunterOf,
 } from "../db/queries.js";
 import { initializeTargetChain, processKill, removeFromChain, getChainSize, getChainMap } from "./targetChain.js";
 import { ZoneTracker } from "./zoneTracker.js";
@@ -167,15 +173,23 @@ export function onGameStarted(gameId: number): void {
 
   activeGames.set(gameId, { zoneTracker: zoneTrackerFull, tickInterval });
 
-  // Notify all players of their targets
+  // Initialize heartbeats for all players
+  initPlayersHeartbeat(gameId, now);
+
+  // Notify all players of their targets + hunter number
   for (const [hunter, target] of chain) {
     const targetPlayer = getPlayer(gameId, target);
+    const hunterOfHunter = findHunterOf(gameId, hunter);
+    const hunterOfHunterPlayer = hunterOfHunter ? getPlayer(gameId, hunterOfHunter) : null;
     sendToPlayer(gameId, hunter, {
       type: "game:started",
       target: {
         address: target,
         playerNumber: targetPlayer?.playerNumber ?? 0,
       },
+      hunterPlayerNumber: hunterOfHunterPlayer?.playerNumber ?? 0,
+      heartbeatDeadline: now + config.heartbeatIntervalSeconds,
+      heartbeatIntervalSeconds: config.heartbeatIntervalSeconds,
       zone: zoneTrackerFull.getZoneState(),
     });
   }
@@ -274,16 +288,29 @@ export async function handleKillSubmission(
     reason: "killed",
   });
 
-  // Send new target to hunter
+  // Send new target to hunter (+ their new hunter number, since chain shifted)
   if (newTarget) {
     const newTargetPlayer = getPlayer(gameId, newTarget);
+    const hunterOfKiller = findHunterOf(gameId, hunterAddress);
+    const hunterOfKillerPlayer = hunterOfKiller ? getPlayer(gameId, hunterOfKiller) : null;
     sendToPlayer(gameId, hunterAddress, {
       type: "target:assigned",
       target: {
         address: newTarget,
         playerNumber: newTargetPlayer?.playerNumber ?? 0,
       },
+      hunterPlayerNumber: hunterOfKillerPlayer?.playerNumber ?? 0,
     });
+
+    // Also notify the new target that their hunter changed (dead player's target now has a new hunter)
+    const hunterOfNewTarget = findHunterOf(gameId, newTarget);
+    if (hunterOfNewTarget) {
+      const hunterOfNewTargetPlayer = getPlayer(gameId, hunterOfNewTarget);
+      sendToPlayer(gameId, newTarget, {
+        type: "hunter:updated",
+        hunterPlayerNumber: hunterOfNewTargetPlayer?.playerNumber ?? 0,
+      });
+    }
   }
 
   // Broadcast leaderboard update
@@ -444,6 +471,15 @@ async function gameTick(gameId: number): Promise<void> {
     await handleZoneElimination(gameId, address);
   }
 
+  // Check heartbeat timeouts (only if enough players remain)
+  const aliveCount = getAlivePlayerCount(gameId);
+  if (aliveCount > config.heartbeatDisableThreshold) {
+    const heartbeatExpired = getHeartbeatExpiredPlayers(gameId, now, config.heartbeatIntervalSeconds);
+    for (const player of heartbeatExpired) {
+      await handleHeartbeatElimination(gameId, player.address);
+    }
+  }
+
   // Broadcast player positions to spectators every 2 seconds
   if (now % 2 === 0 && spectatorBroadcastFn) {
     const alivePlayers = getAlivePlayers(gameId);
@@ -522,16 +558,29 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
     reason: "zone_violation",
   });
 
-  // Notify reassigned hunter of new target
+  // Notify reassigned hunter of new target + their updated hunter number
   if (reassignment) {
     const newTargetPlayer = getPlayer(gameId, reassignment.newTarget);
+    const hunterOfReassigned = findHunterOf(gameId, reassignment.reassignedHunter);
+    const hunterOfReassignedPlayer = hunterOfReassigned ? getPlayer(gameId, hunterOfReassigned) : null;
     sendToPlayer(gameId, reassignment.reassignedHunter, {
       type: "target:assigned",
       target: {
         address: reassignment.newTarget,
         playerNumber: newTargetPlayer?.playerNumber ?? 0,
       },
+      hunterPlayerNumber: hunterOfReassignedPlayer?.playerNumber ?? 0,
     });
+
+    // Also notify the new target that their hunter changed
+    const hunterOfNewTarget = findHunterOf(gameId, reassignment.newTarget);
+    if (hunterOfNewTarget) {
+      const hunterOfNewTargetPlayer = getPlayer(gameId, hunterOfNewTarget);
+      sendToPlayer(gameId, reassignment.newTarget, {
+        type: "hunter:updated",
+        hunterPlayerNumber: hunterOfNewTargetPlayer?.playerNumber ?? 0,
+      });
+    }
   }
 
   // Broadcast leaderboard update
@@ -545,6 +594,197 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
   if (aliveCount <= 1) {
     await endGameWithWinners(gameId);
   }
+}
+
+/**
+ * Eliminate a player for missing their heartbeat scan deadline.
+ */
+async function handleHeartbeatElimination(gameId: number, address: string): Promise<void> {
+  const now = Math.floor(Date.now() / 1000);
+
+  // Check if player is still alive
+  const player = getPlayer(gameId, address);
+  if (!player || !player.isAlive) return;
+
+  log.info({ gameId, address, playerNumber: player.playerNumber }, "Eliminating player for missed heartbeat");
+
+  // Update DB
+  dbEliminatePlayer(gameId, address, "heartbeat", now);
+
+  // Update target chain
+  const reassignment = removeFromChain(gameId, address);
+
+  // Clear zone tracking
+  const active = activeGames.get(gameId);
+  active?.zoneTracker.clearPlayer(address);
+
+  // Submit on-chain
+  if (!isSimulatedGame(gameId)) {
+    operator.eliminatePlayer(gameId, address).catch((err) => {
+      log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain (heartbeat)");
+    });
+  }
+
+  // Broadcast elimination
+  broadcast(gameId, {
+    type: "player:eliminated",
+    player: address,
+    eliminator: "heartbeat",
+    reason: "heartbeat_timeout",
+  });
+
+  // Notify reassigned hunter of new target
+  if (reassignment) {
+    const newTargetPlayer = getPlayer(gameId, reassignment.newTarget);
+    const hunterOfReassigned = findHunterOf(gameId, reassignment.reassignedHunter);
+    const hunterOfReassignedPlayer = hunterOfReassigned ? getPlayer(gameId, hunterOfReassigned) : null;
+    sendToPlayer(gameId, reassignment.reassignedHunter, {
+      type: "target:assigned",
+      target: {
+        address: reassignment.newTarget,
+        playerNumber: newTargetPlayer?.playerNumber ?? 0,
+      },
+      hunterPlayerNumber: hunterOfReassignedPlayer?.playerNumber ?? 0,
+    });
+
+    // Notify the new target that their hunter changed
+    const hunterOfNewTarget = findHunterOf(gameId, reassignment.newTarget);
+    if (hunterOfNewTarget) {
+      const hunterOfNewTargetPlayer = getPlayer(gameId, hunterOfNewTarget);
+      sendToPlayer(gameId, reassignment.newTarget, {
+        type: "hunter:updated",
+        hunterPlayerNumber: hunterOfNewTargetPlayer?.playerNumber ?? 0,
+      });
+    }
+  }
+
+  // Broadcast leaderboard update
+  broadcast(gameId, {
+    type: "leaderboard:update",
+    entries: getLeaderboard(gameId),
+  });
+
+  // Check if game should end
+  const aliveCount = getAlivePlayerCount(gameId);
+  if (aliveCount <= 1) {
+    await endGameWithWinners(gameId);
+  }
+}
+
+/**
+ * Process a heartbeat scan submission.
+ * Only the scanned player (whose QR was read) gets their heartbeat refreshed.
+ */
+export function handleHeartbeatScan(
+  gameId: number,
+  scannerAddress: string,
+  qrPayload: string,
+  lat: number,
+  lng: number,
+  bleNearbyAddresses: string[]
+): { success: boolean; error?: string; scannedPlayerNumber?: number } {
+  // 1. Verify game is active
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.ACTIVE) {
+    return { success: false, error: "Game is not active" };
+  }
+
+  // 2. Check if heartbeat is disabled (too few players)
+  const aliveCount = getAlivePlayerCount(gameId);
+  if (aliveCount <= config.heartbeatDisableThreshold) {
+    return { success: false, error: "Heartbeat is disabled (endgame)" };
+  }
+
+  // 3. Verify scanner is alive
+  const scanner = getPlayer(gameId, scannerAddress);
+  if (!scanner || !scanner.isAlive) {
+    return { success: false, error: "Scanner is not alive" };
+  }
+
+  // 4. Parse QR payload
+  const qr = parseKillQrPayload(qrPayload);
+  if (!qr) {
+    return { success: false, error: "Invalid QR code format" };
+  }
+  if (qr.gameId !== gameId) {
+    return { success: false, error: "QR code is for a different game" };
+  }
+
+  // 5. Resolve scanned player
+  const scannedPlayer = getPlayerByNumber(gameId, qr.playerNumber);
+  if (!scannedPlayer) {
+    return { success: false, error: "Player not found for QR code" };
+  }
+  if (!scannedPlayer.isAlive) {
+    return { success: false, error: "Scanned player is eliminated" };
+  }
+
+  // 6. Cannot scan yourself
+  if (scannedPlayer.address === scannerAddress) {
+    return { success: false, error: "Cannot scan your own QR code" };
+  }
+
+  // 7. Relationship check: cannot heartbeat with your target or your hunter
+  const scannerTarget = getTargetAssignment(gameId, scannerAddress);
+  if (scannerTarget && scannerTarget.targetAddress === scannedPlayer.address) {
+    return { success: false, error: "Cannot heartbeat with your target" };
+  }
+  const scannerHunter = findHunterOf(gameId, scannerAddress);
+  if (scannerHunter && scannerHunter === scannedPlayer.address) {
+    return { success: false, error: "Cannot heartbeat with your hunter" };
+  }
+
+  // 8. GPS proximity check
+  const scannedPing = getLatestLocationPing(gameId, scannedPlayer.address);
+  let distanceMeters: number | null = null;
+  if (scannedPing) {
+    distanceMeters = haversineDistance(lat, lng, scannedPing.lat, scannedPing.lng);
+    if (distanceMeters > config.heartbeatProximityMeters) {
+      return { success: false, error: `Too far from player (${Math.round(distanceMeters)}m, max ${config.heartbeatProximityMeters}m)` };
+    }
+  }
+
+  // 9. BLE proximity check
+  if (config.bleRequired) {
+    const bleAddresses = bleNearbyAddresses.map((a) => a.toLowerCase());
+    if (!bleAddresses.includes(scannedPlayer.address)) {
+      return { success: false, error: "Player not detected via Bluetooth" };
+    }
+  }
+
+  // 10. Refresh the SCANNED player's heartbeat (not the scanner's)
+  const now = Math.floor(Date.now() / 1000);
+  updateLastHeartbeat(gameId, scannedPlayer.address, now);
+
+  // 11. Record the scan
+  insertHeartbeatScan({
+    gameId,
+    scannerAddress,
+    scannedAddress: scannedPlayer.address,
+    timestamp: now,
+    scannerLat: lat,
+    scannerLng: lng,
+    distanceMeters,
+  });
+
+  // 12. Notify the scanned player their heartbeat was refreshed
+  sendToPlayer(gameId, scannedPlayer.address, {
+    type: "heartbeat:refreshed",
+    refreshedUntil: now + config.heartbeatIntervalSeconds,
+  });
+
+  // 13. Notify the scanner of success
+  sendToPlayer(gameId, scannerAddress, {
+    type: "heartbeat:scan_success",
+    scannedPlayerNumber: scannedPlayer.playerNumber,
+  });
+
+  log.info(
+    { gameId, scanner: scannerAddress, scanned: scannedPlayer.address, distanceMeters },
+    "Heartbeat scan processed"
+  );
+
+  return { success: true, scannedPlayerNumber: scannedPlayer.playerNumber };
 }
 
 /**

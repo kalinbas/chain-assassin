@@ -7,6 +7,7 @@ import com.cryptohunt.app.domain.game.GameEvent
 import com.cryptohunt.app.domain.game.KillResult
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.CheckInResult
+import com.cryptohunt.app.domain.model.HeartbeatResult
 import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.domain.model.GameState
 import com.cryptohunt.app.domain.model.LocationState
@@ -56,6 +57,7 @@ class GameViewModel @Inject constructor(
                     is GameEvent.CheckInStarted -> _uiEvents.emit(UiEvent.NavigateToCheckIn)
                     is GameEvent.GameStarted -> _uiEvents.emit(UiEvent.NavigateToMainGame)
                     is GameEvent.CheckInVerified -> _uiEvents.emit(UiEvent.CheckInVerified)
+                    is GameEvent.HeartbeatEliminated -> _uiEvents.emit(UiEvent.NavigateToEliminated)
                     else -> {}
                 }
             }
@@ -80,34 +82,34 @@ class GameViewModel @Inject constructor(
         return gameEngine.processCheckInScan(qrPayload)
     }
 
+    fun processHeartbeatScan(qrPayload: String): HeartbeatResult {
+        return gameEngine.processHeartbeatScan(qrPayload)
+    }
+
     fun setSpectatorMode() {
         gameEngine.setSpectatorMode()
     }
 
+    companion object {
+        const val ITEM_COOLDOWN_MS = 5 * 60 * 1000L // 5 minutes
+    }
+
+    fun getItemCooldownRemaining(itemId: String): Long {
+        val state = gameState.value ?: return 0
+        val lastUsed = state.itemCooldowns[itemId] ?: return 0
+        val remaining = (lastUsed + ITEM_COOLDOWN_MS) - System.currentTimeMillis()
+        return remaining.coerceAtLeast(0)
+    }
+
     fun useItem(item: IntelItem): ItemResult {
         val state = gameState.value ?: return ItemResult.Failed("No active game")
-        if (item.id in state.usedItems) return ItemResult.AlreadyUsed
-        gameEngine.markItemUsed(item.id)
+        val cooldownRemaining = getItemCooldownRemaining(item.id)
+        if (cooldownRemaining > 0) return ItemResult.OnCooldown(cooldownRemaining)
+        val ping = gameEngine.useItemWithPing(item.id) ?: return ItemResult.Failed("Failed")
         return when (item.id) {
-            "ping_target" -> {
-                val zone = listOf("NW quadrant", "NE quadrant", "SE quadrant", "SW quadrant", "center area").random()
-                ItemResult.Success("Target spotted in the $zone!")
-            }
-            "ping_hunter" -> {
-                val dist = listOf("very close", "nearby", "far away", "across the zone").random()
-                ItemResult.Success("Your hunter is $dist!")
-            }
-            "ghost_mode" -> {
-                gameEngine.activateGhostMode()
-                ItemResult.Success("Ghost Mode ON — invisible for 2 minutes!")
-            }
-            "decoy_ping" -> {
-                ItemResult.Success("Decoy sent! Your hunter sees a fake location.")
-            }
-            "emp_blast" -> {
-                ItemResult.Success("EMP fired! Target's map disabled for 30s.")
-            }
-            else -> ItemResult.Failed("Unknown item")
+            "ping_target" -> ItemResult.Success("Target ping activated!")
+            "ping_hunter" -> ItemResult.Success("Hunter ping activated!")
+            else -> ItemResult.Success("Ping activated!")
         }
     }
 
@@ -145,15 +147,12 @@ data class IntelItem(
 )
 
 val INTEL_ITEMS = listOf(
-    IntelItem("ping_target", "Ping Target", "Reveal your target's approximate zone for 30s", "gps_fixed"),
-    IntelItem("ping_hunter", "Ping Hunter", "Find out how close your hunter is to you", "person_search"),
-    IntelItem("ghost_mode", "Ghost Mode", "Become invisible to your hunter for 2 minutes", "visibility_off"),
-    IntelItem("decoy_ping", "Decoy Ping", "Send a fake location to mislead your hunter", "wrong_location"),
-    IntelItem("emp_blast", "EMP Blast", "Disable your target's map & intel for 30 seconds", "flash_on")
+    IntelItem("ping_target", "Ping Target", "Shows a 50m circle on the map near your target. 5-min cooldown.", "gps_fixed"),
+    IntelItem("ping_hunter", "Ping Hunter", "Shows a 50m circle on the map near your hunter. 5-min cooldown.", "person_search"),
 )
 
 sealed class ItemResult {
     data class Success(val message: String) : ItemResult()
-    data object AlreadyUsed : ItemResult()
+    data class OnCooldown(val remainingMs: Long) : ItemResult()
     data class Failed(val reason: String) : ItemResult()
 }

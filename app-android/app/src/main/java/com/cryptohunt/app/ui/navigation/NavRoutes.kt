@@ -26,6 +26,8 @@ sealed class NavRoutes(val route: String) {
     // Game
     data object MainGame : NavRoutes("main_game")
     data object HuntCamera : NavRoutes("hunt_camera")
+    data object HeartbeatScan : NavRoutes("heartbeat_scan")
+    data object PhotoCapture : NavRoutes("photo_capture")
     data object Map : NavRoutes("map")
     data object Intel : NavRoutes("intel")
 

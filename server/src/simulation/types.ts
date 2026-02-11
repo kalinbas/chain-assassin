@@ -24,21 +24,25 @@ export interface SimulationStatus {
 
 export type PlayerAgentState = "wandering" | "hunting" | "fleeing_zone";
 
-export type ItemId = "ping_target" | "ping_hunter" | "ghost_mode" | "decoy_ping" | "emp_blast";
+export type ItemId = "ping_target" | "ping_hunter";
 
 export interface ItemDefinition {
   id: ItemId;
   name: string;
-  cooldownTicks: number;
-  probabilityPerTick: number; // base probability, multiplied by aggressiveness
+  cooldownTicks: number;       // ticks before item can be used again (1 tick ≈ 1s)
+  durationTicks: number;       // how long the ping circle is visible
+  radiusMeters: number;        // radius of the ping circle on the map
+  probabilityPerTick: number;  // base probability, multiplied by aggressiveness
 }
 
+// Configurable defaults
+const PING_COOLDOWN_TICKS = 300;  // 5 minutes
+const PING_DURATION_TICKS = 30;   // 30 seconds visible
+const PING_RADIUS_METERS = 50;    // 50m circle
+
 export const ITEM_DEFINITIONS: ItemDefinition[] = [
-  { id: "ping_target", name: "Ping Target", cooldownTicks: 60, probabilityPerTick: 0.008 },
-  { id: "ping_hunter", name: "Ping Hunter", cooldownTicks: 60, probabilityPerTick: 0.006 },
-  { id: "ghost_mode", name: "Ghost Mode", cooldownTicks: 180, probabilityPerTick: 0.004 },
-  { id: "decoy_ping", name: "Decoy Ping", cooldownTicks: 45, probabilityPerTick: 0.010 },
-  { id: "emp_blast", name: "EMP Blast", cooldownTicks: 90, probabilityPerTick: 0.005 },
+  { id: "ping_target", name: "Ping Target", cooldownTicks: PING_COOLDOWN_TICKS, durationTicks: PING_DURATION_TICKS, radiusMeters: PING_RADIUS_METERS, probabilityPerTick: 0.008 },
+  { id: "ping_hunter", name: "Ping Hunter", cooldownTicks: PING_COOLDOWN_TICKS, durationTicks: PING_DURATION_TICKS, radiusMeters: PING_RADIUS_METERS, probabilityPerTick: 0.006 },
 ];
 
 export interface SimulatedPlayer {

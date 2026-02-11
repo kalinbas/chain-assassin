@@ -232,17 +232,79 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(spectatorMode = true, phase = GamePhase.ACTIVE)
     }
 
-    fun markItemUsed(itemId: String) {
-        val current = _state.value ?: return
-        _state.value = current.copy(usedItems = current.usedItems + itemId)
+    fun useItemWithPing(itemId: String): PingOverlay? {
+        val current = _state.value ?: return null
+        val config = current.config
+        val now = System.currentTimeMillis()
+
+        // Generate random position within the zone (simulated)
+        val angle = Random.nextDouble(0.0, 2 * Math.PI)
+        val dist = Random.nextDouble(0.0, current.currentZoneRadius * 0.7)
+        val offsetLat = (dist / 111_000.0) * Math.cos(angle)
+        val offsetLng = (dist / (111_000.0 * Math.cos(Math.toRadians(config.zoneCenterLat)))) * Math.sin(angle)
+
+        val ping = PingOverlay(
+            lat = config.zoneCenterLat + offsetLat,
+            lng = config.zoneCenterLng + offsetLng,
+            radiusMeters = 50.0,
+            type = itemId,
+            expiresAt = now + 30_000 // visible for 30 seconds
+        )
+
+        _state.value = current.copy(
+            itemCooldowns = current.itemCooldowns + (itemId to now),
+            activePing = ping
+        )
+        return ping
     }
 
-    fun activateGhostMode() {
+    fun clearExpiredPing() {
         val current = _state.value ?: return
-        _state.value = current.copy(
-            ghostModeActive = true,
-            ghostModeExpiresAt = System.currentTimeMillis() + 2 * 60 * 1000
-        )
+        val ping = current.activePing ?: return
+        if (System.currentTimeMillis() > ping.expiresAt) {
+            _state.value = current.copy(activePing = null)
+        }
+    }
+
+    fun processHeartbeatScan(scannedPayload: String): HeartbeatResult {
+        val current = _state.value ?: return HeartbeatResult.NoGame
+        if (current.phase != GamePhase.ACTIVE) return HeartbeatResult.WrongPhase
+        if (current.heartbeatDisabled) return HeartbeatResult.HeartbeatDisabled
+
+        val parts = scannedPayload.split(":")
+        val scannedPlayerId = if (parts.size >= 3) parts[2] else scannedPayload
+
+        // Can't scan yourself
+        if (scannedPlayerId == current.currentPlayer.id) {
+            return HeartbeatResult.ScanYourself
+        }
+
+        // Can't scan your target
+        if (current.currentTarget != null && scannedPlayerId == current.currentTarget.player.id) {
+            return HeartbeatResult.ScanTarget
+        }
+
+        // Check if scanned player exists
+        val scannedPlayer = mockPlayers.find { it.id == scannedPlayerId }
+        if (scannedPlayer == null) {
+            return HeartbeatResult.UnknownPlayer
+        }
+        if (!scannedPlayer.isAlive) {
+            return HeartbeatResult.PlayerNotAlive
+        }
+
+        // Can't scan your hunter (check by number)
+        if (current.hunterPlayerNumber != null && scannedPlayer.number == current.hunterPlayerNumber) {
+            return HeartbeatResult.ScanHunter
+        }
+
+        // In prototype, refresh our own heartbeat (in production, this refreshes the scanned player's)
+        // For single-device testing we refresh our own since we're the only real player
+        val now = System.currentTimeMillis() / 1000
+        _state.value = current.copy(lastHeartbeatAt = now)
+        _events.tryEmit(GameEvent.HeartbeatRefreshed(scannedPlayer.number))
+
+        return HeartbeatResult.Success(scannedPlayer.number)
     }
 
     fun debugVerifyCheckIn(): CheckInResult {
@@ -352,11 +414,17 @@ class GameEngine @Inject constructor() {
     private fun completeCheckInAndStartGame() {
         val current = _state.value ?: return
         val target = pickRandomTarget()
+        val now = System.currentTimeMillis() / 1000
+        // Pick a random hunter number for the prototype
+        val hunterNum = mockPlayers.filter { it.id != target?.id }.randomOrNull()?.number
         _state.value = current.copy(
             phase = GamePhase.ACTIVE,
             currentTarget = target?.let { Target(it, System.currentTimeMillis()) },
+            hunterPlayerNumber = hunterNum,
             nextShrinkSeconds = if (current.config.shrinkSchedule.isNotEmpty())
-                current.config.shrinkSchedule[0].atMinute * 60 else 0
+                current.config.shrinkSchedule[0].atMinute * 60 else 0,
+            lastHeartbeatAt = now,
+            heartbeatDisabled = false
         )
         updateLeaderboard()
         startTimers()
@@ -414,12 +482,6 @@ class GameEngine @Inject constructor() {
             }
         }
 
-        // Ghost mode expiry
-        var ghostModeActive = current.ghostModeActive
-        if (ghostModeActive && System.currentTimeMillis() >= current.ghostModeExpiresAt) {
-            ghostModeActive = false
-        }
-
         // Out-of-zone deadline (60 seconds to return)
         val newOutOfZoneSeconds = if (!current.isInZone && !current.spectatorMode) {
             current.outOfZoneSeconds + 1
@@ -439,12 +501,15 @@ class GameEngine @Inject constructor() {
             return
         }
 
+        // Auto-disable heartbeat when ≤4 players remain
+        val heartbeatDisabled = current.playersRemaining <= 4
+
         _state.value = current.copy(
             gameTimeElapsedSeconds = elapsed,
             currentZoneRadius = newRadius,
             nextShrinkSeconds = nextShrink,
-            ghostModeActive = ghostModeActive,
-            outOfZoneSeconds = newOutOfZoneSeconds
+            outOfZoneSeconds = newOutOfZoneSeconds,
+            heartbeatDisabled = heartbeatDisabled
         )
     }
 
@@ -598,4 +663,6 @@ sealed class GameEvent {
     data object CheckInVerified : GameEvent()
     data object GameStarted : GameEvent()
     data object RefundClaimed : GameEvent()
+    data class HeartbeatRefreshed(val scannedPlayerNumber: Int) : GameEvent()
+    data object HeartbeatEliminated : GameEvent()
 }

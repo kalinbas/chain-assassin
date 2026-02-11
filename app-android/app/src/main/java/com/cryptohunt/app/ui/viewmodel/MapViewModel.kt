@@ -25,6 +25,10 @@ class MapViewModel @Inject constructor(
     val gameState: StateFlow<GameState?> = gameEngine.state
     val locationState: StateFlow<LocationState> = locationTracker.state
 
+    fun clearExpiredPing() {
+        gameEngine.clearExpiredPing()
+    }
+
     fun generateHeatmapBlobs(): List<HeatmapBlob> {
         val config = gameState.value?.config ?: return emptyList()
         val radius = gameState.value?.currentZoneRadius ?: config.initialRadiusMeters

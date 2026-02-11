@@ -92,10 +92,13 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
   const center: [number, number] = [zone.centerLat, zone.centerLng];
   const now = Date.now();
 
-  // Filter: only alive players with positions, exclude ghosted
+  // Filter: only alive players with positions
   const visiblePlayers = state.players.filter(
-    (p) => p.lat != null && p.lng != null && p.isAlive && !(state.ghostedPlayers[p.address] && state.ghostedPlayers[p.address] > now)
+    (p) => p.lat != null && p.lng != null && p.isAlive
   );
+
+  // Active ping circles
+  const activePings = state.pingCircles.filter((c) => c.expiresAt > now);
 
   return (
     <div className="spectator__map">
@@ -133,8 +136,6 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
           if (trail.length < 2) return null;
           const player = state.players.find((p) => p.address === address);
           if (!player?.isAlive) return null;
-          // Check if ghosted
-          if (state.ghostedPlayers[address] && state.ghostedPlayers[address] > now) return null;
 
           const positions = trail.map((t) =>
             fuzzyPosition(t.lat, t.lng, address, t.timestamp)
@@ -198,6 +199,28 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
                 fillColor: '#00FF88',
                 fillOpacity: 0.85,
                 weight: 1,
+              }}
+            />
+          );
+        })}
+
+        {/* Ping circles (Ping Target = cyan, Ping Hunter = orange) */}
+        {activePings.map((ping, i) => {
+          const color = ping.type === 'target' ? '#00D4FF' : '#FF8800';
+          const remaining = (ping.expiresAt - now) / (ping.expiresAt - (ping.expiresAt - 30000));
+          const fadeOpacity = Math.min(1, Math.max(0.2, remaining));
+          return (
+            <Circle
+              key={`ping-${i}-${ping.expiresAt}`}
+              center={[ping.lat, ping.lng]}
+              radius={ping.radius}
+              pathOptions={{
+                color,
+                weight: 2,
+                opacity: 0.7 * fadeOpacity,
+                fillColor: color,
+                fillOpacity: 0.15 * fadeOpacity,
+                dashArray: '6 4',
               }}
             />
           );

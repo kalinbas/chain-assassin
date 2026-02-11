@@ -1,7 +1,7 @@
 import { WebSocket } from "ws";
 import { verifySignature, validateAuthMessage } from "../utils/crypto.js";
-import { getPlayer, getTargetAssignment, getAlivePlayers, getLatestLocationPing } from "../db/queries.js";
-import { handleLocationUpdate, getGameStatus } from "../game/manager.js";
+import { getPlayer, getTargetAssignment, findHunterOf, getAlivePlayers, getAlivePlayerCount, getLatestLocationPing } from "../db/queries.js";
+import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../game/manager.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
@@ -30,6 +30,10 @@ export function handleWsMessage(ws: WebSocket, raw: string): void {
       break;
 
     case "ble_proximity":
+      break;
+
+    case "heartbeat_scan":
+      handleWsHeartbeatScan(ws, message as { type: "heartbeat_scan"; qrPayload: string; lat: number; lng: number; bleNearbyAddresses?: string[] });
       break;
 
     case "spectate":
@@ -70,6 +74,8 @@ function handleAuth(
   joinRoom(gameId, address.toLowerCase(), ws);
 
   const targetAssignment = getTargetAssignment(gameId, address.toLowerCase());
+  const hunterAddress = findHunterOf(gameId, address.toLowerCase());
+  const hunterPlayer = hunterAddress ? getPlayer(gameId, hunterAddress) : null;
 
   ws.send(
     JSON.stringify({
@@ -86,6 +92,8 @@ function handleAuth(
               getPlayer(gameId, targetAssignment.targetAddress)?.playerNumber ?? 0,
           }
         : null,
+      hunterPlayerNumber: hunterPlayer?.playerNumber ?? null,
+      lastHeartbeatAt: player.lastHeartbeatAt,
     })
   );
 
@@ -156,6 +164,36 @@ function handleSpectate(
   );
 
   log.info({ gameId }, "Spectator connected");
+}
+
+/**
+ * Handle heartbeat scan via WebSocket.
+ */
+function handleWsHeartbeatScan(
+  ws: WebSocket,
+  msg: { type: "heartbeat_scan"; qrPayload: string; lat: number; lng: number; bleNearbyAddresses?: string[] }
+): void {
+  const conn = getConnection(ws);
+  if (!conn) {
+    sendError(ws, "Not authenticated");
+    return;
+  }
+
+  const result = handleHeartbeatScan(
+    conn.gameId,
+    conn.address,
+    msg.qrPayload,
+    msg.lat,
+    msg.lng,
+    msg.bleNearbyAddresses || []
+  );
+
+  if (!result.success) {
+    ws.send(JSON.stringify({ type: "heartbeat:error", error: result.error }));
+    return;
+  }
+
+  // Success response is sent via sendToPlayer inside handleHeartbeatScan
 }
 
 function sendError(ws: WebSocket, message: string): void {

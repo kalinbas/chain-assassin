@@ -14,13 +14,16 @@ export function Hero() {
         </h1>
         <p className="hero__sub">Real-world elimination game. GPS-tracked zones. QR-code kills. ETH prizes on Base.</p>
         <div className="hero__ctas">
-          <a href="#" className="btn btn--primary btn--lg">Download App</a>
+          <span style={{ position: 'relative', display: 'inline-block' }}>
+            <a href="#" className="btn btn--primary btn--lg">Download App</a>
+            <span className="badge badge--soon btn-soon-tag">Coming soon</span>
+          </span>
           <a href="#demo" className="btn btn--outline btn--lg">Watch Demo</a>
         </div>
         <div className="hero__badges">
-          <div className="badge">100 Players</div>
+          <div className="badge">100+ Players</div>
           <div className="badge">Real ETH Prizes</div>
-          <div className="badge">GPS + QR Verified</div>
+          <div className="badge">GPS + QR + Bluetooth Verified</div>
         </div>
       </div>
     </section>

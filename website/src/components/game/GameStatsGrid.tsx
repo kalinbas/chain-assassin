@@ -20,14 +20,17 @@ export function GameStatsGrid({ game }: { game: Game }) {
       </div>
       <div className="game-detail__stat game-detail__stat--wide">
         <div className="game-detail__stat-label"><PlayersIcon /> Players</div>
-        <div className="game-detail__stat-value">{game.players} / {game.maxPlayers} (min {game.minPlayers})</div>
+        <div className="game-detail__stat-value">{game.players} / {game.maxPlayers}</div>
         <div className="game-detail__players-bar">
           <div className="game-detail__players-bar-fill" style={{ width: `${fillPct}%` }} />
+          {game.minPlayers > 0 && game.minPlayers < game.maxPlayers && (
+            <div
+              className="game-detail__players-bar-min"
+              style={{ left: `${Math.round((game.minPlayers / game.maxPlayers) * 100)}%` }}
+              data-tooltip={`Min ${game.minPlayers} players`}
+            />
+          )}
         </div>
-      </div>
-      <div className="game-detail__stat">
-        <div className="game-detail__stat-label"><CalendarIcon /> Game Date</div>
-        <div className="game-detail__stat-value">{game.date}</div>
       </div>
       {!isPast && (
         <div className="game-detail__stat">
@@ -35,6 +38,10 @@ export function GameStatsGrid({ game }: { game: Game }) {
           <div className="game-detail__stat-value">{game.registrationDeadline}</div>
         </div>
       )}
+      <div className="game-detail__stat">
+        <div className="game-detail__stat-label"><CalendarIcon /> Game Date</div>
+        <div className="game-detail__stat-value">{game.date}</div>
+      </div>
     </div>
   );
 }

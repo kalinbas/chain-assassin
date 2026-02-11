@@ -1,4 +1,5 @@
 import { createServer } from "http";
+import { mkdirSync } from "fs";
 import express from "express";
 import cors from "cors";
 import { config } from "./config.js";
@@ -22,6 +23,11 @@ async function main(): Promise<void> {
   const app = express();
   app.use(cors());
   app.use(express.json());
+
+  // Serve uploaded photos
+  mkdirSync(config.photosDir, { recursive: true });
+  app.use("/photos", express.static(config.photosDir));
+
   app.use(router);
 
   // 3. Create HTTP server

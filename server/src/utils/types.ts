@@ -64,6 +64,7 @@ export interface Player {
   checkedIn: boolean;
   eliminatedAt: number | null;
   eliminatedBy: string | null;
+  lastHeartbeatAt: number | null;
 }
 
 export interface TargetAssignment {
@@ -134,11 +135,20 @@ export interface WsSpectateMessage {
   gameId: number;
 }
 
+export interface WsHeartbeatScanMessage {
+  type: "heartbeat_scan";
+  qrPayload: string;
+  lat: number;
+  lng: number;
+  bleNearbyAddresses?: string[];
+}
+
 export type WsClientMessage =
   | WsAuthMessage
   | WsLocationMessage
   | WsBleProximityMessage
-  | WsSpectateMessage;
+  | WsSpectateMessage
+  | WsHeartbeatScanMessage;
 
 export interface WsServerMessage {
   type: string;
@@ -165,6 +175,13 @@ export interface CheckinSubmission {
   lng: number;
 }
 
+export interface HeartbeatSubmission {
+  qrPayload: string;
+  lat: number;
+  lng: number;
+  bleNearbyAddresses?: string[];
+}
+
 // ============ Leaderboard Types ============
 
 export interface LeaderboardEntry {
@@ -189,6 +206,17 @@ export interface OutOfZoneTracker {
   address: string;
   exitedAt: number; // unix seconds
   warned: boolean;
+}
+
+// ============ Photo Types ============
+
+export interface GamePhoto {
+  id: number;
+  gameId: number;
+  address: string;
+  filename: string;
+  caption: string | null;
+  timestamp: number;
 }
 
 // ============ Auth Types ============

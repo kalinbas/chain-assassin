@@ -7,11 +7,12 @@ import { PrizeBreakdown } from './PrizeBreakdown';
 import { ActivityFeed } from './ActivityFeed';
 import { ShareButton } from './ShareButton';
 import { Leaderboard } from './Leaderboard';
+import { PhotoGallery } from './PhotoGallery';
 import { SpectatorView } from './SpectatorView';
 import { useSpectatorSocket } from '../../hooks/useSpectatorSocket';
 
 function PhaseBadge({ phase }: { phase: string }) {
-  return <span className={`game-detail__phase game-detail__phase--${phase}`}>{phase}</span>;
+  return <span className={`game-detail__badge game-detail__badge--${phase}`}>{phase}</span>;
 }
 
 function LiveContent({ game }: { game: Game }) {
@@ -42,14 +43,12 @@ export function GameDetailPage({ game }: { game: Game }) {
   return (
     <main className="game-detail">
       <div className="container">
+        <Link to={backLink} className="game-detail__back">
+          <BackIcon /> Back to Games
+        </Link>
         <div className="game-detail__header">
-          <Link to={backLink} className="game-detail__back">
-            <BackIcon /> Back to Games
-          </Link>
-          <div className="game-detail__title-row">
-            <h1 className="game-detail__title">{game.title}</h1>
-            <PhaseBadge phase={game.phase} />
-          </div>
+          <h1 className="game-detail__title">{game.title}</h1>
+          <PhaseBadge phase={game.phase} />
           <ShareButton gameId={game.id} title={game.title} />
         </div>
 
@@ -66,6 +65,7 @@ export function GameDetailPage({ game }: { game: Game }) {
         ) : (
           <>
             {game.phase === 'ended' && <Leaderboard game={game} />}
+            {game.phase === 'ended' && <PhotoGallery gameId={game.id} />}
 
             {game.zoneShrinks.length > 0 && <GameMap game={game} />}
 

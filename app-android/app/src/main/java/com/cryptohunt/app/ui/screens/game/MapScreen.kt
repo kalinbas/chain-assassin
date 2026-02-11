@@ -41,6 +41,7 @@ fun MapScreen(
     val context = LocalContext.current
 
     val config = gameState?.config
+    val activePing = gameState?.activePing
     val zoneRadius = gameState?.currentZoneRadius ?: config?.initialRadiusMeters ?: 1000.0
 
     val zoneCenterLat = config?.zoneCenterLat ?: 0.0
@@ -62,6 +63,30 @@ fun MapScreen(
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
+    // Hold a reference to the MapView so the FAB can access it
+    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+
+    // Auto-center on ping when map opens with active ping
+    LaunchedEffect(activePing) {
+        if (activePing != null && System.currentTimeMillis() < activePing.expiresAt) {
+            kotlinx.coroutines.delay(500) // wait for map to render
+            mapViewRef.value?.controller?.animateTo(
+                GeoPoint(activePing.lat, activePing.lng), 17.0, 1000L
+            )
+        }
+    }
+
+    // Clear expired pings
+    LaunchedEffect(activePing) {
+        if (activePing != null) {
+            val remaining = activePing.expiresAt - System.currentTimeMillis()
+            if (remaining > 0) {
+                kotlinx.coroutines.delay(remaining)
+                viewModel.clearExpiredPing()
+            }
+        }
+    }
+
     val meetingLat = config?.meetingLat ?: 0.0
     val meetingLng = config?.meetingLng ?: 0.0
 
@@ -76,6 +101,12 @@ fun MapScreen(
     val shieldArgb = Shield.toArgb()
     val whiteArgb = Color.White.toArgb()
 
+    // Ping overlay colors
+    val pingTargetArgb = Primary.toArgb()      // green for target ping
+    val pingHunterArgb = Danger.toArgb()        // red for hunter ping
+    val pingTargetFillArgb = Primary.copy(alpha = 0.15f).toArgb()
+    val pingHunterFillArgb = Danger.copy(alpha = 0.15f).toArgb()
+
     // Pulse animation for player marker outer ring
     val infiniteTransition = rememberInfiniteTransition(label = "playerPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
@@ -89,8 +120,16 @@ fun MapScreen(
     )
     val pulseAlphaInt = (pulseAlpha * 255).toInt()
 
-    // Hold a reference to the MapView so the FAB can access it
-    val mapViewRef = remember { mutableStateOf<MapView?>(null) }
+    // Ping circle pulse animation
+    val pingPulse by infiniteTransition.animateFloat(
+        initialValue = 0.8f,
+        targetValue = 1.2f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(1000),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pingPulse"
+    )
 
     Scaffold(
         topBar = {
@@ -264,6 +303,50 @@ fun MapScreen(
                                         style = Paint.Style.STROKE
                                         color = shieldArgb
                                         strokeWidth = 1.5f
+                                    })
+                            }
+                        })
+                    }
+
+                    // Ping circle overlay (50m radius, pulsing)
+                    if (activePing != null && System.currentTimeMillis() < activePing.expiresAt) {
+                        val pingGeo = GeoPoint(activePing.lat, activePing.lng)
+                        val isTarget = activePing.type == "ping_target"
+                        val pingStrokeColor = if (isTarget) pingTargetArgb else pingHunterArgb
+                        val pingFillColor = if (isTarget) pingTargetFillArgb else pingHunterFillArgb
+
+                        mapView.overlays.add(object : Overlay() {
+                            override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+                                if (shadow) return
+                                val projection = mapView.projection
+                                val pingPoint = android.graphics.Point()
+                                projection.toPixels(pingGeo, pingPoint)
+
+                                val pingEdge = pingGeo.destinationPoint(activePing.radiusMeters * pingPulse.toDouble(), 90.0)
+                                val pingEdgePixel = android.graphics.Point()
+                                projection.toPixels(GeoPoint(pingEdge.latitude, pingEdge.longitude), pingEdgePixel)
+                                val pingPixelRadius = Math.abs(pingEdgePixel.x - pingPoint.x).toFloat().coerceAtLeast(8f)
+
+                                // Fill
+                                canvas.drawCircle(pingPoint.x.toFloat(), pingPoint.y.toFloat(), pingPixelRadius,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = pingFillColor
+                                    })
+
+                                // Stroke
+                                canvas.drawCircle(pingPoint.x.toFloat(), pingPoint.y.toFloat(), pingPixelRadius,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.STROKE
+                                        color = pingStrokeColor
+                                        strokeWidth = 3f
+                                    })
+
+                                // Center dot
+                                canvas.drawCircle(pingPoint.x.toFloat(), pingPoint.y.toFloat(), 6f,
+                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                        style = Paint.Style.FILL
+                                        color = pingStrokeColor
                                     })
                             }
                         })

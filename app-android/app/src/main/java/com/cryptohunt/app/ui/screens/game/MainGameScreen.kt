@@ -31,6 +31,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun MainGameScreen(
     onHunt: () -> Unit,
+    onHeartbeat: () -> Unit,
+    onPhoto: () -> Unit,
     onMap: () -> Unit,
     onIntel: () -> Unit,
     onEliminated: () -> Unit,
@@ -211,6 +213,25 @@ fun MainGameScreen(
                             }
                         }
                     }
+
+                    Spacer(Modifier.height(16.dp))
+
+                    // Map button
+                    Button(
+                        onClick = onMap,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SurfaceVariant,
+                            contentColor = TextPrimary
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(Icons.Default.Map, null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("VIEW MAP", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold)
+                    }
                 } else {
                     // ========== ACTIVE PLAYER VIEW ==========
 
@@ -220,16 +241,56 @@ fun MainGameScreen(
                         horizontalArrangement = Arrangement.End,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        IconButton(onClick = onPhoto) {
+                            Icon(Icons.Default.CameraAlt, "Photo", tint = TextSecondary)
+                        }
                         IconButton(onClick = onIntel) {
                             Icon(Icons.Default.Star, "Items", tint = Shield)
                         }
                     }
 
-                    // Target card
+                    // Target card + hunter info
                     TargetCard(
                         target = state.currentTarget,
                         modifier = Modifier.padding(vertical = 8.dp)
                     )
+
+                    // Hunter info
+                    if (state.hunterPlayerNumber != null) {
+                        Text(
+                            "\uD83D\uDC41 Your hunter: Player #${state.hunterPlayerNumber}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Danger.copy(alpha = 0.8f),
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                    }
+
+                    // Heartbeat timer (clickable to open heartbeat scan)
+                    if (!state.heartbeatDisabled && state.lastHeartbeatAt > 0) {
+                        val now = System.currentTimeMillis() / 1000
+                        val deadline = state.lastHeartbeatAt + state.heartbeatIntervalSeconds
+                        val remaining = (deadline - now).coerceAtLeast(0)
+                        val minutes = remaining / 60
+                        val seconds = remaining % 60
+                        val heartbeatColor = when {
+                            remaining < 30 -> Danger
+                            remaining < 60 -> Warning
+                            remaining < 180 -> Warning.copy(alpha = 0.7f)
+                            else -> Primary
+                        }
+
+                        TextButton(
+                            onClick = onHeartbeat,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                "\u2764\ufe0f %d:%02d".format(minutes, seconds),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = heartbeatColor,
+                                fontWeight = if (remaining < 60) FontWeight.Black else FontWeight.Bold
+                            )
+                        }
+                    }
 
                     Spacer(Modifier.height(12.dp))
 

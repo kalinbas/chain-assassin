@@ -49,7 +49,10 @@ export function Header() {
             ),
           )}
         </nav>
-        <a href="#" className="btn btn--primary nav__cta">Download App</a>
+        <span className="nav__cta-wrap" style={{ position: 'relative', display: 'inline-block' }}>
+          <a href="#" className="btn btn--primary nav__cta">Download App</a>
+          <span className="badge badge--soon btn-soon-tag">Coming soon</span>
+        </span>
         <button
           className={`nav__hamburger${isOpen ? ' active' : ''}`}
           aria-label="Menu"

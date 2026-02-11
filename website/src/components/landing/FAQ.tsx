@@ -35,7 +35,7 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'What are tactical items?',
-    a: "Tactical items are one-use abilities that give you a strategic edge. Ping Target reveals your target's approximate zone. Ping Hunter shows how close your hunter is. Ghost Mode makes you invisible for 2 minutes. Decoy Ping sends a fake location to mislead your hunter. EMP Blast disables your target's map for 30 seconds.",
+    a: "There are two tactical items you can use during a game, each with a 5-minute cooldown. Ping Target shows a 50m radius circle on the map where your target currently is — but the exact position within the circle is unknown. Ping Hunter does the same for whoever is hunting you. Use them strategically to close in on your target or evade your hunter.",
   },
   {
     q: 'Is GPS tracking required?',
@@ -43,7 +43,7 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'Can I spectate after elimination?',
-    a: 'Yes! After being eliminated, you can switch to spectator mode. Watch the live leaderboard, follow the kill feed in real-time, and see how the remaining players battle it out for the prize pool.',
+    a: 'Yes! After being eliminated, you can switch to spectator mode. Watch the live leaderboard, follow the kill feed in real-time, and see how the remaining players battle it out for the prize pool. Important: please remove your QR codes from your shirt as soon as possible after elimination so you don\'t interfere with the running game.',
   },
   {
     q: 'How do I host a game?',

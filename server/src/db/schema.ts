@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 2;
+export const SCHEMA_VERSION = 4;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS players (
   checked_in    INTEGER NOT NULL DEFAULT 0,
   eliminated_at INTEGER,
   eliminated_by TEXT,
+  last_heartbeat_at INTEGER,
   PRIMARY KEY (game_id, address)
 );
 
@@ -85,6 +86,20 @@ CREATE TABLE IF NOT EXISTS kills (
 
 CREATE INDEX IF NOT EXISTS idx_kills_game ON kills(game_id);
 
+-- Heartbeat scans (audit trail for anti-QR-hiding fairplay)
+CREATE TABLE IF NOT EXISTS heartbeat_scans (
+  id              INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id         INTEGER NOT NULL,
+  scanner_address TEXT NOT NULL,
+  scanned_address TEXT NOT NULL,
+  timestamp       INTEGER NOT NULL,
+  scanner_lat     REAL,
+  scanner_lng     REAL,
+  distance_meters REAL
+);
+
+CREATE INDEX IF NOT EXISTS idx_heartbeat_game ON heartbeat_scans(game_id);
+
 -- Location pings (recent only, older ones get pruned)
 CREATE TABLE IF NOT EXISTS location_pings (
   game_id   INTEGER NOT NULL,
@@ -112,6 +127,18 @@ CREATE TABLE IF NOT EXISTS operator_txs (
 
 CREATE INDEX IF NOT EXISTS idx_operator_txs_game ON operator_txs(game_id);
 CREATE INDEX IF NOT EXISTS idx_operator_txs_status ON operator_txs(status);
+
+-- Game photos (uploaded by players)
+CREATE TABLE IF NOT EXISTS game_photos (
+  id        INTEGER PRIMARY KEY AUTOINCREMENT,
+  game_id   INTEGER NOT NULL,
+  address   TEXT NOT NULL,
+  filename  TEXT NOT NULL,
+  caption   TEXT,
+  timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_photos_game ON game_photos(game_id);
 
 -- Block tracking for event recovery
 CREATE TABLE IF NOT EXISTS sync_state (

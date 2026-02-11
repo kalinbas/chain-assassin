@@ -63,6 +63,7 @@ data class GameState(
     val config: GameConfig,
     val currentPlayer: Player,
     val currentTarget: Target? = null,
+    val hunterPlayerNumber: Int? = null,
     val playersRemaining: Int = 100,
     val currentZoneRadius: Double = 0.0,
     val nextShrinkSeconds: Int = 0,
@@ -71,16 +72,19 @@ data class GameState(
     val isInZone: Boolean = true,
     val outOfZoneSeconds: Int = 0,
     val spectatorMode: Boolean = false,
-    val usedItems: Set<String> = emptySet(),
-    val ghostModeActive: Boolean = false,
-    val ghostModeExpiresAt: Long = 0,
+    val itemCooldowns: Map<String, Long> = emptyMap(), // itemId -> timestamp when last used
+    val activePing: PingOverlay? = null,
     val leaderboard: List<LeaderboardEntry> = emptyList(),
     val registeredAt: Long = 0L,
     val gameStartTime: Long = 0L,
     val checkInVerified: Boolean = false,
     val checkInTimeRemainingSeconds: Int = 0,
     val checkedInCount: Int = 0,
-    val checkedInPlayerNumbers: Set<Int> = emptySet()
+    val checkedInPlayerNumbers: Set<Int> = emptySet(),
+    // Heartbeat (anti-QR-hiding fairplay)
+    val lastHeartbeatAt: Long = 0L,
+    val heartbeatIntervalSeconds: Int = 600,
+    val heartbeatDisabled: Boolean = false
 )
 
 sealed class CheckInResult {
@@ -91,4 +95,24 @@ sealed class CheckInResult {
     data object UnknownPlayer : CheckInResult()
     data object WrongPhase : CheckInResult()
     data object NoGame : CheckInResult()
+}
+
+data class PingOverlay(
+    val lat: Double,
+    val lng: Double,
+    val radiusMeters: Double = 50.0,
+    val type: String, // "ping_target" or "ping_hunter"
+    val expiresAt: Long // epoch millis
+)
+
+sealed class HeartbeatResult {
+    data class Success(val scannedPlayerNumber: Int) : HeartbeatResult()
+    data object ScanYourself : HeartbeatResult()
+    data object ScanTarget : HeartbeatResult()
+    data object ScanHunter : HeartbeatResult()
+    data object PlayerNotAlive : HeartbeatResult()
+    data object UnknownPlayer : HeartbeatResult()
+    data object HeartbeatDisabled : HeartbeatResult()
+    data object WrongPhase : HeartbeatResult()
+    data object NoGame : HeartbeatResult()
 }

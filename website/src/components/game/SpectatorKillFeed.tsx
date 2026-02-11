@@ -1,5 +1,5 @@
 import type { SpectatorEvent } from '../../hooks/useSpectatorSocket';
-import { CrosshairIcon, AlertIcon, TargetIcon, BoltIcon, TrophyIcon, GhostIcon, RadarIcon, EmpIcon, DecoyIcon } from '../icons/Icons';
+import { CrosshairIcon, AlertIcon, TargetIcon, BoltIcon, TrophyIcon, RadarIcon, HeartIcon } from '../icons/Icons';
 
 function formatTime(timestamp: number): string {
   const d = new Date(timestamp);
@@ -13,27 +13,16 @@ function getEventIcon(type: string, itemId?: string) {
       return <CrosshairIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--kill" />;
     case 'zone_elim':
       return <AlertIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--zone" />;
+    case 'heartbeat_elim':
+      return <HeartIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--heartbeat" />;
     case 'zone_shrink':
       return <TargetIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--shrink" />;
     case 'start':
       return <BoltIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--start" />;
     case 'end':
       return <TrophyIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--end" />;
-    case 'item': {
-      switch (itemId) {
-        case 'ghost_mode':
-          return <GhostIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
-        case 'ping_target':
-        case 'ping_hunter':
-          return <RadarIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
-        case 'emp_blast':
-          return <EmpIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
-        case 'decoy_ping':
-          return <DecoyIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
-        default:
-          return <BoltIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
-      }
-    }
+    case 'item':
+      return <RadarIcon width={size} height={size} className="spectator__feed-icon spectator__feed-icon--item" />;
     default:
       return null;
   }

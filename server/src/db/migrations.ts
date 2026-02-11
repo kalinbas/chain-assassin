@@ -55,4 +55,39 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(2);
     log.info("Migrated to v2: added meeting_lat/meeting_lng");
   }
+
+  if (currentVersion < 3 && currentVersion > 0) {
+    db.exec(`ALTER TABLE players ADD COLUMN last_heartbeat_at INTEGER`);
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS heartbeat_scans (
+        id              INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id         INTEGER NOT NULL,
+        scanner_address TEXT NOT NULL,
+        scanned_address TEXT NOT NULL,
+        timestamp       INTEGER NOT NULL,
+        scanner_lat     REAL,
+        scanner_lng     REAL,
+        distance_meters REAL
+      )
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_heartbeat_game ON heartbeat_scans(game_id)`);
+    db.prepare("UPDATE schema_version SET version = ?").run(3);
+    log.info("Migrated to v3: added heartbeat_scans table + last_heartbeat_at column");
+  }
+
+  if (currentVersion < 4 && currentVersion > 0) {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS game_photos (
+        id        INTEGER PRIMARY KEY AUTOINCREMENT,
+        game_id   INTEGER NOT NULL,
+        address   TEXT NOT NULL,
+        filename  TEXT NOT NULL,
+        caption   TEXT,
+        timestamp INTEGER NOT NULL
+      )
+    `);
+    db.exec(`CREATE INDEX IF NOT EXISTS idx_photos_game ON game_photos(game_id)`);
+    db.prepare("UPDATE schema_version SET version = ?").run(4);
+    log.info("Migrated to v4: added game_photos table");
+  }
 }

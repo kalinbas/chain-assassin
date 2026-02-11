@@ -140,9 +140,6 @@ export class GameSimulator {
     const initialCooldowns: Record<ItemId, number> = {
       ping_target: 0,
       ping_hunter: 0,
-      ghost_mode: 0,
-      decoy_ping: 0,
-      emp_blast: 0,
     };
     this.players = wallets.map((w, i) => ({
       address: w.address.toLowerCase(),
@@ -336,13 +333,41 @@ export class GameSimulator {
           // Use this item
           player.itemCooldowns[item.id] = item.cooldownTicks;
 
-          // Broadcast item:used event
+          // Find the relevant player's position for the ping circle
+          let pingLat: number | null = null;
+          let pingLng: number | null = null;
+
+          if (item.id === "ping_target") {
+            // Find this player's assigned target
+            const assignment = getTargetAssignment(this.gameId, player.address);
+            if (assignment) {
+              const target = this.players.find((p) => p.address === assignment.targetAddress);
+              if (target) {
+                [pingLat, pingLng] = randomizeCircleCenter(target.lat, target.lng, item.radiusMeters);
+              }
+            }
+          } else if (item.id === "ping_hunter") {
+            // Find who is hunting this player
+            const hunter = alive.find((p) => {
+              const a = getTargetAssignment(this.gameId, p.address);
+              return a && a.targetAddress === player.address;
+            });
+            if (hunter) {
+              [pingLat, pingLng] = randomizeCircleCenter(hunter.lat, hunter.lng, item.radiusMeters);
+            }
+          }
+
+          // Broadcast item:used event with ping circle data
           broadcastToGame(this.gameId, {
             type: "item:used",
             playerAddress: player.address,
             playerNumber: player.playerNumber,
             itemId: item.id,
             itemName: item.name,
+            pingLat,
+            pingLng,
+            pingRadiusMeters: item.radiusMeters,
+            pingDurationMs: item.durationTicks * 1000,
           });
 
           break; // max 1 item per tick
@@ -394,6 +419,15 @@ export class GameSimulator {
       speedMultiplier: this.config.speedMultiplier,
     };
   }
+}
+
+/** Offset a circle center randomly so the real position is somewhere inside the circle, not at the center */
+function randomizeCircleCenter(realLat: number, realLng: number, radiusMeters: number): [number, number] {
+  const angle = Math.random() * 2 * Math.PI;
+  const dist = Math.random() * radiusMeters; // 0 to radiusMeters offset
+  const dlat = (dist * Math.cos(angle)) / 111320;
+  const dlng = (dist * Math.sin(angle)) / (111320 * Math.cos(realLat * Math.PI / 180));
+  return [realLat + dlat, realLng + dlng];
 }
 
 function sleep(ms: number): Promise<void> {

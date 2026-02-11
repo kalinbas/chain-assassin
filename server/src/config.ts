@@ -58,6 +58,15 @@ export const config = {
   gpsPingIntervalSeconds: envInt("GPS_PING_INTERVAL_SECONDS", 5),
   bleRequired: envBool("BLE_REQUIRED", true),
 
+  // Heartbeat (anti-QR-hiding fairplay)
+  heartbeatIntervalSeconds: envInt("HEARTBEAT_INTERVAL_SECONDS", 600),  // 10 minutes
+  heartbeatProximityMeters: envInt("HEARTBEAT_PROXIMITY_METERS", 100),
+  heartbeatDisableThreshold: envInt("HEARTBEAT_DISABLE_THRESHOLD", 4),  // disable when ≤ this many alive
+
+  // Photos
+  photosDir: optionalEnv("PHOTOS_DIR", "./data/photos"),
+  maxPhotoSizeMb: envInt("MAX_PHOTO_SIZE_MB", 5),
+
   // Logging
   logLevel: optionalEnv("LOG_LEVEL", "info"),
 } as const;

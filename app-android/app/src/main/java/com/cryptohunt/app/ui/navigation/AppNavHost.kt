@@ -16,7 +16,9 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cryptohunt.app.ui.screens.game.CheckInCameraScreen
 import com.cryptohunt.app.ui.screens.game.CheckInScreen
+import com.cryptohunt.app.ui.screens.game.HeartbeatScanScreen
 import com.cryptohunt.app.ui.screens.game.HuntCameraScreen
+import com.cryptohunt.app.ui.screens.game.PhotoCaptureScreen
 import com.cryptohunt.app.ui.screens.game.IntelScreen
 import com.cryptohunt.app.ui.screens.game.MainGameScreen
 import com.cryptohunt.app.ui.screens.game.MapScreen
@@ -207,6 +209,8 @@ fun AppNavHost(
         composable(NavRoutes.MainGame.route) {
             MainGameScreen(
                 onHunt = { navController.navigate(NavRoutes.HuntCamera.route) },
+                onHeartbeat = { navController.navigate(NavRoutes.HeartbeatScan.route) },
+                onPhoto = { navController.navigate(NavRoutes.PhotoCapture.route) },
                 onMap = { navController.navigate(NavRoutes.Map.route) },
                 onIntel = { navController.navigate(NavRoutes.Intel.route) },
                 onEliminated = {
@@ -229,12 +233,29 @@ fun AppNavHost(
             )
         }
 
+        composable(NavRoutes.HeartbeatScan.route) {
+            HeartbeatScanScreen(
+                onSuccess = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoutes.PhotoCapture.route) {
+            PhotoCaptureScreen(
+                onPhotoTaken = { navController.popBackStack() },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
         composable(NavRoutes.Map.route) {
             MapScreen(onBack = { navController.popBackStack() })
         }
 
         composable(NavRoutes.Intel.route) {
-            IntelScreen(onBack = { navController.popBackStack() })
+            IntelScreen(
+                onBack = { navController.popBackStack() },
+                onNavigateToMap = { navController.navigate(NavRoutes.Map.route) }
+            )
         }
 
         // Post-game

@@ -112,6 +112,23 @@ fun EliminatedScreen(
             }
         }
 
+        Spacer(Modifier.height(20.dp))
+
+        // QR removal warning
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(containerColor = Warning.copy(alpha = 0.12f)),
+            shape = MaterialTheme.shapes.medium
+        ) {
+            Text(
+                "Please remove your QR codes from your shirt as soon as possible to not interfere with the running game.",
+                modifier = Modifier.padding(16.dp),
+                style = MaterialTheme.typography.bodyMedium,
+                color = Warning,
+                textAlign = TextAlign.Center
+            )
+        }
+
         Spacer(Modifier.weight(1f))
 
         // Spectate button
