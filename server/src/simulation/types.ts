@@ -6,9 +6,20 @@ export interface SimulationConfig {
   centerLng: number;
   initialRadiusMeters: number;
   speedMultiplier: number;
-  useOnChain: boolean;
   title: string;
   entryFeeWei: string;
+}
+
+export interface DeploySimulationConfig {
+  playerCount: number;
+  centerLat: number;         // degrees
+  centerLng: number;         // degrees
+  initialRadiusMeters: number;
+  speedMultiplier: number;
+  title: string;
+  entryFeeWei: string;       // "0" for free games
+  baseRewardWei: string;     // "0" for no base reward
+  registrationDelaySeconds: number; // how long registration stays open before auto-start
 }
 
 export interface SimulationStatus {

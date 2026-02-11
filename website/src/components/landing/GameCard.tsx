@@ -7,7 +7,8 @@ export function GameCard({ game }: { game: Game }) {
   const fillPct = game.maxPlayers > 0 ? Math.round((game.players / game.maxPlayers) * 100) : 0;
   const prizePoolBps = game.bps.first + game.bps.second + game.bps.third + game.bps.kills;
   const playerCount = Math.max(game.players, game.minPlayers);
-  const prizePool = (playerCount * game.entryFee * prizePoolBps / 10000).toFixed(4);
+  const totalPool = playerCount * game.entryFee + game.baseReward;
+  const prizePool = (totalPool * prizePoolBps / 10000).toFixed(4);
 
   return (
     <Link to={gameUrl(game.id, game.title)} className="game-card__link">

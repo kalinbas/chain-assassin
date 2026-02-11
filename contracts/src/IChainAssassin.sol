@@ -38,13 +38,14 @@ interface IChainAssassin {
         uint16  bps3rd;                 // 3rd-place share
         uint16  bpsKills;               // top-killer share
         uint16  bpsCreator;             // game creator fee share
+        uint128 baseReward;             // creator's base reward deposit (wei), set from msg.value
     }
 
     /// @notice Mutable runtime state of a game.
     struct GameState {
         GamePhase phase;
         uint16   playerCount;       // current registered player count
-        uint128  totalCollected;    // cumulative entry fees in wei
+        uint128  totalCollected;    // cumulative entry fees + base reward in wei
         address  winner1;           // 1st place (set in endGame)
         address  winner2;           // 2nd place
         address  winner3;           // 3rd place
@@ -213,6 +214,7 @@ interface IChainAssassin {
         uint256 indexed gameId,
         string  title,
         uint128 entryFee,
+        uint128 baseReward,
         uint16  minPlayers,
         uint16  maxPlayers,
         int32   centerLat,

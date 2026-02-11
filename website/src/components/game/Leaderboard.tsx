@@ -13,7 +13,7 @@ interface LeaderboardEntry {
 
 export function Leaderboard({ game }: { game: Game }) {
   const playerCount = Math.max(game.players, game.minPlayers);
-  const totalPool = playerCount * game.entryFee;
+  const totalPool = playerCount * game.entryFee + game.baseReward;
 
   const entries: LeaderboardEntry[] = [];
 

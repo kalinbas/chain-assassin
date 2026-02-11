@@ -208,12 +208,27 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         game.triggerExpiry(gameId);
     }
 
-    function test_triggerExpiry_revertsIfNotActive() public {
+    function test_triggerExpiry_worksForRegistrationPhase() public {
         vm.prank(operator);
         uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
 
+        // Warp past gameDate + maxDuration
         vm.warp(block.timestamp + 3 days);
 
+        game.triggerExpiry(gameId);
+
+        IChainAssassin.GameState memory state = game.getGameState(gameId);
+        assertEq(uint256(state.phase), uint256(IChainAssassin.GamePhase.CANCELLED));
+    }
+
+    function test_triggerExpiry_revertsIfEndedOrCancelled() public {
+        // Test ENDED phase
+        uint256 gameId = _createAndRegisterPlayers(3);
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player1);
+
+        vm.warp(block.timestamp + 3 days);
         vm.expectRevert(IChainAssassin.WrongPhase.selector);
         game.triggerExpiry(gameId);
     }

@@ -35,6 +35,14 @@ fun PregameScreen(
     val gameState by viewModel.gameState.collectAsState()
     val state = gameState ?: return
 
+    // Ensure server connection
+    LaunchedEffect(Unit) {
+        val id = gameId.toIntOrNull() ?: state.config.id.toIntOrNull()
+        if (id != null) {
+            viewModel.connectToServer(id)
+        }
+    }
+
     // Navigate when game starts
     LaunchedEffect(state.phase) {
         when (state.phase) {
@@ -169,18 +177,6 @@ fun PregameScreen(
                 }
             }
 
-            Spacer(Modifier.height(32.dp))
-
-            // Debug: skip to game
-            OutlinedButton(
-                onClick = {
-                    viewModel.debugStartGame()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
-            ) {
-                Text("Debug: Skip to Game", style = MaterialTheme.typography.bodySmall)
-            }
         }
     }
 }

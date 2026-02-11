@@ -118,7 +118,7 @@ fun ResultsScreen(
             Spacer(Modifier.height(12.dp))
 
             val playerCount = maxOf(state?.config?.maxPlayers ?: 0, state?.config?.minPlayers ?: 0)
-            val prizePool = (state?.config?.entryFee ?: 0.0) * playerCount * 0.9
+            val prizePool = ((state?.config?.entryFee ?: 0.0) * playerCount + (state?.config?.baseReward ?: 0.0)) * 0.9
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = CardBackground),

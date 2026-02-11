@@ -47,7 +47,7 @@ fun GameBrowserScreen(
     val error by viewModel.error.collectAsState()
 
     val activePhase = gameState?.phase
-    val hasActiveGame = activePhase in listOf(GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)
+    val hasActiveGame = activePhase in listOf(GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)
 
     Scaffold(
         topBar = {
@@ -164,10 +164,12 @@ fun GameBrowserScreen(
                             playersRemaining = gameState!!.playersRemaining,
                             kills = gameState!!.currentPlayer.killCount,
                             onClick = {
-                                if (activePhase == GamePhase.ACTIVE) {
-                                    onActiveGameClick()
-                                } else {
-                                    onEliminatedGameClick()
+                                when (activePhase) {
+                                    GamePhase.CHECK_IN -> onRegisteredGameClick(gameState!!.config.id)
+                                    GamePhase.PREGAME -> onRegisteredGameClick(gameState!!.config.id)
+                                    GamePhase.ACTIVE -> onActiveGameClick()
+                                    GamePhase.ELIMINATED -> onEliminatedGameClick()
+                                    else -> onActiveGameClick()
                                 }
                             }
                         )
@@ -424,7 +426,7 @@ private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick:
 
             // Prize pool — use real BPS from contract
             val playerCount = maxOf(game.currentPlayers, game.config.minPlayers)
-            val totalPool = game.config.entryFee * playerCount
+            val totalPool = game.config.entryFee * playerCount + game.config.baseReward
             val creatorBps = 10000 - game.config.bps1st - game.config.bps2nd - game.config.bps3rd - game.config.bpsKills
             val prizePool = totalPool * (10000 - creatorBps) / 10000.0
             Row(
@@ -455,12 +457,28 @@ private fun ActiveGameCard(
     kills: Int,
     onClick: () -> Unit
 ) {
+    val isLive = phase in listOf(GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE)
+    val phaseLabel = when (phase) {
+        GamePhase.CHECK_IN -> "CHECK-IN"
+        GamePhase.PREGAME -> "PREGAME"
+        GamePhase.ACTIVE -> "ACTIVE"
+        GamePhase.ELIMINATED -> "ELIMINATED"
+        else -> "ACTIVE"
+    }
+    val phaseColor = if (isLive) Primary else Danger
+    val buttonLabel = when (phase) {
+        GamePhase.CHECK_IN -> "Go to Check-in"
+        GamePhase.PREGAME -> "View Pregame"
+        GamePhase.ACTIVE -> "Resume Game"
+        else -> "View Game"
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = if (phase == GamePhase.ACTIVE) Primary.copy(alpha = 0.1f) else Danger.copy(alpha = 0.1f)
+            containerColor = phaseColor.copy(alpha = 0.1f)
         ),
         shape = MaterialTheme.shapes.medium
     ) {
@@ -477,13 +495,13 @@ private fun ActiveGameCard(
                     modifier = Modifier.weight(1f)
                 )
                 Surface(
-                    color = if (phase == GamePhase.ACTIVE) Primary.copy(alpha = 0.2f) else Danger.copy(alpha = 0.2f),
+                    color = phaseColor.copy(alpha = 0.2f),
                     shape = RoundedCornerShape(4.dp)
                 ) {
                     Text(
-                        if (phase == GamePhase.ACTIVE) "ACTIVE" else "ELIMINATED",
+                        phaseLabel,
                         style = MaterialTheme.typography.labelSmall,
-                        color = if (phase == GamePhase.ACTIVE) Primary else Danger,
+                        color = phaseColor,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
@@ -499,12 +517,14 @@ private fun ActiveGameCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.People, null, modifier = Modifier.size(16.dp), tint = TextSecondary)
                     Spacer(Modifier.width(4.dp))
-                    Text("$playersRemaining remaining", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+                    Text("$playersRemaining players", style = MaterialTheme.typography.bodySmall, color = TextSecondary)
                 }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CenterFocusStrong, null, modifier = Modifier.size(16.dp), tint = Primary)
-                    Spacer(Modifier.width(4.dp))
-                    Text("$kills kills", style = MaterialTheme.typography.bodySmall, color = Primary)
+                if (phase == GamePhase.ACTIVE || phase == GamePhase.ELIMINATED) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.CenterFocusStrong, null, modifier = Modifier.size(16.dp), tint = Primary)
+                        Spacer(Modifier.width(4.dp))
+                        Text("$kills kills", style = MaterialTheme.typography.bodySmall, color = Primary)
+                    }
                 }
             }
 
@@ -514,15 +534,12 @@ private fun ActiveGameCard(
                 onClick = onClick,
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = if (phase == GamePhase.ACTIVE) Primary else SurfaceVariant,
-                    contentColor = if (phase == GamePhase.ACTIVE) Background else TextPrimary
+                    containerColor = if (isLive) Primary else SurfaceVariant,
+                    contentColor = if (isLive) Background else TextPrimary
                 ),
                 shape = RoundedCornerShape(8.dp)
             ) {
-                Text(
-                    if (phase == GamePhase.ACTIVE) "Resume Game" else "View Game",
-                    fontWeight = FontWeight.Bold
-                )
+                Text(buttonLabel, fontWeight = FontWeight.Bold)
             }
         }
     }
@@ -588,6 +605,7 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                     Surface(
                         color = when {
                             isCancelled -> TextSecondary.copy(alpha = 0.15f)
+                            !item.participated -> SurfaceVariant.copy(alpha = 0.3f)
                             isWinner -> Warning.copy(alpha = 0.15f)
                             else -> Danger.copy(alpha = 0.15f)
                         },
@@ -596,12 +614,14 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                         Text(
                             when {
                                 isCancelled -> "CANCELLED"
+                                !item.participated -> "ENDED"
                                 isWinner -> "WON"
                                 else -> "LOST"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = when {
                                 isCancelled -> TextSecondary
+                                !item.participated -> TextSecondary
                                 isWinner -> Warning
                                 else -> Danger
                             },
@@ -632,6 +652,33 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = TextDim
                 )
+            } else if (!item.participated) {
+                // Non-participated game — show general info
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            "${item.playersTotal}",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("PLAYERS", style = MaterialTheme.typography.labelSmall, color = TextDim)
+                    }
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        val playerCount = maxOf(item.playersTotal, item.config.minPlayers)
+                        val totalPool = item.config.entryFee * playerCount + item.config.baseReward
+                        Text(
+                            "%.4f".format(totalPool),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = Warning,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Text("POOL ETH", style = MaterialTheme.typography.labelSmall, color = TextDim)
+                    }
+                }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

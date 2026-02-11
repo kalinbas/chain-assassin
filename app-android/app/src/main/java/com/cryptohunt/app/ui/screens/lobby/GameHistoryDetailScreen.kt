@@ -53,7 +53,7 @@ fun GameHistoryDetailScreen(
 
     val isCancelled = item.phase == GamePhase.CANCELLED
     val isWinner = item.rank == 1 && item.phase == GamePhase.ENDED
-    val hasUnclaimedPrize = item.prizeEth > 0.0 && !item.claimed
+    val hasUnclaimedPrize = item.prizeEth > 0.0 && !item.claimed && item.participated
     val dateFormat = SimpleDateFormat("EEEE, MMM d · HH:mm", Locale.getDefault())
 
     Scaffold(
@@ -85,7 +85,7 @@ fun GameHistoryDetailScreen(
         ) {
             // Header
             item {
-                if (isWinner) {
+                if (isWinner && item.participated) {
                     Icon(
                         Icons.Default.EmojiEvents,
                         contentDescription = null,
@@ -102,15 +102,17 @@ fun GameHistoryDetailScreen(
                     )
                 } else {
                     Text(
-                        when (item.phase) {
-                            GamePhase.CANCELLED -> "CANCELLED"
-                            GamePhase.ELIMINATED -> "ELIMINATED"
+                        when {
+                            item.phase == GamePhase.CANCELLED -> "CANCELLED"
+                            !item.participated -> "GAME OVER"
+                            item.phase == GamePhase.ELIMINATED -> "ELIMINATED"
                             else -> "GAME OVER"
                         },
                         style = MaterialTheme.typography.displaySmall,
-                        color = when (item.phase) {
-                            GamePhase.CANCELLED -> TextSecondary
-                            GamePhase.ELIMINATED -> Danger
+                        color = when {
+                            item.phase == GamePhase.CANCELLED -> TextSecondary
+                            !item.participated -> TextSecondary
+                            item.phase == GamePhase.ELIMINATED -> Danger
                             else -> TextPrimary
                         },
                         fontWeight = FontWeight.Black,
@@ -147,16 +149,51 @@ fun GameHistoryDetailScreen(
                         shape = MaterialTheme.shapes.medium
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
-                            Text("YOUR STATS", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                            Text(
+                                if (item.participated) "YOUR STATS" else "GAME STATS",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = TextSecondary
+                            )
                             Spacer(Modifier.height(16.dp))
 
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                StatColumn("KILLS", "${item.kills}", Primary)
-                                StatColumn("SURVIVED", if (item.survivalSeconds > 0) TimeUtils.formatDuration(item.survivalSeconds) else "—", TextPrimary)
-                                StatColumn("RANK", if (item.rank > 0) "#${item.rank}/${item.playersTotal}" else "#—/${item.playersTotal}", if (isWinner) Warning else TextPrimary)
+                            if (item.participated) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    StatColumn("KILLS", "${item.kills}", Primary)
+                                    StatColumn("SURVIVED", if (item.survivalSeconds > 0) TimeUtils.formatDuration(item.survivalSeconds) else "—", TextPrimary)
+                                    StatColumn("RANK", if (item.rank > 0) "#${item.rank}/${item.playersTotal}" else "#—/${item.playersTotal}", if (isWinner) Warning else TextPrimary)
+                                }
+                            } else {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceEvenly
+                                ) {
+                                    StatColumn("PLAYERS", "${item.playersTotal}", TextPrimary)
+                                    StatColumn("ENTRY", "${item.config.entryFee} ETH", Primary)
+                                }
+                            }
+                        }
+                    }
+
+                    // Winners section for non-participated games
+                    if (!item.participated && item.winner1.isNotEmpty() && item.winner1 != "0x0000000000000000000000000000000000000000") {
+                        Spacer(Modifier.height(16.dp))
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(containerColor = CardBackground),
+                            shape = MaterialTheme.shapes.medium
+                        ) {
+                            Column(modifier = Modifier.padding(20.dp)) {
+                                Text("WINNERS", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
+                                Spacer(Modifier.height(12.dp))
+
+                                val zeroAddr = "0x0000000000000000000000000000000000000000"
+                                WinnerRow("1st Place", item.winner1, Warning)
+                                if (item.winner2 != zeroAddr) WinnerRow("2nd Place", item.winner2, TextPrimary)
+                                if (item.winner3 != zeroAddr) WinnerRow("3rd Place", item.winner3, TextPrimary)
+                                if (item.topKiller != zeroAddr) WinnerRow("Most Kills", item.topKiller, Primary)
                             }
                         }
                     }
@@ -295,7 +332,7 @@ fun GameHistoryDetailScreen(
                     Spacer(Modifier.height(12.dp))
 
                     val playerCount = maxOf(item.playersTotal, item.config.minPlayers)
-                    val totalPool = item.config.entryFee * playerCount
+                    val totalPool = item.config.entryFee * playerCount + item.config.baseReward
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -382,6 +419,20 @@ private fun PrizeRow(label: String, value: String, valueColor: Color) {
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = TextSecondary)
         Text(value, style = MaterialTheme.typography.bodyMedium, color = valueColor, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun WinnerRow(label: String, address: String, labelColor: Color) {
+    val shortened = if (address.length > 10) "${address.take(6)}…${address.takeLast(4)}" else address
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, fontWeight = FontWeight.SemiBold)
+        Text(shortened, style = MaterialTheme.typography.bodyMedium, color = TextDim)
     }
 }
 

@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -28,13 +29,18 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.cryptohunt.app.ui.theme.*
+import com.cryptohunt.app.ui.viewmodel.GameViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import java.io.File
 
 @Composable
 fun PhotoCaptureScreen(
     onBack: () -> Unit,
-    onPhotoTaken: () -> Unit
+    onPhotoTaken: () -> Unit,
+    viewModel: GameViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -236,12 +242,24 @@ fun PhotoCaptureScreen(
                             )
                         }
                         else -> {
+                            val scope = rememberCoroutineScope()
                             Button(
                                 onClick = {
-                                    // Mock upload (prototype — no real server connection yet)
                                     uploading = true
-                                    // Simulate upload delay
-                                    // In production: HTTP multipart POST to server
+                                    scope.launch {
+                                        val success = withContext(Dispatchers.IO) {
+                                            viewModel.uploadPhoto(
+                                                capturedFile!!,
+                                                caption.ifBlank { null }
+                                            )
+                                        }
+                                        uploading = false
+                                        if (success) {
+                                            uploaded = true
+                                        } else {
+                                            errorMessage = "Upload failed"
+                                        }
+                                    }
                                 },
                                 colors = ButtonDefaults.buttonColors(containerColor = Primary)
                             ) {
@@ -269,12 +287,4 @@ fun PhotoCaptureScreen(
         }
     }
 
-    // Simulate upload completion (prototype)
-    LaunchedEffect(uploading) {
-        if (uploading) {
-            delay(1500)
-            uploading = false
-            uploaded = true
-        }
-    }
 }

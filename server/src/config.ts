@@ -63,6 +63,9 @@ export const config = {
   heartbeatProximityMeters: envInt("HEARTBEAT_PROXIMITY_METERS", 100),
   heartbeatDisableThreshold: envInt("HEARTBEAT_DISABLE_THRESHOLD", 4),  // disable when ≤ this many alive
 
+  // Check-in (after startGame, before pregame)
+  checkinDurationSeconds: envInt("CHECKIN_DURATION_SECONDS", 300),  // 5 minutes
+
   // Pregame
   pregameDurationSeconds: envInt("PREGAME_DURATION_SECONDS", 180),  // 3 minutes
 

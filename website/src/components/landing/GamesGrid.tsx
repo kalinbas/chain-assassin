@@ -5,9 +5,11 @@ import { Section } from '../layout/Section';
 
 export function GamesGrid() {
   const { games, loading, error } = useGames();
+  const now = Math.floor(Date.now() / 1000);
+  const upcoming = games.filter((g) => g.phase === 'registration' && g.registrationDeadlineTs > now);
 
   return (
-    <Section id="games" title="Live & Upcoming Games" subtitle="Registration open — join now">
+    <Section id="games" title="Upcoming Games" subtitle="Registration open — join now">
       <div className="games-grid" id="gamesGrid">
         {loading && (
           <>
@@ -21,12 +23,12 @@ export function GamesGrid() {
             {error}
           </p>
         )}
-        {!loading && !error && games.length === 0 && (
+        {!loading && !error && upcoming.length === 0 && (
           <p style={{ gridColumn: '1/-1', textAlign: 'center', color: 'var(--text-sec)', fontSize: '1rem' }}>
-            No games found on-chain yet.
+            No upcoming games right now.
           </p>
         )}
-        {!loading && !error && games.map((game) => (
+        {!loading && !error && upcoming.map((game) => (
           <GameCard key={game.id} game={game} />
         ))}
       </div>

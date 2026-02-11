@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom';
-import { useSimulationStatus } from '../../hooks/useSimulationStatus';
+import { useActiveGame } from '../../hooks/useActiveGame';
 import { gameUrl } from '../../lib/url';
 
 export function ActiveGame() {
-  const status = useSimulationStatus();
+  const status = useActiveGame();
 
-  if (!status || status.phase === 'ended' || status.phase === 'aborted') {
+  if (!status) {
     return null;
   }
 
@@ -31,7 +31,7 @@ export function ActiveGame() {
               </>
             )}
           </div>
-          <span className="active-game__cta">Watch Live &rarr;</span>
+          <span className="active-game__cta">{isActive ? 'Watch Live' : 'View Game'} &rarr;</span>
         </Link>
       </div>
     </section>

@@ -211,7 +211,100 @@ The server listens for on-chain events via WebSocket provider:
 
 **Startup recovery:** On boot, recovers ACTIVE games (target chains, zone trackers, tick intervals) and REGISTRATION games (deadline timers) from SQLite. Backfills missed events from last processed block.
 
-## Docker
+## Simulation
+
+The server can deploy and run fully simulated games on-chain. One API call creates a game, registers simulated players, and lets the normal server lifecycle handle auto-start, check-in, pregame, and gameplay.
+
+### Deploy a simulated game
+
+```bash
+curl -X POST http://localhost:3000/api/simulation/deploy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "playerCount": 10,
+    "centerLat": 37.7749,
+    "centerLng": -122.4194,
+    "initialRadiusMeters": 500,
+    "speedMultiplier": 1,
+    "title": "Test Game",
+    "entryFeeWei": "0",
+    "registrationDelaySeconds": 120
+  }'
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `playerCount` | 10 | Number of simulated players (3-50) |
+| `centerLat` | 37.7749 | Game zone center latitude |
+| `centerLng` | -122.4194 | Game zone center longitude |
+| `initialRadiusMeters` | 500 | Initial zone radius |
+| `speedMultiplier` | 1 | Simulation speed (1 = real-time, up to 50) |
+| `title` | "Simulation Game" | Game title |
+| `entryFeeWei` | "0" | Entry fee in wei ("0" for free) |
+| `registrationDelaySeconds` | 120 | Seconds until registration closes and game auto-starts (30-600) |
+
+**Flow:** Game created on-chain → simulated wallets funded & registered on-chain → registration deadline fires → `startGame` on-chain → simulated players auto-check-in → pregame countdown → gameplay simulation (movement, kills, heartbeats, zone shrinks) → `endGame` on-chain.
+
+Real players can join the game during registration via the Android app.
+
+### Check status / Stop
+
+```bash
+# Status
+curl http://localhost:3000/api/simulation/status
+
+# Stop
+curl -X POST http://localhost:3000/api/simulation/stop
+```
+
+## Deployment (Fly.io)
+
+The server runs on [Fly.io](https://fly.io) at **https://chain-assassin.fly.dev**.
+
+### Prerequisites
+
+- [Fly CLI](https://fly.io/docs/flyctl/install/) (`brew install flyctl`)
+- Docker (for local image builds: `brew install --cask docker`)
+
+### First-time setup
+
+```bash
+cd server
+
+fly auth login
+fly apps create chain-assassin
+fly volumes create game_data --region iad --size 1
+
+fly secrets set \
+  RPC_URL="https://base-sepolia.g.alchemy.com/v2/YOUR_KEY" \
+  RPC_WS_URL="wss://base-sepolia.g.alchemy.com/v2/YOUR_KEY" \
+  CONTRACT_ADDRESS="0x..." \
+  OPERATOR_PRIVATE_KEY="0x..."
+```
+
+### Deploy
+
+```bash
+fly deploy --local-only
+```
+
+### Monitoring
+
+```bash
+fly logs              # Live logs
+fly status            # Machine status
+curl https://chain-assassin.fly.dev/health
+```
+
+### Infrastructure
+
+- **Region:** `iad` (Virginia)
+- **VM:** shared-cpu-1x, 512MB RAM
+- **Storage:** 1GB persistent volume at `/app/data` (SQLite + photos)
+- **Always-on:** Machine runs 24/7 for real-time blockchain event listening
+- **TLS:** Automatic via Fly.io proxy
+
+## Docker (local)
 
 ```bash
 # Build and run

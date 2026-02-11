@@ -4,7 +4,8 @@ import type { Game } from '../../types/game';
 export function GameStatsGrid({ game }: { game: Game }) {
   const prizePoolBps = game.bps.first + game.bps.second + game.bps.third + game.bps.kills;
   const playerCount = Math.max(game.players, game.minPlayers);
-  const prizePool = (playerCount * game.entryFee * prizePoolBps / 10000).toFixed(4);
+  const totalPool = playerCount * game.entryFee + game.baseReward;
+  const prizePool = (totalPool * prizePoolBps / 10000).toFixed(4);
   const fillPct = Math.round((game.players / game.maxPlayers) * 100);
   const isPast = game.phase === 'ended' || game.phase === 'cancelled';
 

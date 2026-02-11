@@ -522,7 +522,7 @@ fun RegisteredDetailScreen(
                     Text("PRIZE POOL", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(8.dp))
                     val playerCount = maxOf(selectedGame?.currentPlayers ?: 0, config.minPlayers)
-                    val prizePool = config.entryFee * playerCount * 0.9
+                    val prizePool = (config.entryFee * playerCount + config.baseReward) * 0.9
                     PrizeRow("Winner (40%)", "%.3f ETH".format(prizePool * 0.4))
                     PrizeRow("Most Kills (20%)", "%.3f ETH".format(prizePool * 0.2))
                     PrizeRow("2nd Place (15%)", "%.3f ETH".format(prizePool * 0.15))
@@ -553,37 +553,6 @@ fun RegisteredDetailScreen(
                         color = TextSecondary
                     )
                 }
-            }
-
-            Spacer(Modifier.height(24.dp))
-
-            // Debug: skip to check-in
-            OutlinedButton(
-                onClick = {
-                    viewModel.beginCheckIn()
-                    onCheckInStart(config.id)
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
-            ) {
-                Text("Debug: Skip to Check-in", style = MaterialTheme.typography.bodySmall)
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Debug: simulate countdown reached (tests proximity check)
-            OutlinedButton(
-                onClick = {
-                    if (!gpsStarted) {
-                        viewModel.startLocationTracking()
-                        gpsStarted = true
-                    }
-                    countdownReached = true
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
-            ) {
-                Text("Debug: Test Proximity Check", style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(32.dp))

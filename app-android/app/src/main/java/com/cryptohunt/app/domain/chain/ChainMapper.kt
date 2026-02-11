@@ -17,6 +17,11 @@ object ChainMapper {
             Convert.Unit.ETHER
         ).toDouble()
 
+        val baseRewardEth = Convert.fromWei(
+            BigDecimal(config.baseReward),
+            Convert.Unit.ETHER
+        ).toDouble()
+
         val initialRadius = if (shrinks.isNotEmpty()) {
             shrinks[0].radiusMeters.toDouble()
         } else {
@@ -47,6 +52,7 @@ object ChainMapper {
             bps3rd = config.bps3rd,
             bpsKills = config.bpsKills,
             entryFeeWei = config.entryFee,
+            baseReward = baseRewardEth,
             registrationDeadline = config.registrationDeadline * 1000,
             gameDate = config.gameDate * 1000,
             pregameDurationMinutes = 3

@@ -2,7 +2,7 @@ import type { Game } from '../../types/game';
 
 export function PrizeBreakdown({ game }: { game: Game }) {
   const playerCount = Math.max(game.players, game.minPlayers);
-  const totalPool = playerCount * game.entryFee;
+  const totalPool = playerCount * game.entryFee + game.baseReward;
   const calc = (bps: number) => (totalPool * bps / 10000).toFixed(4);
   const pct = (bps: number) => Math.round(bps / 100);
 
@@ -56,6 +56,9 @@ export function PrizeBreakdown({ game }: { game: Game }) {
       <div className="prize-pool">
         <span className="prize-pool__label">Total Pool</span>
         <span className="prize-pool__amount">{totalPool.toFixed(4)} ETH</span>
+        {game.baseReward > 0 && (
+          <span className="prize-pool__bounty">Includes {game.baseReward.toFixed(4)} ETH creator bounty</span>
+        )}
       </div>
 
       {/* Pedestal: 2nd | 1st | 3rd */}

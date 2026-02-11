@@ -12,7 +12,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectEmit(true, false, false, true);
-        emit IChainAssassin.GameCreated(1, params.title, params.entryFee, params.minPlayers, params.maxPlayers, params.centerLat, params.centerLng);
+        emit IChainAssassin.GameCreated(1, params.title, params.entryFee, 0, params.minPlayers, params.maxPlayers, params.centerLat, params.centerLng);
         game.createGame(params, shrinks);
     }
 

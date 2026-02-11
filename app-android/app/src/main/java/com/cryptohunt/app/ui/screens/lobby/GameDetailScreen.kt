@@ -352,7 +352,7 @@ fun GameDetailScreen(
             Text("Prize Distribution", style = MaterialTheme.typography.titleMedium, color = TextPrimary)
             Spacer(Modifier.height(8.dp))
             val playerCount = maxOf(game?.currentPlayers ?: 0, config.minPlayers)
-            val totalPool = config.entryFee * playerCount
+            val totalPool = config.entryFee * playerCount + config.baseReward
             InfoRow("1st Place (${config.bps1st / 100}%)", "%.4f ETH".format(totalPool * config.bps1st / 10000.0))
             InfoRow("Most Kills (${config.bpsKills / 100}%)", "%.4f ETH".format(totalPool * config.bpsKills / 10000.0))
             InfoRow("2nd Place (${config.bps2nd / 100}%)", "%.4f ETH".format(totalPool * config.bps2nd / 10000.0))

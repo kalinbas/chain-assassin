@@ -1,5 +1,5 @@
 import { ethers } from "ethers";
-import { getWriteContract } from "./contract.js";
+import { getWriteContract, getAbi } from "./contract.js";
 import { insertOperatorTx, updateOperatorTx } from "../db/queries.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -92,6 +92,94 @@ async function enqueueTx(
 
 // ============ Operator Actions ============
 
+export interface CreateGameParams {
+  title: string;
+  entryFee: bigint;
+  minPlayers: number;
+  maxPlayers: number;
+  registrationDeadline: number; // unix seconds
+  gameDate: number; // unix seconds
+  maxDuration: number; // seconds
+  centerLat: number; // int32 (degrees × 1e6)
+  centerLng: number;
+  meetingLat: number;
+  meetingLng: number;
+  bps1st: number;
+  bps2nd: number;
+  bps3rd: number;
+  bpsKills: number;
+  bpsCreator: number;
+  baseRewardWei?: bigint; // optional ETH base reward (creator bounty)
+}
+
+export interface CreateGameResult extends TxResult {
+  gameId: number;
+}
+
+/**
+ * Create a game on-chain. Returns the gameId from the emitted GameCreated event.
+ */
+export async function createGame(
+  params: CreateGameParams,
+  shrinks: { atSecond: number; radiusMeters: number }[]
+): Promise<CreateGameResult> {
+  const result = await enqueueTx(
+    0, // gameId not known yet
+    "createGame",
+    { title: params.title, playerCount: `${params.minPlayers}-${params.maxPlayers}` },
+    async (nonce) => {
+      const contract = getWriteContract();
+      const txOptions: Record<string, unknown> = { nonce };
+      if (params.baseRewardWei && params.baseRewardWei > 0n) {
+        txOptions.value = params.baseRewardWei;
+      }
+      return contract.createGame(
+        [
+          params.title,
+          params.entryFee,
+          params.minPlayers,
+          params.maxPlayers,
+          params.registrationDeadline,
+          params.gameDate,
+          params.maxDuration,
+          params.centerLat,
+          params.centerLng,
+          params.meetingLat,
+          params.meetingLng,
+          params.bps1st,
+          params.bps2nd,
+          params.bps3rd,
+          params.bpsKills,
+          params.bpsCreator,
+        ],
+        shrinks.map(s => [s.atSecond, s.radiusMeters]),
+        txOptions
+      );
+    }
+  );
+
+  // Parse gameId from GameCreated event in the receipt logs
+  const iface = new ethers.Interface(getAbi());
+  let gameId = 0;
+  for (const receiptLog of result.receipt.logs) {
+    try {
+      const parsed = iface.parseLog({ topics: receiptLog.topics as string[], data: receiptLog.data });
+      if (parsed?.name === "GameCreated") {
+        gameId = Number(parsed.args[0]); // first indexed arg is gameId
+        break;
+      }
+    } catch {
+      // skip non-matching logs
+    }
+  }
+
+  if (gameId === 0) {
+    log.warn("Could not parse gameId from GameCreated event, receipt may lack logs");
+  }
+
+  return { ...result, gameId };
+}
+
 /**
  * Start a game on-chain.
  */
@@ -135,6 +223,25 @@ export async function eliminatePlayer(
     async (nonce) => {
       const contract = getWriteContract();
       return contract.eliminatePlayer(gameId, player, { nonce });
+    }
+  );
+}
+
+/**
+ * Send ETH from the operator wallet to another address.
+ * Routed through the nonce queue to prevent collisions.
+ */
+export async function fundWallet(
+  toAddress: string,
+  value: bigint
+): Promise<TxResult> {
+  return enqueueTx(
+    0,
+    "fundWallet",
+    { to: toAddress, value: value.toString() },
+    async (nonce) => {
+      const wallet = getWriteContract().runner as ethers.Wallet;
+      return wallet.sendTransaction({ to: toAddress, value, nonce });
     }
   );
 }

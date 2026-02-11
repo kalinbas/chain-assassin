@@ -16,6 +16,7 @@ export interface GameConfig {
   minPlayers: number;
   maxPlayers: number;
   registrationDeadline: number; // unix seconds
+  gameDate: number; // unix seconds — when check-in opens and startGame is allowed
   expiryDeadline: number;
   createdAt: number;
   creator: string;
@@ -28,6 +29,7 @@ export interface GameConfig {
   bps3rd: number;
   bpsKills: number;
   bpsPlatform: number;
+  baseReward: bigint;
 }
 
 export interface GameState {

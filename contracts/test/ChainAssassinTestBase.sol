@@ -18,12 +18,14 @@ abstract contract ChainAssassinTestBase is Test {
     uint16 constant MIN_PLAYERS = 3;
     uint16 constant MAX_PLAYERS = 100;
 
+    uint128 constant BASE_REWARD = 0.5 ether;
     uint16 constant PLATFORM_FEE_BPS = 1000; // 10%
 
     function setUp() public virtual {
         game = new ChainAssassin(PLATFORM_FEE_BPS);
         game.addOperator(operator);
 
+        vm.deal(operator, 100 ether);
         vm.deal(player1, 10 ether);
         vm.deal(player2, 10 ether);
         vm.deal(player3, 10 ether);
@@ -63,6 +65,11 @@ abstract contract ChainAssassinTestBase is Test {
     function _createDefaultGame() internal returns (uint256) {
         vm.prank(operator);
         return game.createGame(_defaultParams(), _defaultShrinks());
+    }
+
+    function _createGameWithBaseReward(uint128 reward) internal returns (uint256) {
+        vm.prank(operator);
+        return game.createGame{value: reward}(_defaultParams(), _defaultShrinks());
     }
 
     function _registerPlayer(uint256 gameId, address player) internal {

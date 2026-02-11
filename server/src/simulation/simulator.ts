@@ -4,33 +4,42 @@ import { degreesToContractCoord } from "../utils/geo.js";
 import { encodeKillQrPayload } from "../utils/crypto.js";
 import { config } from "../config.js";
 import {
-  getAlivePlayerCount,
   getAlivePlayers,
   getLatestLocationPing,
   getTargetAssignment,
   getGame,
   getPlayerByNumber,
+  getPlayers,
   updateLastHeartbeat,
 } from "../db/queries.js";
 import {
-  onGameCreated,
-  onPlayerRegistered,
-  onGameStarted,
   handleLocationUpdate,
   handleKillSubmission,
   handleCheckin,
-  addSimulatedGame,
+  addHybridSimulatedGame,
   removeSimulatedGame,
   broadcastToGame,
 } from "../game/manager.js";
+import { getHttpProvider } from "../blockchain/client.js";
+import { getAbi } from "../blockchain/contract.js";
 import { movePlayer, scatterPlayers, shouldAttemptKill } from "./playerAgent.js";
-import type { SimulationConfig, SimulationStatus, SimulatedPlayer } from "./types.js";
+import type { SimulationConfig, SimulationStatus, SimulatedPlayer, DeploySimulationConfig } from "./types.js";
 import { DEFAULT_ZONE_SHRINKS, ITEM_DEFINITIONS } from "./types.js";
 import type { ItemId } from "./types.js";
+import * as operator from "../blockchain/operator.js";
 import { GamePhase } from "../utils/types.js";
-import type { GameConfig, ZoneShrink } from "../utils/types.js";
+import type { ZoneShrink } from "../utils/types.js";
 
 const log = createLogger("simulator");
+
+// Hardcoded sim wallets — reused across runs to save testnet ETH
+const SIM_WALLET_KEYS = [
+  "0xb76b6c4243dd5b149b218bcdeb4cc47a511764383af114dddb814b7aca41f52e", // 0xc33c...813c
+  "0xf35320474eb0cb10c9d13c9aa58072087aa74c8592562aab646e032a6e0f2034", // 0x5E2b...85A9
+  "0x048daaeb4ee9a4422c4a738cc782f06655b27df4d9b2382b65c954407e7793fb", // 0xDF40...2e03
+  "0x4cf8c632b2d891589182bdf935fd0c06537452127c73a80e2e495d526b8156b6", // 0xc259...37e6
+  "0x17fcb3f26bdcfe71933af2a33a17508fb8149adb3e801744685a70bcefdaa99f", // 0xbeF1...400e
+];
 
 // Singleton — only one simulation at a time
 let currentSimulation: GameSimulator | null = null;
@@ -45,23 +54,40 @@ export function getSimulation(): GameSimulator | null {
   return currentSimulation;
 }
 
-export function startSimulation(cfg: SimulationConfig): GameSimulator {
-  if (currentSimulation && currentSimulation.phase !== "ended" && currentSimulation.phase !== "aborted") {
-    throw new Error("A simulation is already running. Stop it first.");
-  }
-  const sim = new GameSimulator(cfg);
-  currentSimulation = sim;
-  sim.start().catch((err) => {
-    log.error({ error: err.message }, "Simulation failed");
-    sim.abort(err.message);
-  });
-  return sim;
-}
-
 export function stopSimulation(): boolean {
   if (!currentSimulation) return false;
   currentSimulation.abort("Stopped by user");
   return true;
+}
+
+/**
+ * Deploy a new game on-chain, register simulated players, then let the server's
+ * normal lifecycle handle everything. One unified call for simulation.
+ */
+export function deploySimulation(cfg: DeploySimulationConfig): GameSimulator {
+  if (currentSimulation && currentSimulation.phase !== "ended" && currentSimulation.phase !== "aborted") {
+    throw new Error("A simulation is already running. Stop it first.");
+  }
+
+  const simConfig: SimulationConfig = {
+    playerCount: cfg.playerCount,
+    centerLat: cfg.centerLat,
+    centerLng: cfg.centerLng,
+    initialRadiusMeters: cfg.initialRadiusMeters,
+    speedMultiplier: cfg.speedMultiplier,
+    title: cfg.title,
+    entryFeeWei: cfg.entryFeeWei,
+  };
+
+  const sim = new GameSimulator(simConfig);
+  currentSimulation = sim;
+
+  sim.deployAndSimulate(cfg).catch((err) => {
+    log.error({ error: (err as Error).message }, "Deploy simulation failed");
+    sim.abort((err as Error).message);
+  });
+
+  return sim;
 }
 
 export class GameSimulator {
@@ -91,37 +117,51 @@ export class GameSimulator {
     }));
   }
 
-  async start(): Promise<void> {
-    const { config: cfg } = this;
-    log.info({ gameId: this.gameId, playerCount: cfg.playerCount, speed: cfg.speedMultiplier }, "Starting simulation");
+  /** Override zone shrinks (used by attach mode with DB-sourced shrinks). */
+  setZoneShrinks(shrinks: ZoneShrink[]): void {
+    this.zoneShrinks = shrinks;
+  }
 
-    // --- Setup ---
+  /**
+   * Deploy a new game on-chain, register simulated players on-chain,
+   * then wait for the server's normal lifecycle to handle everything:
+   *   listener catches GameCreated → schedules deadline timer
+   *   listener catches PlayerRegistered → inserts players into DB
+   *   deadline timer fires → checkAutoStart() → operator.startGame()
+   *   listener catches GameStarted → onGameStarted() (check-in, pregame, game)
+   *   simulator auto-checks-in and simulates movement/kills once active
+   */
+  async deployAndSimulate(cfg: DeploySimulationConfig): Promise<void> {
+    log.info({ playerCount: cfg.playerCount, speed: cfg.speedMultiplier, title: cfg.title }, "Deploying simulation game");
+
+    // --- Setup: use hardcoded wallets (saves testnet ETH across runs) ---
     this.phase = "setup";
-    const wallets: ethers.HDNodeWallet[] = [];
-    for (let i = 0; i < cfg.playerCount; i++) {
-      wallets.push(ethers.Wallet.createRandom());
-    }
+    const wallets: ethers.Wallet[] = SIM_WALLET_KEYS
+      .slice(0, cfg.playerCount)
+      .map((key) => new ethers.Wallet(key));
+    log.info({ count: wallets.length }, "Loaded simulated wallets");
 
-    // --- Create game ---
+    // --- Create game on-chain ---
     this.phase = "registration";
     const now = Math.floor(Date.now() / 1000);
+    const registrationDeadline = now + cfg.registrationDelaySeconds;
+    const entryFee = BigInt(cfg.entryFeeWei || "0");
 
-    if (cfg.useOnChain) {
-      // TODO: implement on-chain flow
-      throw new Error("On-chain simulation not yet implemented");
-    }
+    // Build zone shrinks for on-chain storage
+    const onChainShrinks = this.zoneShrinks.map(s => ({
+      atSecond: s.atSecond,
+      radiusMeters: s.radiusMeters,
+    }));
 
-    // Local-only: create game directly via manager
-    const gameConfig: GameConfig = {
-      gameId: this.gameId,
+    const baseReward = BigInt(cfg.baseRewardWei || "0");
+    const createGameParams: operator.CreateGameParams = {
       title: cfg.title,
-      entryFee: BigInt(cfg.entryFeeWei || "0"),
+      entryFee,
       minPlayers: cfg.playerCount,
-      maxPlayers: cfg.playerCount,
-      registrationDeadline: now + 3600,
-      expiryDeadline: now + 7200,
-      createdAt: now,
-      creator: "0x0000000000000000000000000000000000000000",
+      maxPlayers: Math.max(cfg.playerCount, 50), // allow real players to also join
+      registrationDeadline,
+      gameDate: registrationDeadline + 60, // 1 minute after registration closes
+      maxDuration: 7200, // 2 hours max
       centerLat: degreesToContractCoord(cfg.centerLat),
       centerLng: degreesToContractCoord(cfg.centerLng),
       meetingLat: degreesToContractCoord(cfg.centerLat),
@@ -130,76 +170,140 @@ export class GameSimulator {
       bps2nd: 1500,
       bps3rd: 1000,
       bpsKills: 2000,
-      bpsPlatform: 2000,
+      bpsCreator: 1000, // sum with platformFeeBps (1000) must equal 10000
+      baseRewardWei: baseReward > 0n ? baseReward : undefined,
     };
 
-    // Register this as a simulated game so the manager skips on-chain calls
-    addSimulatedGame(this.gameId);
+    log.info({ registrationDeadline, delaySeconds: cfg.registrationDelaySeconds }, "Creating game on-chain...");
+    const createResult = await operator.createGame(createGameParams, onChainShrinks);
+    this.gameId = createResult.gameId;
+    log.info({ gameId: this.gameId, txHash: createResult.txHash }, "Game created on-chain");
 
-    onGameCreated(gameConfig, this.zoneShrinks);
+    // Wait for blockchain listener to process GameCreated event
+    log.info("Waiting for GameCreated event to be processed...");
+    let gameInDb = false;
+    for (let i = 0; i < 120; i++) {
+      await sleep(500);
+      const dbGame = getGame(this.gameId);
+      if (dbGame) {
+        gameInDb = true;
+        break;
+      }
+    }
+    if (!gameInDb) throw new Error("Game not found in DB after 60s — listener may be down");
 
-    // --- Register players ---
-    const initialCooldowns: Record<ItemId, number> = {
-      ping_target: 0,
-      ping_hunter: 0,
-    };
-    this.players = wallets.map((w, i) => ({
-      address: w.address.toLowerCase(),
-      playerNumber: i + 1,
-      lat: cfg.centerLat,
-      lng: cfg.centerLng,
-      isAlive: true,
-      aggressiveness: 0.5 + Math.random() * 1.5, // 0.5-2.0
-      state: "wandering" as const,
-      itemCooldowns: { ...initialCooldowns },
-    }));
+    // Mark as hybrid simulated: skip recordKill/eliminatePlayer but keep endGame on-chain
+    addHybridSimulatedGame(this.gameId);
+
+    // --- Register simulated players on-chain ---
+    const provider = getHttpProvider();
+    const abi = getAbi();
+    const gasBuffer = ethers.parseEther("0.001");
 
     for (let i = 0; i < wallets.length; i++) {
-      onPlayerRegistered(this.gameId, wallets[i].address.toLowerCase(), i + 1);
+      const wallet = wallets[i];
+      try {
+        const needed = entryFee + gasBuffer;
+        const balance = await provider.getBalance(wallet.address);
+        if (balance < needed) {
+          const topUp = needed - balance;
+          log.info({ i: i + 1, total: wallets.length, address: wallet.address.slice(0, 10), topUp: ethers.formatEther(topUp) }, "Funding + registering wallet");
+          await operator.fundWallet(wallet.address, topUp);
+        } else {
+          log.info({ i: i + 1, total: wallets.length, address: wallet.address.slice(0, 10) }, "Wallet already funded, registering");
+        }
+
+        // Register on-chain from the funded wallet
+        const signer = wallet.connect(provider);
+        const contract = new ethers.Contract(config.contractAddress, abi, signer);
+        const regTx = await contract.register(this.gameId, { value: entryFee });
+        await regTx.wait();
+
+        log.info({ i: i + 1, address: wallet.address.slice(0, 10) }, "Registered successfully");
+      } catch (err) {
+        log.error({ i: i + 1, address: wallet.address.slice(0, 10), error: (err as Error).message }, "Failed to register wallet");
+      }
     }
 
-    // --- Check-in ---
+    // Wait for blockchain listener to process PlayerRegistered events
+    log.info("Waiting for PlayerRegistered events to be processed...");
+    const expectedCount = wallets.length;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      await sleep(500);
+      const dbPlayers = getPlayers(this.gameId);
+      const simAddresses = new Set(wallets.map(w => w.address.toLowerCase()));
+      const registeredSimCount = dbPlayers.filter(p => simAddresses.has(p.address.toLowerCase())).length;
+      if (registeredSimCount >= expectedCount) {
+        log.info({ registered: registeredSimCount }, "All simulated players registered in DB");
+        break;
+      }
+      if (attempt % 20 === 0 && attempt > 0) {
+        log.info({ registered: registeredSimCount, expected: expectedCount }, "Still waiting for registrations...");
+      }
+    }
+
+    // Build simulated player list from DB
+    const initialCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
+    const dbPlayers = getPlayers(this.gameId);
+    const simAddressSet = new Set(wallets.map(w => w.address.toLowerCase()));
+    this.players = dbPlayers
+      .filter(p => simAddressSet.has(p.address.toLowerCase()))
+      .map(p => ({
+        address: p.address.toLowerCase(),
+        playerNumber: p.playerNumber,
+        lat: cfg.centerLat,
+        lng: cfg.centerLng,
+        isAlive: true,
+        aggressiveness: 0.5 + Math.random() * 1.5,
+        state: "wandering" as const,
+        itemCooldowns: { ...initialCooldowns },
+      }));
+
+    log.info({ simPlayers: this.players.length, gameId: this.gameId }, "Simulated players ready, waiting for gameDate...");
+
+    // --- Wait for startGame → checkin subPhase ---
     this.phase = "checkin";
-    // Scatter players near the meeting point
+    while (true) {
+      const dbGame = getGame(this.gameId);
+      if (!dbGame) { this.abort("Game deleted"); return; }
+      if (dbGame.phase === GamePhase.CANCELLED) { this.abort("Game cancelled"); return; }
+      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "checkin") break;
+      if (dbGame.phase === GamePhase.ENDED) { this.phase = "ended"; this.cleanup(); return; }
+      await sleep(1000);
+    }
+
+    // --- Auto-check-in simulated players during checkin phase ---
+    log.info("Auto-checking in simulated players...");
     scatterPlayers(this.players, cfg.centerLat, cfg.centerLng, cfg.initialRadiusMeters);
 
-    // Generate fake bluetooth IDs for simulated players
-    const simBluetoothIds = this.players.map((_, i) => {
+    const simBluetoothIds = this.players.map(() => {
       const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
       return `SIM:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
     });
 
-    const gpsOnlySlots = Math.max(1, Math.ceil(cfg.playerCount * 0.05));
+    const gpsOnlySlots = Math.max(1, Math.ceil(this.players.length * 0.05));
     for (let i = 0; i < this.players.length; i++) {
       const p = this.players[i];
       const bleId = simBluetoothIds[i];
       if (i < gpsOnlySlots) {
-        // GPS-only check-in
         handleCheckin(this.gameId, p.address, p.lat, p.lng, undefined, bleId);
       } else {
-        // Need QR from a checked-in player
         const checkedInPlayer = this.players[Math.floor(Math.random() * gpsOnlySlots)];
         const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
         handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId);
       }
     }
+    log.info({ count: this.players.length }, "Simulated players checked in");
 
-    // Small delay to let WS clients connect before game starts
-    await sleep(500);
-
-    // --- Pregame phase ---
+    // --- Wait for active gameplay (subPhase === "game") ---
     this.phase = "pregame";
-    onGameStarted(this.gameId); // Sets ACTIVE + sub_phase='pregame', schedules completePregame timer
-
-    // Wait for manager's completePregame timer to fire
-    while (this.phase === "pregame") {
+    log.info("Waiting for active gameplay...");
+    while (true) {
       const dbGame = getGame(this.gameId);
-      if (dbGame && dbGame.subPhase === "game") break;
-      if (!dbGame || dbGame.phase === GamePhase.CANCELLED) {
-        this.phase = "aborted";
-        this.cleanup();
-        return;
-      }
+      if (!dbGame) { this.abort("Game deleted"); return; }
+      if (dbGame.phase === GamePhase.CANCELLED) { this.abort("Game cancelled"); return; }
+      if (dbGame.phase === GamePhase.ENDED) { this.phase = "ended"; this.cleanup(); return; }
+      if (dbGame.subPhase === "game") break;
       await sleep(500);
     }
 
@@ -207,18 +311,17 @@ export class GameSimulator {
     this.phase = "active";
     this.startedAtWall = Math.floor(Date.now() / 1000);
 
-    // Send initial location pings for all players
+    // Send initial location pings
     for (const p of this.players) {
       if (p.isAlive) {
         handleLocationUpdate(this.gameId, p.address, p.lat, p.lng);
       }
     }
 
-    // --- Active play tick ---
-    const tickMs = Math.max(50, Math.round(1000 / cfg.speedMultiplier));
+    // Start tick loop
+    const tickMs = Math.max(50, Math.round(1000 / this.config.speedMultiplier));
     this.tickTimer = setInterval(() => this.simulationTick(), tickMs);
-
-    log.info({ gameId: this.gameId }, "Simulation active — tick interval: " + tickMs + "ms");
+    log.info({ gameId: this.gameId, tickMs }, "Deploy simulation active");
   }
 
   private async simulationTick(): Promise<void> {

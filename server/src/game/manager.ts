@@ -52,22 +52,39 @@ const activeGames = new Map<number, {
 // Per-game deadline timers (replaces 10s polling interval)
 const deadlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
+// Per-game checkin timers — fires when checkin period ends, transitions to pregame
+const checkinTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
 // Per-game pregame timers — fires when pregame countdown ends
 const pregameTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // Simulated game IDs — skip on-chain operator calls for these
 const simulatedGames = new Set<number>();
 
+// Hybrid simulated games — registered on-chain, simulated off-chain.
+// endGame still goes on-chain for these (players paid real entry fees).
+const hybridSimulatedGames = new Set<number>();
+
 export function addSimulatedGame(gameId: number): void {
   simulatedGames.add(gameId);
 }
 
+export function addHybridSimulatedGame(gameId: number): void {
+  simulatedGames.add(gameId);
+  hybridSimulatedGames.add(gameId);
+}
+
 export function removeSimulatedGame(gameId: number): void {
   simulatedGames.delete(gameId);
+  hybridSimulatedGames.delete(gameId);
 }
 
 export function isSimulatedGame(gameId: number): boolean {
   return simulatedGames.has(gameId);
+}
+
+export function isHybridSimulatedGame(gameId: number): boolean {
+  return hybridSimulatedGames.has(gameId);
 }
 
 // Broadcast function — injected from WebSocket server
@@ -139,8 +156,8 @@ export function onPlayerRegistered(gameId: number, playerAddress: string, player
 
 /**
  * Start a game — called after operator.startGame() tx confirms.
- * Transitions to ACTIVE phase with sub_phase='pregame'.
- * Eliminates non-checked-in players, then starts pregame countdown.
+ * Transitions to ACTIVE phase with sub_phase='checkin'.
+ * Players must check in during this period or they'll be eliminated.
  */
 export function onGameStarted(gameId: number): void {
   cancelDeadlineTimer(gameId);
@@ -150,6 +167,33 @@ export function onGameStarted(gameId: number): void {
     log.error({ gameId }, "Game not found for start");
     return;
   }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Set phase to ACTIVE with sub_phase='checkin'
+  updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now, subPhase: "checkin" });
+
+  broadcast(gameId, {
+    type: "game:checkin_started",
+    checkinDurationSeconds: config.checkinDurationSeconds,
+  });
+
+  // Schedule checkin end timer
+  const timer = setTimeout(() => {
+    checkinTimers.delete(gameId);
+    completeCheckin(gameId);
+  }, config.checkinDurationSeconds * 1000);
+  checkinTimers.set(gameId, timer);
+
+  log.info({ gameId, checkinDurationSeconds: config.checkinDurationSeconds }, "Check-in phase started");
+}
+
+/**
+ * Complete the check-in phase — eliminate non-checked-in players, then transition to pregame.
+ */
+function completeCheckin(gameId: number): void {
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") return;
 
   const now = Math.floor(Date.now() / 1000);
 
@@ -176,8 +220,8 @@ export function onGameStarted(gameId: number): void {
     return;
   }
 
-  // Set phase to ACTIVE with sub_phase='pregame'
-  updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now, subPhase: "pregame" });
+  // Transition to pregame
+  updateSubPhase(gameId, "pregame");
 
   const checkedInCount = getCheckedInCount(gameId);
 
@@ -195,7 +239,7 @@ export function onGameStarted(gameId: number): void {
   }, config.pregameDurationSeconds * 1000);
   pregameTimers.set(gameId, timer);
 
-  log.info({ gameId, aliveCount, pregameDurationSeconds: config.pregameDurationSeconds }, "Pregame started");
+  log.info({ gameId, aliveCount, checkedInCount, pregameDurationSeconds: config.pregameDurationSeconds }, "Pregame started");
 }
 
 /**
@@ -446,8 +490,8 @@ export function handleCheckin(
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
 
-  // Reject check-ins once game is ACTIVE (pregame or game sub-phase)
-  if (game.phase === GamePhase.ACTIVE) {
+  // Only allow check-ins during ACTIVE/checkin sub-phase
+  if (game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") {
     return { success: false, error: "Check-in period has ended" };
   }
 
@@ -881,7 +925,7 @@ async function endGameWithWinners(gameId: number): Promise<void> {
   );
 
   try {
-    if (!isSimulatedGame(gameId)) {
+    if (!isSimulatedGame(gameId) || isHybridSimulatedGame(gameId)) {
       await operator.endGame(gameId, winner1, winner2, winner3, topKiller);
     }
     updateGamePhase(gameId, GamePhase.ENDED, {
@@ -942,15 +986,17 @@ export function onGameEnded(
 // ============ Deadline Scheduling ============
 
 /**
- * Schedule a one-shot timer for the game's registration deadline.
+ * Schedule a one-shot timer for the game's gameDate.
  * When the timer fires, checkAutoStart() runs and decides whether to start or skip.
+ * The contract only allows startGame() after gameDate is reached.
  */
 export function scheduleDeadlineCheck(config: GameConfig): void {
   // Cancel any existing timer for this game
   cancelDeadlineTimer(config.gameId);
 
   const nowSec = Math.floor(Date.now() / 1000);
-  const delaySec = Math.max(0, config.registrationDeadline - nowSec);
+  // Schedule at gameDate (when contract allows startGame)
+  const delaySec = Math.max(0, config.gameDate - nowSec + 2);
   const delayMs = delaySec * 1000;
 
   const timer = setTimeout(async () => {
@@ -1034,12 +1080,28 @@ export function recoverGames(): void {
     const fullGame = getGame(game.gameId);
     if (!fullGame || !fullGame.startedAt) continue;
 
-    if (fullGame.subPhase === "pregame") {
+    if (fullGame.subPhase === "checkin") {
+      // Recover checkin timer — calculate remaining time
+      const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
+      const remaining = Math.max(0, config.checkinDurationSeconds - elapsed);
+      if (remaining <= 0) {
+        log.info({ gameId: game.gameId }, "Completing expired checkin on recovery");
+        completeCheckin(game.gameId);
+      } else {
+        log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering checkin timer");
+        const timer = setTimeout(() => {
+          checkinTimers.delete(game.gameId);
+          completeCheckin(game.gameId);
+        }, remaining * 1000);
+        checkinTimers.set(game.gameId, timer);
+      }
+    } else if (fullGame.subPhase === "pregame") {
       // Recover pregame timer — calculate remaining time
       const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
-      const remaining = Math.max(0, config.pregameDurationSeconds - elapsed);
+      const checkinElapsed = config.checkinDurationSeconds;
+      const pregameElapsed = elapsed - checkinElapsed;
+      const remaining = Math.max(0, config.pregameDurationSeconds - pregameElapsed);
       if (remaining <= 0) {
-        // Pregame expired while server was down — complete it now
         log.info({ gameId: game.gameId }, "Completing expired pregame on recovery");
         completePregame(game.gameId);
       } else {
@@ -1053,17 +1115,6 @@ export function recoverGames(): void {
     } else if (fullGame.subPhase === "game") {
       // Recover active game with zone tracker and tick
       log.info({ gameId: game.gameId }, "Recovering active game");
-      const zoneTracker = ZoneTracker.fromDb(
-        game.gameId,
-        game.centerLat,
-        game.centerLng,
-        fullGame.startedAt
-      );
-      const tickInterval = setInterval(() => gameTick(game.gameId), 1000);
-      activeGames.set(game.gameId, { zoneTracker, tickInterval });
-    } else {
-      // Legacy or checkin sub-phase — restore as active game
-      log.info({ gameId: game.gameId, subPhase: fullGame.subPhase }, "Recovering active game (legacy)");
       const zoneTracker = ZoneTracker.fromDb(
         game.gameId,
         game.centerLat,
@@ -1095,6 +1146,11 @@ function cleanupActiveGame(gameId: number): void {
     clearInterval(active.tickInterval);
     activeGames.delete(gameId);
   }
+  const checkinTimer = checkinTimers.get(gameId);
+  if (checkinTimer) {
+    clearTimeout(checkinTimer);
+    checkinTimers.delete(gameId);
+  }
   const pregameTimer = pregameTimers.get(gameId);
   if (pregameTimer) {
     clearTimeout(pregameTimer);
@@ -1117,6 +1173,11 @@ export function cleanupAll(): void {
     clearTimeout(timer);
   }
   deadlineTimers.clear();
+
+  for (const [gameId, timer] of checkinTimers) {
+    clearTimeout(timer);
+  }
+  checkinTimers.clear();
 
   for (const [gameId, timer] of pregameTimers) {
     clearTimeout(timer);
@@ -1142,8 +1203,11 @@ export function getGameStatus(gameId: number) {
     gameId,
     phase: game.phase,
     subPhase: game.subPhase,
+    checkinEndsAt: game.subPhase === "checkin" && game.startedAt
+      ? game.startedAt + config.checkinDurationSeconds
+      : null,
     pregameEndsAt: game.subPhase === "pregame" && game.startedAt
-      ? game.startedAt + config.pregameDurationSeconds
+      ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
       : null,
     playerCount: players.length,
     aliveCount: players.filter((p) => p.isAlive).length,

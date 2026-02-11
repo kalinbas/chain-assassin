@@ -42,11 +42,11 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
     .prepare(
       `INSERT INTO games (
         game_id, title, entry_fee, min_players, max_players,
-        registration_deadline, expiry_deadline, created_at, creator,
+        registration_deadline, game_date, expiry_deadline, created_at, creator,
         center_lat, center_lng, meeting_lat, meeting_lng,
-        bps_1st, bps_2nd, bps_3rd, bps_kills, bps_platform, phase
+        bps_1st, bps_2nd, bps_3rd, bps_kills, bps_platform, base_reward, phase
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )`
     )
     .run(
@@ -56,6 +56,7 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
       game.minPlayers,
       game.maxPlayers,
       game.registrationDeadline,
+      game.gameDate,
       game.expiryDeadline,
       game.createdAt,
       game.creator,
@@ -68,6 +69,7 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
       game.bps3rd,
       game.bpsKills,
       game.bpsPlatform,
+      game.baseReward.toString(),
       game.phase ?? 0
     );
 }
@@ -93,6 +95,7 @@ export function getGame(gameId: number): (GameConfig & {
     minPlayers: row.min_players as number,
     maxPlayers: row.max_players as number,
     registrationDeadline: row.registration_deadline as number,
+    gameDate: row.game_date as number,
     expiryDeadline: row.expiry_deadline as number,
     createdAt: row.created_at as number,
     creator: row.creator as string,
@@ -105,6 +108,7 @@ export function getGame(gameId: number): (GameConfig & {
     bps3rd: row.bps_3rd as number,
     bpsKills: row.bps_kills as number,
     bpsPlatform: row.bps_platform as number,
+    baseReward: BigInt((row.base_reward as string) ?? "0"),
     phase: row.phase as GamePhase,
     subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
     startedAt: row.started_at as number | null,
@@ -176,6 +180,7 @@ export function getGamesInPhase(phase: GamePhase): GameConfig[] {
     minPlayers: row.min_players as number,
     maxPlayers: row.max_players as number,
     registrationDeadline: row.registration_deadline as number,
+    gameDate: row.game_date as number,
     expiryDeadline: row.expiry_deadline as number,
     createdAt: row.created_at as number,
     creator: row.creator as string,
@@ -188,6 +193,7 @@ export function getGamesInPhase(phase: GamePhase): GameConfig[] {
     bps3rd: row.bps_3rd as number,
     bpsKills: row.bps_kills as number,
     bpsPlatform: row.bps_platform as number,
+    baseReward: BigInt((row.base_reward as string) ?? "0"),
   }));
 }
 

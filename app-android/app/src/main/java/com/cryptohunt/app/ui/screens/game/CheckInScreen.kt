@@ -46,6 +46,14 @@ fun CheckInScreen(
     val checkedInCount = state.checkedInCount
     val totalPlayers = state.playersRemaining
 
+    // Ensure server connection
+    LaunchedEffect(Unit) {
+        val id = gameId.toIntOrNull() ?: config.id.toIntOrNull()
+        if (id != null) {
+            viewModel.connectToServer(id)
+        }
+    }
+
     // Navigate based on phase change
     LaunchedEffect(state.phase) {
         when (state.phase) {
@@ -344,31 +352,6 @@ fun CheckInScreen(
                 color = TextDim,
                 textAlign = TextAlign.Center
             )
-
-            Spacer(Modifier.height(24.dp))
-
-            // Debug: simulate scanning buddy
-            OutlinedButton(
-                onClick = { viewModel.debugVerifyCheckIn() },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim),
-                enabled = !isVerified
-            ) {
-                Text("Debug: Scan Buddy", style = MaterialTheme.typography.bodySmall)
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            // Debug: skip to pregame
-            OutlinedButton(
-                onClick = {
-                    viewModel.debugStartGame()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
-            ) {
-                Text("Debug: Skip to Pregame", style = MaterialTheme.typography.bodySmall)
-            }
 
             Spacer(Modifier.height(32.dp))
         }

@@ -43,6 +43,8 @@ export function truncAddr(addr: string): string {
 function formatGameData(gameId: number, config: any, state: any, shrinks: any[]): Game {
   const entryFeeWei = config.entryFee;
   const entryFeeEth = parseFloat(formatEther(entryFeeWei));
+  const baseRewardWei = config.baseReward ?? 0n;
+  const baseRewardEth = parseFloat(formatEther(baseRewardWei));
   const playerCount = Number(state.playerCount);
   const maxPlayers = Number(config.maxPlayers);
   const minPlayers = Number(config.minPlayers);
@@ -62,12 +64,15 @@ function formatGameData(gameId: number, config: any, state: any, shrinks: any[])
     title: config.title,
     entryFee: entryFeeEth,
     entryFeeWei: entryFeeWei,
+    baseReward: baseRewardEth,
+    baseRewardWei: baseRewardWei,
     location: `${(Number(config.centerLat) / 1e6).toFixed(4)}\u00B0, ${(Number(config.centerLng) / 1e6).toFixed(4)}\u00B0`,
     date: formatDate(gameDate),
     players: playerCount,
     maxPlayers,
     minPlayers,
     registrationDeadline: formatDate(Number(config.registrationDeadline)),
+    registrationDeadlineTs: Number(config.registrationDeadline),
     expiryDeadline: formatDate(gameDate + maxDuration),
     centerLat: Number(config.centerLat) / 1e6,
     centerLng: Number(config.centerLng) / 1e6,
@@ -101,7 +106,7 @@ export async function loadGame(gameId: number): Promise<Game | null> {
   const [config, state, shrinks] = await Promise.all([
     contract.getGameConfig(gameId),
     contract.getGameState(gameId),
-    contract.getZoneShrinks(gameId),
+    contract.getZoneShrinks(gameId).catch(() => []),
   ]);
 
   if (!config.title || config.title === '') return null;
@@ -117,7 +122,7 @@ export async function loadAllGames(): Promise<Game[]> {
 
   const promises: Promise<Game | null>[] = [];
   for (let i = 1; i < nextId; i++) {
-    promises.push(loadGame(i));
+    promises.push(loadGame(i).catch(() => null));
   }
 
   const games = await Promise.all(promises);

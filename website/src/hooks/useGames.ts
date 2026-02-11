@@ -1,5 +1,6 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { loadAllGames } from '../lib/contract';
+import { onContractEvent } from '../lib/contractEvents';
 import type { Game } from '../types/game';
 
 export function useGames() {
@@ -7,7 +8,7 @@ export function useGames() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  const fetchGames = useCallback(() => {
     loadAllGames()
       .then(setGames)
       .catch((err) => {
@@ -16,6 +17,11 @@ export function useGames() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchGames();
+    return onContractEvent(fetchGames);
+  }, [fetchGames]);
 
   return { games, loading, error };
 }

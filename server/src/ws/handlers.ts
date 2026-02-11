@@ -97,8 +97,11 @@ function handleAuth(
       hunterPlayerNumber: hunterPlayer?.playerNumber ?? null,
       lastHeartbeatAt: player.lastHeartbeatAt,
       subPhase: game?.subPhase ?? null,
+      checkinEndsAt: game?.subPhase === "checkin" && game?.startedAt
+        ? game.startedAt + config.checkinDurationSeconds
+        : null,
       pregameEndsAt: game?.subPhase === "pregame" && game?.startedAt
-        ? game.startedAt + config.pregameDurationSeconds
+        ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
         : null,
     })
   );

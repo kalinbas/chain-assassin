@@ -217,6 +217,11 @@ ul { list-style: none; }
     opacity: 1;
 }
 
+.nav__cta-wrap {
+    position: relative;
+    display: inline-block;
+}
+
 .nav__cta {
     padding: 10px 24px;
     font-size: 0.85rem;
@@ -1060,6 +1065,74 @@ ul { list-style: none; }
     border: 1px solid var(--danger);
 }
 
+.game-detail__phase-info {
+    text-align: center;
+    padding: 2rem 0;
+}
+
+.game-detail__phase-info h2 {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    margin: 0.5rem 0;
+}
+
+.game-detail__phase-info p {
+    color: var(--text-sec);
+    max-width: 500px;
+    margin: 0 auto 1.5rem;
+    line-height: 1.5;
+}
+
+.game-detail__phase-icon {
+    font-size: 3rem;
+    margin-bottom: 0.5rem;
+}
+
+.game-detail__countdown {
+    margin: 1.5rem 0;
+}
+
+.game-detail__countdown-label {
+    color: var(--text-sec);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
+}
+
+.game-detail__countdown-time {
+    font-size: 3.5rem;
+    font-weight: 700;
+    color: var(--primary);
+    font-variant-numeric: tabular-nums;
+}
+
+.game-detail__phase-stats {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin: 1.5rem 0;
+}
+
+.game-detail__phase-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.game-detail__phase-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+.game-detail__phase-stat-label {
+    font-size: 0.75rem;
+    color: var(--text-sec);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
 .game-detail__grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1208,6 +1281,12 @@ ul { list-style: none; }
     font-size: 1.1rem;
     font-weight: 700;
     color: var(--primary);
+}
+.prize-pool__bounty {
+    display: block;
+    font-size: 0.75rem;
+    color: var(--primary-dim);
+    margin-top: 2px;
 }
 
 /* Pedestal — 3 columns: 2nd | 1st | 3rd */

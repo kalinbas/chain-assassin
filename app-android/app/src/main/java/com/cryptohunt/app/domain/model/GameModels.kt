@@ -21,6 +21,7 @@ data class GameConfig(
     val bps3rd: Int = 1000,
     val bpsKills: Int = 2000,
     val entryFeeWei: BigInteger = BigInteger.ZERO,
+    val baseReward: Double = 0.0,
     val registrationDeadline: Long = 0L,
     val gameDate: Long = 0L,
     val pregameDurationMinutes: Int = 3

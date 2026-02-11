@@ -85,6 +85,7 @@ class ContractService @Inject constructor() {
         // 15: bps3rd (uint16)
         // 16: bpsKills (uint16)
         // 17: bpsCreator (uint16)
+        // 18: baseReward (uint128)
         // Then the string data at the offset
 
         val stringOffset = readUint(hex, tupleOffset).toInt() * 2
@@ -111,7 +112,8 @@ class ContractService @Inject constructor() {
             bps2nd = readUint(hex, tupleOffset + 64 * 14).toInt(),
             bps3rd = readUint(hex, tupleOffset + 64 * 15).toInt(),
             bpsKills = readUint(hex, tupleOffset + 64 * 16).toInt(),
-            bpsCreator = readUint(hex, tupleOffset + 64 * 17).toInt()
+            bpsCreator = readUint(hex, tupleOffset + 64 * 17).toInt(),
+            baseReward = readUint(hex, tupleOffset + 64 * 18)
         )
     }
 

@@ -10,7 +10,7 @@ import {IChainAssassin} from "../src/IChainAssassin.sol";
 contract RegisterPlayer is Script {
     function run() external {
         // --- Config ---
-        address gameContract = 0x0ABfD376Bd339A6dcd885F37aB0A9cE761c2F99e;
+        address gameContract = 0xA9AC5fe70646b7a24Cc7BFeDe2A367B7bF2015b2;
         uint256 gameId = 1;
 
         ChainAssassin game = ChainAssassin(gameContract);

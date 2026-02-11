@@ -146,7 +146,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     function createGame(
         CreateGameParams calldata params,
         ZoneShrink[] calldata shrinks
-    ) external onlyOperator returns (uint256 gameId) {
+    ) external payable onlyOperator returns (uint256 gameId) {
         // --- Title ---
         if (bytes(params.title).length > MAX_TITLE_LENGTH) revert TitleTooLong();
 
@@ -204,8 +204,14 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
             bps2nd: params.bps2nd,
             bps3rd: params.bps3rd,
             bpsKills: params.bpsKills,
-            bpsCreator: params.bpsCreator
+            bpsCreator: params.bpsCreator,
+            baseReward: uint128(msg.value)
         });
+
+        // Seed totalCollected with base reward so BPS math includes it
+        if (msg.value > 0) {
+            _gameStates[gameId].totalCollected = uint128(msg.value);
+        }
 
         for (uint256 i = 0; i < shrinks.length; i++) {
             _zoneShrinks[gameId].push(shrinks[i]);
@@ -213,6 +219,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
 
         emit GameCreated(
             gameId, params.title, params.entryFee,
+            uint128(msg.value),
             params.minPlayers, params.maxPlayers,
             params.centerLat, params.centerLng
         );
@@ -385,20 +392,37 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         if (state.playerCount >= config.minPlayers) revert EnoughPlayers();
 
         state.phase = GamePhase.CANCELLED;
+
+        // Return base reward to creator via creatorFeesAccrued
+        if (config.baseReward > 0) {
+            creatorFeesAccrued[config.creator] += config.baseReward;
+        }
+
         emit GameCancelled(gameId);
     }
 
-    /// @notice Cancel an ACTIVE game that has exceeded its maximum duration.
+    /// @notice Cancel a game that has exceeded its maximum duration without ending.
     /// @dev Anyone can call this. Expiry is computed as `gameDate + maxDuration`.
+    ///      Works for both ACTIVE games (server died) and REGISTRATION games that
+    ///      met minPlayers but were never started by the operator.
     ///      After cancellation, players may claim full refunds.
     ///      No platform fees are accrued since endGame was never called.
-    /// @param gameId The game in ACTIVE phase.
-    function triggerExpiry(uint256 gameId) external inPhase(gameId, GamePhase.ACTIVE) {
+    /// @param gameId The game in REGISTRATION or ACTIVE phase.
+    function triggerExpiry(uint256 gameId) external {
+        GamePhase phase = _gameStates[gameId].phase;
+        if (phase != GamePhase.ACTIVE && phase != GamePhase.REGISTRATION) revert WrongPhase();
+
         GameConfig storage config = _gameConfigs[gameId];
 
         if (block.timestamp <= uint256(config.gameDate) + config.maxDuration) revert NotExpiredYet();
 
         _gameStates[gameId].phase = GamePhase.CANCELLED;
+
+        // Return base reward to creator via creatorFeesAccrued
+        if (config.baseReward > 0) {
+            creatorFeesAccrued[config.creator] += config.baseReward;
+        }
+
         emit GameCancelled(gameId);
     }
 

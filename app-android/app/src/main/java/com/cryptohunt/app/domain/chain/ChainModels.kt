@@ -31,7 +31,8 @@ data class OnChainGameConfig(
     val bps2nd: Int,
     val bps3rd: Int,
     val bpsKills: Int,
-    val bpsCreator: Int
+    val bpsCreator: Int,
+    val baseReward: BigInteger
 )
 
 data class OnChainGameState(

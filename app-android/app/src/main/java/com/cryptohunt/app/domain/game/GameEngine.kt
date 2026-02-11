@@ -1,6 +1,8 @@
 package com.cryptohunt.app.domain.game
 
+import android.util.Log
 import com.cryptohunt.app.domain.model.*
+import com.cryptohunt.app.domain.server.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -11,7 +13,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
-import kotlin.random.Random
+
+private const val TAG = "GameEngine"
 
 @Singleton
 class GameEngine @Inject constructor() {
@@ -26,33 +29,24 @@ class GameEngine @Inject constructor() {
     val events: SharedFlow<GameEvent> = _events.asSharedFlow()
 
     private var timerJob: Job? = null
-    private var simulationJob: Job? = null
     private var checkInTimerJob: Job? = null
     private var pregameTimerJob: Job? = null
 
-    private val mockPlayers = mutableListOf<Player>()
     private val killFeedList = mutableListOf<KillEvent>()
-    private val checkedInPlayerIds = mutableSetOf<String>() // viral check-in tracking
-
-    private val zoneNames = listOf("Zone A", "Zone B", "Zone C", "Zone D", "Zone E", "Central")
 
     // --- Public API ---
 
     /** Clear all game state (used on logout). */
     fun reset() {
         timerJob?.cancel()
-        simulationJob?.cancel()
         checkInTimerJob?.cancel()
         pregameTimerJob?.cancel()
-        mockPlayers.clear()
         killFeedList.clear()
-        checkedInPlayerIds.clear()
         _state.value = null
     }
 
     fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long, assignedPlayerNumber: Int = 0) {
-        val maxNum = config.maxPlayers + 1
-        val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else Random.nextInt(1, maxNum)
+        val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else 0
 
         val currentPlayer = Player(
             id = "player_$playerNumber",
@@ -60,35 +54,12 @@ class GameEngine @Inject constructor() {
             walletAddress = walletAddress
         )
 
-        // Generate mock players
-        mockPlayers.clear()
-        val usedNumbers = mutableSetOf(playerNumber)
-        for (i in 1 until config.maxPlayers) {
-            var num: Int
-            do { num = Random.nextInt(1, maxNum) } while (num in usedNumbers)
-            usedNumbers.add(num)
-            mockPlayers.add(
-                Player(
-                    id = "player_$num",
-                    number = num,
-                    walletAddress = "0x${UUID.randomUUID().toString().replace("-", "").take(40)}"
-                )
-            )
-        }
-
         killFeedList.clear()
-        checkedInPlayerIds.clear()
-
-        // Bootstrap: first mock player is auto-checked-in (represents the organizer)
-        if (mockPlayers.isNotEmpty()) {
-            checkedInPlayerIds.add(mockPlayers.first().id)
-        }
 
         _state.value = GameState(
             phase = GamePhase.REGISTERED,
             config = config,
             currentPlayer = currentPlayer,
-            currentTarget = null, // target assigned when game starts
             playersRemaining = config.maxPlayers,
             currentZoneRadius = config.initialRadiusMeters,
             registeredAt = System.currentTimeMillis(),
@@ -101,19 +72,14 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return
         if (current.phase != GamePhase.REGISTERED) return
 
-        val initialCheckedInNumbers = mockPlayers
-            .filter { it.id in checkedInPlayerIds }
-            .map { it.number }
-            .toSet()
-
         _state.value = current.copy(
             phase = GamePhase.CHECK_IN,
             checkInTimeRemainingSeconds = current.config.checkInDurationMinutes * 60,
-            checkedInCount = checkedInPlayerIds.size,
-            checkedInPlayerNumbers = initialCheckedInNumbers
+            checkedInCount = 0,
+            checkedInPlayerNumbers = emptySet()
         )
         _events.tryEmit(GameEvent.CheckInStarted)
-        startCheckInTimer()
+        startCheckInCountdown()
     }
 
     fun processCheckInScan(scannedPayload: String, bluetoothId: String? = null): CheckInResult {
@@ -129,27 +95,9 @@ class GameEngine @Inject constructor() {
             return CheckInResult.ScanYourself
         }
 
-        // Check if scanned player is a registered player
-        val scannedPlayer = mockPlayers.find { it.id == scannedPlayerId }
-        if (scannedPlayer == null) {
-            return CheckInResult.UnknownPlayer
-        }
-
-        // Viral check-in: scanned player must already be checked in
-        if (scannedPlayerId !in checkedInPlayerIds) {
-            return CheckInResult.PlayerNotCheckedIn
-        }
-
-        // Verified! Add current player to checked-in set
-        checkedInPlayerIds.add(current.currentPlayer.id)
-        val checkedInNumbers = mockPlayers
-            .filter { it.id in checkedInPlayerIds }
-            .map { it.number }
-            .toSet() + current.currentPlayer.number
+        // Optimistic: mark as verified locally, server will confirm
         _state.value = current.copy(
             checkInVerified = true,
-            checkedInCount = checkedInPlayerIds.size,
-            checkedInPlayerNumbers = checkedInNumbers,
             bluetoothId = bluetoothId
         )
         _events.tryEmit(GameEvent.CheckInVerified)
@@ -164,15 +112,6 @@ class GameEngine @Inject constructor() {
         return true
     }
 
-    fun startGame() {
-        val current = _state.value ?: return
-        when (current.phase) {
-            GamePhase.CHECK_IN -> startPregame()
-            GamePhase.PREGAME -> completePregameAndStartGame()
-            else -> startPregame()
-        }
-    }
-
     fun processKill(scannedPayload: String): KillResult {
         val current = _state.value ?: return KillResult.NoGame
         val target = current.currentTarget ?: return KillResult.NoTarget
@@ -185,37 +124,24 @@ class GameEngine @Inject constructor() {
             return KillResult.WrongTarget
         }
 
-        // Kill confirmed
+        // Optimistic: show kill immediately; server will confirm via KillRecorded
         val killEvent = KillEvent(
             id = UUID.randomUUID().toString(),
             hunterNumber = current.currentPlayer.number,
             targetNumber = target.player.number,
             timestamp = System.currentTimeMillis(),
-            zone = zoneNames.random()
+            zone = ""
         )
         killFeedList.add(0, killEvent)
 
-        // Remove target from mock players
-        mockPlayers.removeAll { it.id == target.player.id }
-
-        val newTarget = pickRandomTarget()
-        val newKillCount = current.currentPlayer.killCount + 1
-        val newRemaining = current.playersRemaining - 1
-
         _state.value = current.copy(
-            currentPlayer = current.currentPlayer.copy(killCount = newKillCount),
-            currentTarget = newTarget?.let { Target(it, System.currentTimeMillis()) },
-            playersRemaining = newRemaining,
+            currentPlayer = current.currentPlayer.copy(killCount = current.currentPlayer.killCount + 1),
+            currentTarget = null, // cleared until server assigns new target
+            playersRemaining = current.playersRemaining - 1,
             killFeed = killFeedList.toList()
         )
 
         _events.tryEmit(GameEvent.KillConfirmed(killEvent))
-        updateLeaderboard()
-
-        if (newRemaining <= 1) {
-            endGame()
-        }
-
         return KillResult.Confirmed(killEvent)
     }
 
@@ -242,28 +168,21 @@ class GameEngine @Inject constructor() {
 
     fun useItemWithPing(itemId: String): PingOverlay? {
         val current = _state.value ?: return null
-        val config = current.config
         val now = System.currentTimeMillis()
 
-        // Generate random position within the zone (simulated)
-        val angle = Random.nextDouble(0.0, 2 * Math.PI)
-        val dist = Random.nextDouble(0.0, current.currentZoneRadius * 0.7)
-        val offsetLat = (dist / 111_000.0) * Math.cos(angle)
-        val offsetLng = (dist / (111_000.0 * Math.cos(Math.toRadians(config.zoneCenterLat)))) * Math.sin(angle)
+        // Record cooldown — server will send actual ping coordinates via message
+        _state.value = current.copy(
+            itemCooldowns = current.itemCooldowns + (itemId to now)
+        )
 
-        val ping = PingOverlay(
-            lat = config.zoneCenterLat + offsetLat,
-            lng = config.zoneCenterLng + offsetLng,
+        // Return a placeholder; actual coordinates come from server
+        return PingOverlay(
+            lat = 0.0,
+            lng = 0.0,
             radiusMeters = 50.0,
             type = itemId,
-            expiresAt = now + 30_000 // visible for 30 seconds
+            expiresAt = now + 30_000
         )
-
-        _state.value = current.copy(
-            itemCooldowns = current.itemCooldowns + (itemId to now),
-            activePing = ping
-        )
-        return ping
     }
 
     fun clearExpiredPing() {
@@ -292,79 +211,10 @@ class GameEngine @Inject constructor() {
             return HeartbeatResult.ScanTarget
         }
 
-        // Check if scanned player exists
-        val scannedPlayer = mockPlayers.find { it.id == scannedPlayerId }
-        if (scannedPlayer == null) {
-            return HeartbeatResult.UnknownPlayer
-        }
-        if (!scannedPlayer.isAlive) {
-            return HeartbeatResult.PlayerNotAlive
-        }
-
-        // Can't scan your hunter (check by number)
-        if (current.hunterPlayerNumber != null && scannedPlayer.number == current.hunterPlayerNumber) {
-            return HeartbeatResult.ScanHunter
-        }
-
-        // In prototype, refresh our own heartbeat (in production, this refreshes the scanned player's)
-        // For single-device testing we refresh our own since we're the only real player
-        val now = System.currentTimeMillis() / 1000
-        _state.value = current.copy(lastHeartbeatAt = now)
-        _events.tryEmit(GameEvent.HeartbeatRefreshed(scannedPlayer.number))
-
-        return HeartbeatResult.Success(scannedPlayer.number)
-    }
-
-    fun debugVerifyCheckIn(bluetoothId: String? = null): CheckInResult {
-        val current = _state.value ?: return CheckInResult.NoGame
-        val checkedInPlayer = checkedInPlayerIds.firstOrNull() ?: return CheckInResult.NoGame
-        return processCheckInScan(checkedInPlayer, bluetoothId)
-    }
-
-    fun debugScanTarget(): KillResult {
-        val current = _state.value ?: return KillResult.NoGame
-        val target = current.currentTarget ?: return KillResult.NoTarget
-        return processKill(target.player.id)
-    }
-
-    // --- Debug Controls ---
-
-    fun debugTriggerElimination() {
-        val current = _state.value ?: return
-        val hunterNumber = Random.nextInt(1, 101)
-        val killEvent = KillEvent(
-            id = UUID.randomUUID().toString(),
-            hunterNumber = hunterNumber,
-            targetNumber = current.currentPlayer.number,
-            timestamp = System.currentTimeMillis(),
-            zone = zoneNames.random()
-        )
-        killFeedList.add(0, killEvent)
-        _state.value = current.copy(
-            phase = GamePhase.ELIMINATED,
-            killFeed = killFeedList.toList()
-        )
-        updateLeaderboard()
-        _events.tryEmit(GameEvent.Eliminated(hunterNumber))
-        stopTimers()
-    }
-
-    fun debugTriggerZoneShrink() {
-        val current = _state.value ?: return
-        val newRadius = (current.currentZoneRadius * 0.7).coerceAtLeast(50.0)
-        _state.value = current.copy(currentZoneRadius = newRadius)
-        _events.tryEmit(GameEvent.ZoneShrink(newRadius))
-    }
-
-    fun debugSetPlayersRemaining(count: Int) {
-        val current = _state.value ?: return
-        _state.value = current.copy(playersRemaining = count)
-    }
-
-    fun debugSkipToEndgame() {
-        val current = _state.value ?: return
-        _state.value = current.copy(playersRemaining = 2)
-        // Next simulated kill will end the game
+        // Server will validate and confirm via heartbeat:scan_success or heartbeat:error
+        // Optimistic local success — scanned player number extracted from payload
+        val scannedNumber = scannedPlayerId.removePrefix("player_").toIntOrNull() ?: 0
+        return HeartbeatResult.Success(scannedNumber)
     }
 
     fun cleanup() {
@@ -372,184 +222,328 @@ class GameEngine @Inject constructor() {
         checkInTimerJob?.cancel()
         pregameTimerJob?.cancel()
         _state.value = null
-        mockPlayers.clear()
         killFeedList.clear()
-        checkedInPlayerIds.clear()
     }
 
-    // --- Internal ---
+    // --- Server Message Processing ---
 
-    private fun startCheckInTimer() {
-        checkInTimerJob?.cancel()
-        checkInTimerJob = scope.launch {
-            // Simulate mock players checking in virally over time
-            while (isActive) {
-                delay(1000)
-                val current = _state.value ?: break
-                if (current.phase != GamePhase.CHECK_IN) break
-
-                val remaining = current.checkInTimeRemainingSeconds - 1
-
-                // Viral simulation: checked-in players enable others to check in
-                // More checked-in players = faster spread
-                val spreadChance = 0.05f + (checkedInPlayerIds.size.toFloat() / mockPlayers.size) * 0.2f
-                val uncheckedPlayers = mockPlayers.filter { it.id !in checkedInPlayerIds }
-                if (uncheckedPlayers.isNotEmpty() && Random.nextFloat() < spreadChance) {
-                    checkedInPlayerIds.add(uncheckedPlayers.random().id)
-                }
-
-                val myCheckIn = if (current.checkInVerified) 1 else 0
-
-                if (remaining <= 0) {
-                    val myCheckInFinal = if (current.checkInVerified) 1 else 0
-                    val totalCheckedIn = checkedInPlayerIds.size + myCheckInFinal
-                    if (totalCheckedIn == 0) {
-                        // No one checked in — cancel game
-                        _state.value = current.copy(phase = GamePhase.CANCELLED)
-                        _events.tryEmit(GameEvent.GameCancelled)
-                    } else {
-                        startPregame()
-                    }
-                    break
-                }
-                val checkedInNumbers = mockPlayers
-                    .filter { it.id in checkedInPlayerIds }
-                    .map { it.number }
-                    .toSet()
-
-                _state.value = current.copy(
-                    checkInTimeRemainingSeconds = remaining,
-                    checkedInCount = checkedInPlayerIds.size + myCheckIn,
-                    checkedInPlayerNumbers = if (current.checkInVerified)
-                        checkedInNumbers + current.currentPlayer.number
-                    else checkedInNumbers
-                )
-            }
+    /**
+     * Central handler that updates GameState based on server WebSocket messages.
+     */
+    fun processServerMessage(msg: ServerMessage) {
+        when (msg) {
+            is ServerMessage.AuthSuccess -> handleAuthSuccess(msg)
+            is ServerMessage.TargetAssigned -> handleTargetAssigned(msg)
+            is ServerMessage.HunterUpdated -> handleHunterUpdated(msg)
+            is ServerMessage.PlayerEliminated -> handlePlayerEliminated(msg)
+            is ServerMessage.KillRecorded -> handleKillRecorded(msg)
+            is ServerMessage.ZoneShrink -> handleZoneShrink(msg)
+            is ServerMessage.LeaderboardUpdate -> handleLeaderboardUpdate(msg)
+            is ServerMessage.HeartbeatRefreshed -> handleHeartbeatRefreshed(msg)
+            is ServerMessage.HeartbeatScanSuccess -> handleHeartbeatScanSuccess(msg)
+            is ServerMessage.GameEnded -> handleGameEnded(msg)
+            is ServerMessage.GameCancelled -> handleGameCancelled(msg)
+            is ServerMessage.GameStarted -> handleGameStarted(msg)
+            is ServerMessage.GamePregameStarted -> handlePregameStarted(msg)
+            is ServerMessage.GameStartedBroadcast -> handleGameStartedBroadcast(msg)
+            is ServerMessage.CheckinUpdate -> handleCheckinUpdate(msg)
+            is ServerMessage.CheckinStarted -> handleCheckinStarted(msg)
+            is ServerMessage.PlayerRegistered -> handlePlayerRegistered(msg)
+            is ServerMessage.HeartbeatError -> Log.w(TAG, "Heartbeat error: ${msg.error}")
+            is ServerMessage.ZoneWarning -> handleZoneWarning(msg)
+            is ServerMessage.Error -> Log.e(TAG, "Server error: ${msg.error}")
         }
     }
 
-    private fun startPregame() {
+    // --- Server Message Handlers ---
+
+    private fun handleAuthSuccess(msg: ServerMessage.AuthSuccess) {
         val current = _state.value ?: return
-        val now = System.currentTimeMillis()
+        Log.i(TAG, "Auth success: player #${msg.playerNumber}, alive=${msg.isAlive}, kills=${msg.kills}, subPhase=${msg.subPhase}")
 
-        // Eliminate mock players who didn't check in
-        val uncheckedMockPlayers = mockPlayers.filter { it.id !in checkedInPlayerIds }
-        for (player in uncheckedMockPlayers) {
-            val killEvent = KillEvent(
-                id = UUID.randomUUID().toString(),
-                hunterNumber = 0,
-                targetNumber = player.number,
-                timestamp = now,
-                zone = "",
-                isNoCheckIn = true
-            )
-            killFeedList.add(0, killEvent)
-            mockPlayers.remove(player)
-        }
-
-        // Check if current player didn't check in
-        val currentPlayerEliminated = !current.checkInVerified
-
-        val playersRemaining = mockPlayers.size + 1 - (if (currentPlayerEliminated) 1 else 0)
-
-        if (currentPlayerEliminated) {
-            // Current player eliminated for no check-in
-            val killEvent = KillEvent(
-                id = UUID.randomUUID().toString(),
-                hunterNumber = 0,
-                targetNumber = current.currentPlayer.number,
-                timestamp = now,
-                zone = "",
-                isNoCheckIn = true
-            )
-            killFeedList.add(0, killEvent)
-            _state.value = current.copy(
-                phase = GamePhase.ELIMINATED,
-                playersRemaining = playersRemaining,
-                killFeed = killFeedList.toList()
-            )
-            _events.tryEmit(GameEvent.NoCheckInEliminated)
-            return
-        }
-
-        // Transition to PREGAME
-        _state.value = current.copy(
-            phase = GamePhase.PREGAME,
-            playersRemaining = playersRemaining,
-            pregameTimeRemainingSeconds = current.config.pregameDurationMinutes * 60,
-            killFeed = killFeedList.toList()
+        // Sync local state with server on (re)connect
+        val player = current.currentPlayer.copy(
+            id = "player_${msg.playerNumber}",
+            number = msg.playerNumber,
+            killCount = msg.kills,
+            isAlive = msg.isAlive
         )
-        _events.tryEmit(GameEvent.PregameStarted)
-        startPregameTimer()
+
+        val target = msg.target?.let {
+            Target(
+                player = Player(id = "player_${it.playerNumber}", number = it.playerNumber, walletAddress = it.address),
+                assignedAt = System.currentTimeMillis()
+            )
+        }
+
+        // Determine phase from server subPhase
+        val phase = when (msg.subPhase) {
+            "checkin" -> GamePhase.CHECK_IN
+            "pregame" -> GamePhase.PREGAME
+            "game" -> GamePhase.ACTIVE
+            "ended" -> GamePhase.ENDED
+            "cancelled" -> GamePhase.CANCELLED
+            else -> if (!msg.isAlive) GamePhase.ELIMINATED else current.phase
+        }
+
+        _state.value = current.copy(
+            currentPlayer = player,
+            currentTarget = target,
+            hunterPlayerNumber = msg.hunterPlayerNumber,
+            lastHeartbeatAt = msg.lastHeartbeatAt ?: 0L,
+            phase = phase
+        )
+
+        // If we reconnected to an active game, restart the tick timer
+        if (phase == GamePhase.ACTIVE) {
+            startTickTimer()
+        }
+        // If we reconnected to check-in phase, start countdown
+        if (phase == GamePhase.CHECK_IN) {
+            startCheckInCountdown()
+        }
+        // If we reconnected to pregame, start countdown
+        if (phase == GamePhase.PREGAME && msg.pregameEndsAt != null) {
+            val remainingSeconds = ((msg.pregameEndsAt - System.currentTimeMillis() / 1000)).toInt().coerceAtLeast(0)
+            _state.value = _state.value?.copy(pregameTimeRemainingSeconds = remainingSeconds)
+            startPregameCountdown()
+        }
     }
 
-    private fun completePregameAndStartGame() {
+    private fun handleTargetAssigned(msg: ServerMessage.TargetAssigned) {
+        val current = _state.value ?: return
+        val targetPlayer = Player(
+            id = "player_${msg.target.playerNumber}",
+            number = msg.target.playerNumber,
+            walletAddress = msg.target.address
+        )
+        _state.value = current.copy(
+            currentTarget = Target(targetPlayer, System.currentTimeMillis()),
+            hunterPlayerNumber = msg.hunterPlayerNumber
+        )
+        _events.tryEmit(GameEvent.TargetReassigned(targetPlayer))
+    }
+
+    private fun handleHunterUpdated(msg: ServerMessage.HunterUpdated) {
+        val current = _state.value ?: return
+        _state.value = current.copy(hunterPlayerNumber = msg.hunterPlayerNumber)
+    }
+
+    private fun handlePlayerEliminated(msg: ServerMessage.PlayerEliminated) {
+        val current = _state.value ?: return
+        val myAddress = current.currentPlayer.walletAddress.lowercase()
+
+        if (msg.player.lowercase() == myAddress) {
+            // We were eliminated
+            _state.value = current.copy(phase = GamePhase.ELIMINATED)
+            stopTimers()
+            when (msg.reason) {
+                "zone_violation" -> _events.tryEmit(GameEvent.OutOfZoneEliminated)
+                "heartbeat_timeout" -> _events.tryEmit(GameEvent.HeartbeatEliminated)
+                "no_checkin" -> _events.tryEmit(GameEvent.NoCheckInEliminated)
+                "killed" -> _events.tryEmit(GameEvent.Eliminated(0))
+                else -> _events.tryEmit(GameEvent.Eliminated(0))
+            }
+        } else {
+            // Another player eliminated — decrement count
+            _state.value = current.copy(
+                playersRemaining = (current.playersRemaining - 1).coerceAtLeast(1)
+            )
+        }
+    }
+
+    private fun handleKillRecorded(msg: ServerMessage.KillRecorded) {
+        val current = _state.value ?: return
+        val myAddress = current.currentPlayer.walletAddress.lowercase()
+
+        val killEvent = KillEvent(
+            id = UUID.randomUUID().toString(),
+            hunterNumber = 0, // server sends addresses, not numbers — map if needed
+            targetNumber = 0,
+            timestamp = System.currentTimeMillis(),
+            zone = ""
+        )
+
+        // Only add to kill feed if this wasn't our own optimistic kill
+        if (msg.hunter.lowercase() != myAddress) {
+            killFeedList.add(0, killEvent)
+            _state.value = current.copy(killFeed = killFeedList.take(50))
+            _events.tryEmit(GameEvent.KillFeedUpdate(killEvent))
+        } else {
+            // Server confirmed our kill — update kill count from server
+            _state.value = current.copy(
+                currentPlayer = current.currentPlayer.copy(killCount = msg.hunterKills)
+            )
+        }
+    }
+
+    private fun handleZoneShrink(msg: ServerMessage.ZoneShrink) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            currentZoneRadius = msg.zone.currentRadiusMeters
+        )
+        _events.tryEmit(GameEvent.ZoneShrink(msg.zone.currentRadiusMeters))
+    }
+
+    private fun handleLeaderboardUpdate(msg: ServerMessage.LeaderboardUpdate) {
+        val current = _state.value ?: return
+        val entries = msg.entries.mapIndexed { index, entry ->
+            LeaderboardEntry(
+                rank = index + 1,
+                playerNumber = entry.playerNumber,
+                kills = entry.kills,
+                isAlive = entry.isAlive,
+                isCurrentPlayer = entry.address.lowercase() == current.currentPlayer.walletAddress.lowercase()
+            )
+        }
+        _state.value = current.copy(
+            leaderboard = entries,
+            playersRemaining = entries.count { it.isAlive }
+        )
+    }
+
+    private fun handleHeartbeatRefreshed(msg: ServerMessage.HeartbeatRefreshed) {
+        val current = _state.value ?: return
+        _state.value = current.copy(lastHeartbeatAt = msg.refreshedUntil)
+    }
+
+    private fun handleHeartbeatScanSuccess(msg: ServerMessage.HeartbeatScanSuccess) {
+        _events.tryEmit(GameEvent.HeartbeatRefreshed(msg.scannedPlayerNumber))
+    }
+
+    private fun handleGameStarted(msg: ServerMessage.GameStarted) {
         val current = _state.value ?: return
         val now = System.currentTimeMillis()
         val nowSeconds = now / 1000
 
-        val target = pickRandomTarget()
-        // Pick a random hunter number for the prototype
-        val hunterNum = mockPlayers.filter { it.id != target?.id }.randomOrNull()?.number
+        val targetPlayer = Player(
+            id = "player_${msg.target.playerNumber}",
+            number = msg.target.playerNumber,
+            walletAddress = msg.target.address
+        )
+
         _state.value = current.copy(
             phase = GamePhase.ACTIVE,
-            currentTarget = target?.let { Target(it, now) },
-            hunterPlayerNumber = hunterNum,
-            nextShrinkSeconds = if (current.config.shrinkSchedule.isNotEmpty())
-                current.config.shrinkSchedule[0].atMinute * 60 else 0,
-            lastHeartbeatAt = nowSeconds,
+            currentTarget = Target(targetPlayer, now),
+            hunterPlayerNumber = msg.hunterPlayerNumber,
+            lastHeartbeatAt = msg.heartbeatDeadline,
+            heartbeatIntervalSeconds = msg.heartbeatIntervalSeconds,
             heartbeatDisabled = false,
+            currentZoneRadius = msg.zone?.currentRadiusMeters ?: current.currentZoneRadius,
             pregameTimeRemainingSeconds = 0
         )
-        updateLeaderboard()
-        startTimers()
+
+        startTickTimer()
         _events.tryEmit(GameEvent.GameStarted)
     }
 
-    private fun startPregameTimer() {
-        pregameTimerJob?.cancel()
-        pregameTimerJob = scope.launch {
-            while (isActive) {
-                delay(1000)
-                val current = _state.value ?: break
-                if (current.phase != GamePhase.PREGAME) break
-
-                val remaining = current.pregameTimeRemainingSeconds - 1
-                if (remaining <= 0) {
-                    completePregameAndStartGame()
-                    break
-                }
-                _state.value = current.copy(pregameTimeRemainingSeconds = remaining)
-            }
-        }
+    private fun handlePregameStarted(msg: ServerMessage.GamePregameStarted) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            phase = GamePhase.PREGAME,
+            pregameTimeRemainingSeconds = msg.pregameDurationSeconds,
+            checkedInCount = msg.checkedInCount,
+            playersRemaining = msg.playerCount
+        )
+        _events.tryEmit(GameEvent.PregameStarted)
+        startPregameCountdown()
     }
 
-    private fun startTimers() {
-        timerJob?.cancel()
-        simulationJob?.cancel()
+    private fun handleGameStartedBroadcast(msg: ServerMessage.GameStartedBroadcast) {
+        val current = _state.value ?: return
+        _state.value = current.copy(playersRemaining = msg.playerCount)
+    }
 
-        // Main tick timer (every second)
+    private fun handleCheckinUpdate(msg: ServerMessage.CheckinUpdate) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            checkedInCount = msg.checkedInCount,
+            playersRemaining = msg.totalPlayers
+        )
+    }
+
+    private fun handleGameEnded(msg: ServerMessage.GameEnded) {
+        val current = _state.value ?: return
+        _state.value = current.copy(phase = GamePhase.ENDED)
+        _events.tryEmit(GameEvent.GameEnded)
+        stopTimers()
+    }
+
+    private fun handleGameCancelled(msg: ServerMessage.GameCancelled) {
+        val current = _state.value ?: return
+        _state.value = current.copy(phase = GamePhase.CANCELLED)
+        _events.tryEmit(GameEvent.GameCancelled)
+        stopTimers()
+    }
+
+    private fun handleCheckinStarted(msg: ServerMessage.CheckinStarted) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            phase = GamePhase.CHECK_IN,
+            checkInTimeRemainingSeconds = msg.checkinDurationSeconds,
+            checkedInCount = 0,
+            checkedInPlayerNumbers = emptySet()
+        )
+        _events.tryEmit(GameEvent.CheckInStarted)
+        startCheckInCountdown()
+    }
+
+    private fun handlePlayerRegistered(msg: ServerMessage.PlayerRegistered) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            playersRemaining = msg.playerCount
+        )
+        Log.i(TAG, "Player registered: ${msg.address.take(10)}..., total: ${msg.playerCount}")
+    }
+
+    private fun handleZoneWarning(msg: ServerMessage.ZoneWarning) {
+        // Could show a UI warning — for now just update zone status
+        val current = _state.value ?: return
+        _state.value = current.copy(isInZone = msg.inZone)
+    }
+
+    // --- Timers ---
+
+    private fun startTickTimer() {
+        timerJob?.cancel()
         timerJob = scope.launch {
             while (isActive) {
                 delay(1000)
                 tick()
             }
         }
+    }
 
-        // Simulation (random kills by other players)
-        simulationJob = scope.launch {
-            delay(10_000) // Initial grace period
+    private fun startCheckInCountdown() {
+        checkInTimerJob?.cancel()
+        checkInTimerJob = scope.launch {
             while (isActive) {
-                val interval = simulationInterval()
-                delay(interval)
-                simulateRandomKill()
+                delay(1000)
+                val current = _state.value ?: break
+                if (current.phase != GamePhase.CHECK_IN) break
+                val remaining = current.checkInTimeRemainingSeconds - 1
+                if (remaining <= 0) break // server handles phase transition
+                _state.value = current.copy(checkInTimeRemainingSeconds = remaining)
+            }
+        }
+    }
+
+    private fun startPregameCountdown() {
+        pregameTimerJob?.cancel()
+        pregameTimerJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                val current = _state.value ?: break
+                if (current.phase != GamePhase.PREGAME) break
+                val remaining = current.pregameTimeRemainingSeconds - 1
+                if (remaining <= 0) break // server handles phase transition
+                _state.value = current.copy(pregameTimeRemainingSeconds = remaining)
             }
         }
     }
 
     private fun stopTimers() {
         timerJob?.cancel()
-        simulationJob?.cancel()
         checkInTimerJob?.cancel()
         pregameTimerJob?.cancel()
     }
@@ -559,22 +553,6 @@ class GameEngine @Inject constructor() {
         if (current.phase != GamePhase.ACTIVE) return
 
         val elapsed = current.gameTimeElapsedSeconds + 1
-        val newShrinkSeconds = (current.nextShrinkSeconds - 1).coerceAtLeast(0)
-
-        var newRadius = current.currentZoneRadius
-        var nextShrink = newShrinkSeconds
-
-        // Check zone shrink schedule
-        val elapsedMinutes = (elapsed / 60).toInt()
-        for (shrink in current.config.shrinkSchedule) {
-            if (elapsedMinutes == shrink.atMinute && current.currentZoneRadius > shrink.newRadiusMeters) {
-                newRadius = shrink.newRadiusMeters
-                val nextSchedule = current.config.shrinkSchedule.firstOrNull { it.atMinute > elapsedMinutes }
-                nextShrink = if (nextSchedule != null) (nextSchedule.atMinute * 60 - elapsed).toInt() else 0
-                _events.tryEmit(GameEvent.ZoneShrink(newRadius))
-                break
-            }
-        }
 
         // Out-of-zone deadline (60 seconds to return)
         val newOutOfZoneSeconds = if (!current.isInZone && !current.spectatorMode) {
@@ -589,64 +567,14 @@ class GameEngine @Inject constructor() {
             return
         }
 
-        // Check game end
-        if (elapsed >= current.config.durationMinutes * 60L) {
-            endGame()
-            return
-        }
-
         // Auto-disable heartbeat when ≤4 players remain
         val heartbeatDisabled = current.playersRemaining <= 4
 
         _state.value = current.copy(
             gameTimeElapsedSeconds = elapsed,
-            currentZoneRadius = newRadius,
-            nextShrinkSeconds = nextShrink,
             outOfZoneSeconds = newOutOfZoneSeconds,
             heartbeatDisabled = heartbeatDisabled
         )
-    }
-
-    private fun simulateRandomKill() {
-        val current = _state.value ?: return
-        if (current.phase != GamePhase.ACTIVE) return
-        if (mockPlayers.size < 2) return
-
-        val victim = mockPlayers.random()
-        val hunter = mockPlayers.filter { it.id != victim.id }.randomOrNull() ?: return
-
-        mockPlayers.remove(victim)
-
-        val killEvent = KillEvent(
-            id = UUID.randomUUID().toString(),
-            hunterNumber = hunter.number,
-            targetNumber = victim.number,
-            timestamp = System.currentTimeMillis(),
-            zone = zoneNames.random()
-        )
-        killFeedList.add(0, killEvent)
-
-        val newRemaining = current.playersRemaining - 1
-
-        // If the victim was our target, reassign
-        var newTarget = current.currentTarget
-        if (current.currentTarget?.player?.id == victim.id) {
-            val replacement = pickRandomTarget()
-            newTarget = replacement?.let { Target(it, System.currentTimeMillis()) }
-            _events.tryEmit(GameEvent.TargetReassigned(newTarget?.player))
-        }
-
-        _state.value = current.copy(
-            playersRemaining = newRemaining,
-            currentTarget = newTarget,
-            killFeed = killFeedList.take(50)
-        )
-        _events.tryEmit(GameEvent.KillFeedUpdate(killEvent))
-        updateLeaderboard()
-
-        if (newRemaining <= 1) {
-            endGame()
-        }
     }
 
     private fun endGame() {
@@ -654,86 +582,6 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(phase = GamePhase.ENDED)
         _events.tryEmit(GameEvent.GameEnded)
         stopTimers()
-    }
-
-    private fun pickRandomTarget(): Player? {
-        return mockPlayers.filter { it.isAlive }.randomOrNull()
-    }
-
-    private fun buildLeaderboard(): List<LeaderboardEntry> {
-        val current = _state.value ?: return emptyList()
-
-        // Count kills per player from kill feed
-        val killCounts = mutableMapOf<Int, Int>()
-        val eliminatedNumbers = mutableSetOf<Int>()
-        for (event in killFeedList) {
-            killCounts[event.hunterNumber] = (killCounts[event.hunterNumber] ?: 0) + 1
-            eliminatedNumbers.add(event.targetNumber)
-        }
-
-        val entries = mutableListOf<LeaderboardEntry>()
-
-        // Current player
-        entries.add(
-            LeaderboardEntry(
-                rank = 0,
-                playerNumber = current.currentPlayer.number,
-                kills = current.currentPlayer.killCount,
-                isAlive = current.phase != GamePhase.ELIMINATED,
-                isCurrentPlayer = true
-            )
-        )
-
-        // All mock players (alive + dead)
-        for (player in mockPlayers) {
-            entries.add(
-                LeaderboardEntry(
-                    rank = 0,
-                    playerNumber = player.number,
-                    kills = killCounts[player.number] ?: 0,
-                    isAlive = player.number !in eliminatedNumbers
-                )
-            )
-        }
-
-        // Also add eliminated players no longer in mockPlayers
-        for (number in eliminatedNumbers) {
-            if (entries.none { it.playerNumber == number }) {
-                entries.add(
-                    LeaderboardEntry(
-                        rank = 0,
-                        playerNumber = number,
-                        kills = killCounts[number] ?: 0,
-                        isAlive = false
-                    )
-                )
-            }
-        }
-
-        // Sort: alive first (by kills desc), then dead (by kills desc)
-        val sorted = entries.sortedWith(
-            compareByDescending<LeaderboardEntry> { it.isAlive }
-                .thenByDescending { it.kills }
-                .thenBy { it.playerNumber }
-        )
-
-        return sorted.mapIndexed { index, entry -> entry.copy(rank = index + 1) }
-    }
-
-    private fun updateLeaderboard() {
-        val current = _state.value ?: return
-        _state.value = current.copy(leaderboard = buildLeaderboard())
-    }
-
-    private fun simulationInterval(): Long {
-        val remaining = _state.value?.playersRemaining ?: 100
-        return when {
-            remaining > 50 -> Random.nextLong(30_000, 90_000)
-            remaining > 25 -> Random.nextLong(15_000, 45_000)
-            remaining > 10 -> Random.nextLong(8_000, 25_000)
-            remaining > 5 -> Random.nextLong(5_000, 15_000)
-            else -> Random.nextLong(3_000, 8_000)
-        }
     }
 }
 

@@ -23,7 +23,7 @@ let readContract: ethers.Contract;
 let writeContract: ethers.Contract;
 let wsContract: ethers.Contract;
 
-function getAbi(): ethers.InterfaceAbi {
+export function getAbi(): ethers.InterfaceAbi {
   if (!abi) abi = loadAbi();
   return abi;
 }
@@ -85,7 +85,8 @@ export async function fetchGameConfig(gameId: number): Promise<GameConfig> {
     minPlayers: Number(raw.minPlayers),
     maxPlayers: Number(raw.maxPlayers),
     registrationDeadline: Number(raw.registrationDeadline),
-    expiryDeadline: Number(raw.expiryDeadline),
+    gameDate: Number(raw.gameDate),
+    expiryDeadline: Number(raw.gameDate) + Number(raw.maxDuration),
     createdAt: Number(raw.createdAt),
     creator: raw.creator,
     centerLat: Number(raw.centerLat),
@@ -96,7 +97,8 @@ export async function fetchGameConfig(gameId: number): Promise<GameConfig> {
     bps2nd: Number(raw.bps2nd),
     bps3rd: Number(raw.bps3rd),
     bpsKills: Number(raw.bpsKills),
-    bpsPlatform: Number(raw.bpsPlatform),
+    bpsPlatform: Number(raw.bpsCreator),
+    baseReward: raw.baseReward,
   };
 }
 

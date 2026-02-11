@@ -433,4 +433,179 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         // Contract should have zero balance — no dust locked
         assertEq(address(game).balance, 0);
     }
+
+    // ============ Base Reward Tests ============
+
+    function test_baseReward_addedToTotalCollected() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+
+        IChainAssassin.GameState memory state = game.getGameState(gameId);
+        assertEq(state.totalCollected, BASE_REWARD);
+
+        // Register 3 players
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+
+        state = game.getGameState(gameId);
+        assertEq(state.totalCollected, BASE_REWARD + 3 * ENTRY_FEE);
+    }
+
+    function test_baseReward_storedInConfig() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+
+        IChainAssassin.GameConfig memory config = game.getGameConfig(gameId);
+        assertEq(config.baseReward, BASE_REWARD);
+    }
+
+    function test_baseReward_prizeDistribution() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player1);
+
+        // total = 0.5 + 3 * 0.05 = 0.65 ETH
+        uint256 total = BASE_REWARD + 3 * ENTRY_FEE;
+        uint256 expected1st = total * 3500 / 10000;
+
+        assertEq(game.getClaimableAmount(gameId, player1), expected1st + total * 2000 / 10000); // winner1 + topKiller
+        assertEq(game.getClaimableAmount(gameId, player2), total * 1500 / 10000);
+        assertEq(game.getClaimableAmount(gameId, player3), total * 1000 / 10000);
+    }
+
+    function test_baseReward_noDustWithBaseReward() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+        _registerPlayer(gameId, player4);
+
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player4);
+
+        // Claim all prizes
+        vm.prank(player1); game.claimPrize(gameId);
+        vm.prank(player2); game.claimPrize(gameId);
+        vm.prank(player3); game.claimPrize(gameId);
+        vm.prank(player4); game.claimPrize(gameId);
+
+        // Withdraw creator fees
+        vm.prank(operator);
+        game.withdrawCreatorFees(operator);
+
+        // Withdraw platform fees
+        game.withdrawPlatformFees(address(0xFEE));
+
+        // Contract should have zero balance
+        assertEq(address(game).balance, 0);
+    }
+
+    function test_baseReward_cancellationRefund() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+        _registerPlayer(gameId, player1); // 1 player, min is 3
+
+        // Warp past deadline
+        vm.warp(block.timestamp + 2 days);
+        game.triggerCancellation(gameId);
+
+        // Creator should have base reward accrued
+        assertEq(game.creatorFeesAccrued(operator), BASE_REWARD);
+
+        // Player claims entry fee refund
+        uint256 balBefore = player1.balance;
+        vm.prank(player1);
+        game.claimRefund(gameId);
+        assertEq(player1.balance - balBefore, ENTRY_FEE);
+
+        // Creator withdraws base reward
+        uint256 opBalBefore = operator.balance;
+        vm.prank(operator);
+        game.withdrawCreatorFees(operator);
+        assertEq(operator.balance - opBalBefore, BASE_REWARD);
+
+        // Contract should have zero balance
+        assertEq(address(game).balance, 0);
+    }
+
+    function test_baseReward_expiryRefund() public {
+        uint256 gameId = _createGameWithBaseReward(BASE_REWARD);
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+        _registerPlayer(gameId, player3);
+
+        // Start the game
+        _startGame(gameId);
+
+        // Warp past expiry (gameDate + maxDuration)
+        IChainAssassin.GameConfig memory config = game.getGameConfig(gameId);
+        vm.warp(uint256(config.gameDate) + config.maxDuration + 1);
+
+        game.triggerExpiry(gameId);
+
+        // Creator should have base reward accrued
+        assertEq(game.creatorFeesAccrued(operator), BASE_REWARD);
+
+        // All players claim refunds
+        vm.prank(player1); game.claimRefund(gameId);
+        vm.prank(player2); game.claimRefund(gameId);
+        vm.prank(player3); game.claimRefund(gameId);
+
+        // Creator withdraws
+        vm.prank(operator);
+        game.withdrawCreatorFees(operator);
+
+        assertEq(address(game).balance, 0);
+    }
+
+    function test_baseReward_zeroBaseReward() public {
+        // No base reward — backward compatible
+        uint256 gameId = _createDefaultGame();
+
+        IChainAssassin.GameConfig memory config = game.getGameConfig(gameId);
+        assertEq(config.baseReward, 0);
+
+        IChainAssassin.GameState memory state = game.getGameState(gameId);
+        assertEq(state.totalCollected, 0);
+    }
+
+    function test_baseReward_freeGameWithBaseReward() public {
+        // entryFee = 0, base reward = 1 ETH
+        IChainAssassin.CreateGameParams memory params = _defaultParams();
+        params.entryFee = 0;
+
+        vm.prank(operator);
+        uint256 gameId = game.createGame{value: 1 ether}(params, _defaultShrinks());
+
+        // Register players (free)
+        vm.prank(player1); game.register(gameId);
+        vm.prank(player2); game.register(gameId);
+        vm.prank(player3); game.register(gameId);
+
+        IChainAssassin.GameState memory state = game.getGameState(gameId);
+        assertEq(state.totalCollected, 1 ether); // only base reward
+
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, player1, player2, player3, player1);
+
+        // 1st place gets 35% of 1 ETH = 0.35 ETH, plus topKiller 20% = 0.55 ETH
+        uint256 expected = 1 ether * (3500 + 2000) / 10000;
+        assertEq(game.getClaimableAmount(gameId, player1), expected);
+
+        // Claim all + withdraw all → zero balance
+        vm.prank(player1); game.claimPrize(gameId);
+        vm.prank(player2); game.claimPrize(gameId);
+        vm.prank(player3); game.claimPrize(gameId);
+        vm.prank(operator); game.withdrawCreatorFees(operator);
+        game.withdrawPlatformFees(address(0xFEE));
+
+        assertEq(address(game).balance, 0);
+    }
 }

@@ -8,6 +8,7 @@ import com.cryptohunt.app.domain.chain.OnChainPhase
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
+import com.cryptohunt.app.domain.server.GameServerClient
 import com.cryptohunt.app.domain.wallet.WalletManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,7 +43,12 @@ data class GameHistoryItem(
     val claimed: Boolean = false,
     val claimableWei: BigInteger = BigInteger.ZERO,
     val isCancelled: Boolean = false,
-    val gameId: Int = 0
+    val gameId: Int = 0,
+    val participated: Boolean = true,
+    val winner1: String = "",
+    val winner2: String = "",
+    val winner3: String = "",
+    val topKiller: String = ""
 )
 
 @HiltViewModel
@@ -50,7 +56,8 @@ class LobbyViewModel @Inject constructor(
     private val gameEngine: GameEngine,
     private val walletManager: WalletManager,
     private val contractService: ContractService,
-    private val locationTracker: LocationTracker
+    private val locationTracker: LocationTracker,
+    private val serverClient: GameServerClient
 ) : ViewModel() {
 
     val walletState: StateFlow<WalletState> = walletManager.state
@@ -120,8 +127,8 @@ class LobbyViewModel @Inject constructor(
                     val shrinks = contractService.getZoneShrinks(gameId)
                     val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
 
-                    // Only show games in REGISTRATION phase in the upcoming list
                     if (state.phase == OnChainPhase.REGISTRATION) {
+                        // Show REGISTRATION games in the upcoming list
                         val playerInfo = if (address.isNotEmpty()) {
                             try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
                         } else null
@@ -138,6 +145,24 @@ class LobbyViewModel @Inject constructor(
                                 playerNumber = playerInfo?.number ?: 0
                             )
                         )
+                    } else if (state.phase == OnChainPhase.ACTIVE && address.isNotEmpty()) {
+                        // Check if we're a registered player in this active game
+                        val playerInfo = try {
+                            contractService.getPlayerInfo(gameId, address)
+                        } catch (_: Exception) { null }
+
+                        if (playerInfo != null && playerInfo.registered) {
+                            // Restore GameEngine state so the lobby shows the active game card
+                            val existingState = gameEngine.state.value
+                            if (existingState == null || existingState.config.id != appConfig.id) {
+                                gameEngine.registerForGame(
+                                    appConfig, address, appConfig.gameDate,
+                                    assignedPlayerNumber = playerInfo.number
+                                )
+                                // Connect to server — auth:success will set the correct phase
+                                serverClient.connect(gameId)
+                            }
+                        }
                     }
                 } catch (_: Exception) {
                     // Skip games that fail to load
@@ -155,55 +180,68 @@ class LobbyViewModel @Inject constructor(
 
     private suspend fun loadGameHistoryInternal() {
         val address = walletManager.getAddress()
-        if (address.isEmpty()) return
         try {
             val nextId = contractService.getNextGameId()
             val items = mutableListOf<GameHistoryItem>()
             for (gameId in 1 until nextId) {
                 try {
-                    val playerInfo = contractService.getPlayerInfo(gameId, address)
-                    if (!playerInfo.registered) continue
-
                     val config = contractService.getGameConfig(gameId)
                     val state = contractService.getGameState(gameId)
-                    val shrinks = contractService.getZoneShrinks(gameId)
-                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
 
                     // Only include ended or cancelled games in history
                     if (state.phase != OnChainPhase.ENDED && state.phase != OnChainPhase.CANCELLED) continue
 
-                    val claimable = contractService.getClaimableAmount(gameId, address)
+                    val shrinks = contractService.getZoneShrinks(gameId)
+                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
+
+                    val isCancelled = state.phase == OnChainPhase.CANCELLED
+                    val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
+
+                    // Check if current player participated
+                    val playerInfo = if (address.isNotEmpty()) {
+                        try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
+                    } else null
+                    val participated = playerInfo?.registered == true
+
+                    // Only fetch claimable if player participated
+                    val claimable = if (participated && address.isNotEmpty()) {
+                        try { contractService.getClaimableAmount(gameId, address) } catch (_: Exception) { BigInteger.ZERO }
+                    } else BigInteger.ZERO
                     val claimableEth = org.web3j.utils.Convert.fromWei(
                         java.math.BigDecimal(claimable),
                         org.web3j.utils.Convert.Unit.ETHER
                     ).toDouble()
 
-                    val isCancelled = state.phase == OnChainPhase.CANCELLED
-                    val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
-
-                    // Determine rank based on winners
-                    val rank = when (address.lowercase()) {
-                        state.winner1.lowercase() -> 1
-                        state.winner2.lowercase() -> 2
-                        state.winner3.lowercase() -> 3
-                        else -> 0
-                    }
+                    // Determine rank based on winners (only relevant if participated)
+                    val rank = if (participated && address.isNotEmpty()) {
+                        when (address.lowercase()) {
+                            state.winner1.lowercase() -> 1
+                            state.winner2.lowercase() -> 2
+                            state.winner3.lowercase() -> 3
+                            else -> 0
+                        }
+                    } else 0
 
                     items.add(
                         GameHistoryItem(
                             config = appConfig,
                             phase = gamePhase,
-                            kills = playerInfo.kills,
+                            kills = playerInfo?.kills ?: 0,
                             rank = rank,
                             survivalSeconds = 0L,
                             playersTotal = state.playerCount,
                             leaderboard = emptyList(),
                             playedAt = config.gameDate * 1000,
                             prizeEth = claimableEth,
-                            claimed = playerInfo.claimed || claimable == BigInteger.ZERO,
+                            claimed = if (participated) (playerInfo?.claimed == true || claimable == BigInteger.ZERO) else true,
                             claimableWei = claimable,
                             isCancelled = isCancelled,
-                            gameId = gameId
+                            gameId = gameId,
+                            participated = participated,
+                            winner1 = state.winner1,
+                            winner2 = state.winner2,
+                            winner3 = state.winner3,
+                            topKiller = state.topKiller
                         )
                     )
                 } catch (_: Exception) {
@@ -356,7 +394,8 @@ class LobbyViewModel @Inject constructor(
     }
 
     fun startGame() {
-        gameEngine.startGame()
+        // Server drives game start — this is a no-op now.
+        // Kept for UI compatibility (GameLobbyScreen button).
     }
 
     /**

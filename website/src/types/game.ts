@@ -1,4 +1,5 @@
 export type Phase = 'registration' | 'active' | 'ended' | 'cancelled';
+export type SubPhase = 'checkin' | 'pregame' | 'game';
 
 export type ActivityType = 'create' | 'register' | 'start' | 'kill' | 'end' | 'cancel';
 
@@ -29,12 +30,15 @@ export interface Game {
   title: string;
   entryFee: number;
   entryFeeWei: bigint;
+  baseReward: number;
+  baseRewardWei: bigint;
   location: string;
   date: string;
   players: number;
   maxPlayers: number;
   minPlayers: number;
   registrationDeadline: string;
+  registrationDeadlineTs: number;
   expiryDeadline: string;
   centerLat: number;
   centerLng: number;
@@ -43,6 +47,11 @@ export interface Game {
   bps: GameBps;
   zoneShrinks: ZoneShrink[];
   phase: Phase;
+  subPhase?: SubPhase;
+  checkinEndsAt?: number | null;
+  pregameEndsAt?: number | null;
+  playerCount?: number;
+  aliveCount?: number;
   creator: string;
   createdAt: number;
   winner1: string;

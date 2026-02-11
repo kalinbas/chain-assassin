@@ -24,7 +24,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.LeaderboardEntry
 import com.cryptohunt.app.ui.components.*
 import com.cryptohunt.app.ui.theme.*
-import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.ui.viewmodel.UiEvent
 import kotlinx.coroutines.delay
@@ -41,15 +40,18 @@ fun MainGameScreen(
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val locationState by viewModel.locationState.collectAsState()
-    val bleScanState by viewModel.bleScanState.collectAsState()
     val haptic = LocalHapticFeedback.current
 
     // Kill feed banner
     var bannerText by remember { mutableStateOf<String?>(null) }
     var showKillFlash by remember { mutableStateOf(false) }
 
-    // Start location tracking and BLE scanning
+    // Ensure server connection + start location tracking and BLE scanning
     LaunchedEffect(Unit) {
+        val gameId = gameState?.config?.id?.toIntOrNull()
+        if (gameId != null) {
+            viewModel.connectToServer(gameId)
+        }
         viewModel.startLocationTracking()
         viewModel.startBleScanning()
     }
@@ -323,45 +325,6 @@ fun MainGameScreen(
 
                     Spacer(Modifier.height(8.dp))
 
-                    // BLE debug info
-                    BleDebugCard(bleScanState)
-
-                    Spacer(Modifier.height(4.dp))
-
-                    // Location debug info
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Surface),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(8.dp)) {
-                            Text("GPS DEBUG", style = MaterialTheme.typography.labelSmall, color = TextDim)
-                            Text(
-                                "Lat: %.6f  Lng: %.6f".format(locationState.lat, locationState.lng),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (locationState.isTracking) Primary else TextDim
-                            )
-                            Text(
-                                "Accuracy: %.0fm  Zone edge: %.0fm  %s".format(
-                                    locationState.accuracy,
-                                    locationState.distanceToZoneEdge,
-                                    if (locationState.isInsideZone) "IN ZONE" else "OUTSIDE"
-                                ),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (locationState.isInsideZone) Primary else Danger
-                            )
-                            if (locationState.gpsLostSeconds > 0) {
-                                Text(
-                                    "GPS LOST: ${locationState.gpsLostSeconds}s",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = Danger
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
                     // Kill feed (scrollable, fills remaining space)
                     Text("KILL FEED", style = MaterialTheme.typography.labelSmall, color = TextDim)
                     Spacer(Modifier.height(4.dp))
@@ -577,54 +540,6 @@ fun MainGameScreen(
             }
         }
 
-        // Debug FAB
-        var showDebugMenu by remember { mutableStateOf(false) }
-        SmallFloatingActionButton(
-            onClick = { showDebugMenu = !showDebugMenu },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 16.dp, bottom = if (!isSpectator) 96.dp else 16.dp),
-            containerColor = SurfaceVariant.copy(alpha = 0.7f),
-            contentColor = TextDim
-        ) {
-            Icon(Icons.Default.BugReport, "Debug", modifier = Modifier.size(20.dp))
-        }
-
-        // Debug menu dropdown
-        if (showDebugMenu) {
-            Card(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = if (!isSpectator) 140.dp else 60.dp)
-                    .width(220.dp),
-                colors = CardDefaults.cardColors(containerColor = Surface),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Column(modifier = Modifier.padding(8.dp)) {
-                    Text("DEBUG", style = MaterialTheme.typography.labelSmall, color = TextDim, modifier = Modifier.padding(8.dp))
-                    DebugButton("Simulate Kill on Me") {
-                        showDebugMenu = false
-                        viewModel.debugTriggerElimination()
-                    }
-                    DebugButton("Trigger Zone Shrink") {
-                        showDebugMenu = false
-                        viewModel.debugTriggerZoneShrink()
-                    }
-                    DebugButton("Set 5 Players Left") {
-                        showDebugMenu = false
-                        viewModel.debugSetPlayersRemaining(5)
-                    }
-                    DebugButton("Skip to Endgame") {
-                        showDebugMenu = false
-                        viewModel.debugSkipToEndgame()
-                    }
-                    DebugButton("Scan Target (Kill)") {
-                        showDebugMenu = false
-                        viewModel.debugScanTarget()
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -723,119 +638,3 @@ private fun LeaderboardRow(entry: LeaderboardEntry) {
     }
 }
 
-@Composable
-private fun BleDebugCard(bleScanState: BleScanState) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = Surface),
-        shape = RoundedCornerShape(8.dp)
-    ) {
-        Column(modifier = Modifier.padding(8.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "BLE DEBUG",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextDim
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    if (bleScanState.isScanning) "SCANNING" else "OFF",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (bleScanState.isScanning) Primary else TextDim
-                )
-                Spacer(Modifier.weight(1f))
-                Text(
-                    "${bleScanState.nearbyDevices.size} nearby",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = if (bleScanState.nearbyDevices.isNotEmpty()) Primary else TextDim
-                )
-            }
-
-            if (bleScanState.errorMessage != null) {
-                Text(
-                    bleScanState.errorMessage,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Danger
-                )
-            }
-
-            // Show up to 8 nearby devices sorted by signal strength
-            bleScanState.nearbyDevices.take(8).forEach { device ->
-                val signalLabel = when {
-                    device.rssi >= -50 -> "STRONG"
-                    device.rssi >= -70 -> "GOOD"
-                    device.rssi >= -85 -> "WEAK"
-                    else -> "FAINT"
-                }
-                val signalColor = when {
-                    device.rssi >= -50 -> Primary
-                    device.rssi >= -70 -> Color(0xFF4CAF50)
-                    device.rssi >= -85 -> Warning
-                    else -> TextDim
-                }
-                val ageMs = System.currentTimeMillis() - device.lastSeenMs
-                val ageSec = (ageMs / 1000).coerceAtLeast(0)
-
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 1.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = device.name ?: device.address.takeLast(8),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextSecondary,
-                        modifier = Modifier.weight(1f),
-                        maxLines = 1
-                    )
-                    Text(
-                        text = "${device.rssi}dBm",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = signalColor,
-                        modifier = Modifier.width(56.dp),
-                        textAlign = TextAlign.End
-                    )
-                    Text(
-                        text = signalLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = signalColor,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.width(56.dp),
-                        textAlign = TextAlign.End
-                    )
-                    Text(
-                        text = "${ageSec}s",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = TextDim,
-                        modifier = Modifier.width(28.dp),
-                        textAlign = TextAlign.End
-                    )
-                }
-            }
-
-            if (bleScanState.isScanning && bleScanState.nearbyDevices.isEmpty() && bleScanState.errorMessage == null) {
-                Text(
-                    "No BLE devices detected",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = TextDim
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DebugButton(label: String, onClick: () -> Unit) {
-    TextButton(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Text(
-            label,
-            style = MaterialTheme.typography.bodySmall,
-            color = Warning,
-            modifier = Modifier.fillMaxWidth()
-        )
-    }
-}

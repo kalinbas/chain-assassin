@@ -2,8 +2,8 @@ package com.cryptohunt.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.util.Log
 import com.cryptohunt.app.domain.ble.BleScanner
-import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.game.GameEvent
 import com.cryptohunt.app.domain.game.KillResult
@@ -13,6 +13,9 @@ import com.cryptohunt.app.domain.model.HeartbeatResult
 import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.domain.model.GameState
 import com.cryptohunt.app.domain.model.LocationState
+import com.cryptohunt.app.domain.server.ConnectionState
+import com.cryptohunt.app.domain.server.GameServerClient
+import com.cryptohunt.app.domain.server.ServerMessage
 import com.cryptohunt.app.domain.wallet.WalletManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -24,13 +27,14 @@ class GameViewModel @Inject constructor(
     private val gameEngine: GameEngine,
     private val locationTracker: LocationTracker,
     private val walletManager: WalletManager,
-    private val bleScanner: BleScanner
+    private val bleScanner: BleScanner,
+    private val serverClient: GameServerClient
 ) : ViewModel() {
 
     val gameState: StateFlow<GameState?> = gameEngine.state
     val locationState: StateFlow<LocationState> = locationTracker.state
-    val bleScanState: StateFlow<BleScanState> = bleScanner.state
     val events: SharedFlow<GameEvent> = gameEngine.events
+    val serverConnectionState: StateFlow<ConnectionState> = serverClient.connectionState
 
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 20)
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
@@ -69,6 +73,32 @@ class GameViewModel @Inject constructor(
                 }
             }
         }
+
+        // Forward server messages to GameEngine
+        viewModelScope.launch {
+            serverClient.serverMessages.collect { msg ->
+                Log.d("GameViewModel", "Server: $msg")
+                gameEngine.processServerMessage(msg)
+            }
+        }
+
+        // Forward location updates to server when connected
+        viewModelScope.launch {
+            locationTracker.state.collect { locState ->
+                if (serverClient.connectionState.value == ConnectionState.CONNECTED &&
+                    locState.lat != 0.0 && locState.lng != 0.0) {
+                    serverClient.sendLocation(locState.lat, locState.lng)
+                }
+            }
+        }
+    }
+
+    fun connectToServer(gameId: Int) {
+        serverClient.connect(gameId)
+    }
+
+    fun disconnectFromServer() {
+        serverClient.disconnect()
     }
 
     fun startLocationTracking() {
@@ -90,15 +120,44 @@ class GameViewModel @Inject constructor(
     }
 
     fun processKill(qrPayload: String): KillResult {
-        return gameEngine.processKill(qrPayload)
+        val result = gameEngine.processKill(qrPayload)
+        if (result is KillResult.Confirmed) {
+            val loc = locationTracker.state.value
+            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                serverClient.submitKill(gameId, qrPayload, loc.lat, loc.lng)
+            }
+        }
+        return result
     }
 
     fun processCheckInScan(qrPayload: String): CheckInResult {
-        return gameEngine.processCheckInScan(qrPayload, bleScanner.getLocalBluetoothId())
+        val result = gameEngine.processCheckInScan(qrPayload, bleScanner.getLocalBluetoothId())
+        if (result is CheckInResult.Verified) {
+            val loc = locationTracker.state.value
+            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                serverClient.submitCheckin(gameId, loc.lat, loc.lng, qrPayload, bleScanner.getLocalBluetoothId())
+            }
+        }
+        return result
     }
 
     fun processHeartbeatScan(qrPayload: String): HeartbeatResult {
-        return gameEngine.processHeartbeatScan(qrPayload)
+        val result = gameEngine.processHeartbeatScan(qrPayload)
+        if (result is HeartbeatResult.Success) {
+            val loc = locationTracker.state.value
+            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
+            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                serverClient.submitHeartbeat(gameId, qrPayload, loc.lat, loc.lng)
+            }
+        }
+        return result
+    }
+
+    fun uploadPhoto(photoFile: java.io.File, caption: String?): Boolean {
+        val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return false
+        return serverClient.uploadPhoto(gameId, photoFile, caption)
     }
 
     fun setSpectatorMode() {
@@ -128,19 +187,12 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    // Debug controls
-    fun debugTriggerElimination() = gameEngine.debugTriggerElimination()
-    fun debugTriggerZoneShrink() = gameEngine.debugTriggerZoneShrink()
-    fun debugSetPlayersRemaining(count: Int) = gameEngine.debugSetPlayersRemaining(count)
-    fun debugSkipToEndgame() = gameEngine.debugSkipToEndgame()
-    fun debugScanTarget() = gameEngine.debugScanTarget()
-    fun debugVerifyCheckIn() = gameEngine.debugVerifyCheckIn(bleScanner.getLocalBluetoothId())
-    fun debugStartGame() = gameEngine.startGame()
 
     override fun onCleared() {
         super.onCleared()
         locationTracker.stopTracking()
         bleScanner.stopScanning()
+        serverClient.disconnect()
     }
 }
 

@@ -97,6 +97,9 @@ dependencies {
     // Web3j for wallet + blockchain
     implementation("org.web3j:core:4.10.3")
 
+    // OkHttp for WebSocket (also transitive via web3j, but explicit for clarity)
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+
     // Encrypted key storage
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 

@@ -102,4 +102,10 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(6);
     log.info("Migrated to v6: added bluetooth_id column to players");
   }
+
+  if (currentVersion < 8 && currentVersion > 0) {
+    db.exec(`ALTER TABLE games ADD COLUMN base_reward TEXT NOT NULL DEFAULT '0'`);
+    db.prepare("UPDATE schema_version SET version = ?").run(8);
+    log.info("Migrated to v8: added base_reward column to games");
+  }
 }

@@ -31,13 +31,6 @@ COPY --from=builder /app/abi ./abi
 # Create data directory for SQLite
 RUN mkdir -p data
 
-# Non-root user
-RUN addgroup -g 1001 -S appgroup && \
-    adduser -S appuser -u 1001 -G appgroup && \
-    chown -R appuser:appgroup /app
-
-USER appuser
-
 EXPOSE 3000
 
 CMD ["node", "dist/index.js"]
