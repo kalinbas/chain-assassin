@@ -29,28 +29,44 @@ fun KillFeedItem(
             color = TextDim
         )
         Spacer(Modifier.width(12.dp))
-        Text(
-            text = "#${event.hunterNumber}",
-            style = MaterialTheme.typography.labelMedium,
-            color = Primary,
-            fontWeight = FontWeight.Bold
-        )
-        Text(
-            text = " eliminated ",
-            style = MaterialTheme.typography.bodySmall,
-            color = TextSecondary
-        )
-        Text(
-            text = "#${event.targetNumber}",
-            style = MaterialTheme.typography.labelMedium,
-            color = Danger,
-            fontWeight = FontWeight.Bold
-        )
+        if (event.isNoCheckIn) {
+            Text(
+                text = "#${event.targetNumber}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Danger,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = " no check-in",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+        } else {
+            Text(
+                text = "#${event.hunterNumber}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Primary,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                text = " eliminated ",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextSecondary
+            )
+            Text(
+                text = "#${event.targetNumber}",
+                style = MaterialTheme.typography.labelMedium,
+                color = Danger,
+                fontWeight = FontWeight.Bold
+            )
+        }
         Spacer(Modifier.weight(1f))
-        Text(
-            text = event.zone,
-            style = MaterialTheme.typography.labelSmall,
-            color = TextDim
-        )
+        if (event.zone.isNotEmpty()) {
+            Text(
+                text = event.zone,
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDim
+            )
+        }
     }
 }

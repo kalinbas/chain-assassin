@@ -1,5 +1,7 @@
 package com.cryptohunt.app.ui.screens.lobby
 
+import android.graphics.Canvas
+import android.graphics.Paint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -14,16 +16,25 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
+import com.cryptohunt.app.util.GeoUtils
 import com.cryptohunt.app.util.QrPdfGenerator
 import kotlinx.coroutines.delay
+import org.osmdroid.config.Configuration
+import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
+import org.osmdroid.util.GeoPoint
+import org.osmdroid.util.MapTileIndex
+import org.osmdroid.views.MapView
+import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -60,17 +71,60 @@ fun RegisteredDetailScreen(
         ?: selectedGame?.startTime
         ?: 0L
 
-    // Countdown timer
+    val locationState by viewModel.locationState.collectAsState()
+
+    // Stop GPS on dispose if it was started
+    DisposableEffect(Unit) {
+        onDispose { viewModel.stopLocationTracking() }
+    }
+
+    // Countdown timer + proximity-based auto check-in
     var timeRemainingMs by remember { mutableStateOf(gameStartTime - System.currentTimeMillis()) }
+    var countdownReached by remember { mutableStateOf(false) }
+    var tooFarAway by remember { mutableStateOf(false) }
+    var gpsStarted by remember { mutableStateOf(false) }
+
+    val checkInLeadMs = config.checkInDurationMinutes * 60_000L
+
     LaunchedEffect(gameStartTime) {
         while (true) {
             timeRemainingMs = gameStartTime - System.currentTimeMillis()
+            // Start GPS when within check-in window
+            if (!gpsStarted && timeRemainingMs <= checkInLeadMs) {
+                viewModel.startLocationTracking()
+                gpsStarted = true
+            }
             if (timeRemainingMs <= 0) {
-                viewModel.beginCheckIn()
-                onCheckInStart(config.id)
+                countdownReached = true
                 break
             }
             delay(1000)
+        }
+    }
+
+    // When countdown reaches zero, check location proximity
+    LaunchedEffect(countdownReached, locationState.lat, locationState.lng) {
+        if (!countdownReached) return@LaunchedEffect
+        val meetingLat = config.meetingLat
+        val meetingLng = config.meetingLng
+        if (meetingLat == 0.0 && meetingLng == 0.0) {
+            // No meeting point configured — go straight to check-in
+            viewModel.beginCheckIn()
+            onCheckInStart(config.id)
+            return@LaunchedEffect
+        }
+        if (locationState.lat == 0.0 && locationState.lng == 0.0) {
+            // No location fix yet — wait for one
+            return@LaunchedEffect
+        }
+        val distance = GeoUtils.haversineDistance(
+            locationState.lat, locationState.lng, meetingLat, meetingLng
+        )
+        if (distance <= 500.0) {
+            viewModel.beginCheckIn()
+            onCheckInStart(config.id)
+        } else {
+            tooFarAway = true
         }
     }
 
@@ -152,6 +206,49 @@ fun RegisteredDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = TextDim
             )
+
+            // Too far away warning (shown when countdown reached but not near meeting point)
+            if (tooFarAway) {
+                Spacer(Modifier.height(16.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.15f)),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "You\u2019re too far from the meeting point",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = Danger,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Move closer to start check-in automatically, or proceed manually.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                viewModel.beginCheckIn()
+                                onCheckInStart(config.id)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Warning,
+                                contentColor = Background
+                            )
+                        ) {
+                            Text("Proceed to Check-in", fontWeight = FontWeight.Bold)
+                        }
+                    }
+                }
+            }
 
             Spacer(Modifier.height(24.dp))
 
@@ -300,6 +397,92 @@ fun RegisteredDetailScreen(
                 }
             }
 
+            // Meeting point map
+            if (config.meetingLat != 0.0 && config.meetingLng != 0.0) {
+                Spacer(Modifier.height(12.dp))
+
+                val meetingMarkerArgb = Warning.toArgb()
+
+                // Configure osmdroid
+                LaunchedEffect(Unit) {
+                    Configuration.getInstance().userAgentValue = context.packageName
+                }
+
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = CardBackground),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    AndroidView(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(180.dp)
+                            .clip(MaterialTheme.shapes.medium),
+                        factory = { ctx ->
+                            val cartoDark = object : OnlineTileSourceBase(
+                                "CartoDB_Dark", 0, 20, 256, ".png",
+                                arrayOf(
+                                    "https://a.basemaps.cartocdn.com/dark_all/",
+                                    "https://b.basemaps.cartocdn.com/dark_all/",
+                                    "https://c.basemaps.cartocdn.com/dark_all/",
+                                    "https://d.basemaps.cartocdn.com/dark_all/"
+                                )
+                            ) {
+                                override fun getTileURLString(pMapTileIndex: Long): String {
+                                    val z = MapTileIndex.getZoom(pMapTileIndex)
+                                    val x = MapTileIndex.getX(pMapTileIndex)
+                                    val y = MapTileIndex.getY(pMapTileIndex)
+                                    return baseUrl + "$z/$x/$y.png"
+                                }
+                            }
+                            MapView(ctx).apply {
+                                setTileSource(cartoDark)
+                                setMultiTouchControls(true)
+                                controller.setZoom(16.0)
+                                controller.setCenter(GeoPoint(config.meetingLat, config.meetingLng))
+                                setBuiltInZoomControls(false)
+
+                                // Meeting point marker
+                                val meetingGeo = GeoPoint(config.meetingLat, config.meetingLng)
+                                overlays.add(object : Overlay() {
+                                    override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
+                                        if (shadow) return
+                                        val projection = mapView.projection
+                                        val pt = android.graphics.Point()
+                                        projection.toPixels(meetingGeo, pt)
+                                        val px = pt.x.toFloat()
+                                        val py = pt.y.toFloat()
+
+                                        // Outer glow
+                                        canvas.drawCircle(px, py, 18f,
+                                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                                style = Paint.Style.FILL
+                                                color = meetingMarkerArgb
+                                                alpha = 50
+                                            })
+
+                                        // Inner dot
+                                        canvas.drawCircle(px, py, 10f,
+                                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                                style = Paint.Style.FILL
+                                                color = meetingMarkerArgb
+                                            })
+
+                                        // Border
+                                        canvas.drawCircle(px, py, 10f,
+                                            Paint(Paint.ANTI_ALIAS_FLAG).apply {
+                                                style = Paint.Style.STROKE
+                                                color = meetingMarkerArgb
+                                                strokeWidth = 2f
+                                            })
+                                    }
+                                })
+                            }
+                        }
+                    )
+                }
+            }
+
             Spacer(Modifier.height(16.dp))
 
             // Game Rules
@@ -384,6 +567,23 @@ fun RegisteredDetailScreen(
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
             ) {
                 Text("Debug: Skip to Check-in", style = MaterialTheme.typography.bodySmall)
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            // Debug: simulate countdown reached (tests proximity check)
+            OutlinedButton(
+                onClick = {
+                    if (!gpsStarted) {
+                        viewModel.startLocationTracking()
+                        gpsStarted = true
+                    }
+                    countdownReached = true
+                },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
+            ) {
+                Text("Debug: Test Proximity Check", style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(32.dp))

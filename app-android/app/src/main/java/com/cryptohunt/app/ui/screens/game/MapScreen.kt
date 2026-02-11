@@ -1,6 +1,7 @@
 package com.cryptohunt.app.ui.screens.game
 
 import android.graphics.Canvas
+import android.graphics.DashPathEffect
 import android.graphics.Paint
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
@@ -47,15 +48,15 @@ fun MapScreen(
     val zoneCenterLat = config?.zoneCenterLat ?: 0.0
     val zoneCenterLng = config?.zoneCenterLng ?: 0.0
 
-    val heatmapBlobs = remember { viewModel.generateHeatmapBlobs() }
-    var blobsState by remember { mutableStateOf(heatmapBlobs) }
-
-    // Refresh heatmap periodically
-    LaunchedEffect(Unit) {
-        while (true) {
-            kotlinx.coroutines.delay(30_000)
-            blobsState = viewModel.generateHeatmapBlobs()
-        }
+    // Compute next shrink radius from schedule
+    val nextShrinkRadius = remember(gameState?.gameTimeElapsedSeconds, gameState?.currentZoneRadius) {
+        val state = gameState ?: return@remember null
+        val elapsedMinutes = (state.gameTimeElapsedSeconds / 60).toInt()
+        val schedule = state.config.shrinkSchedule
+        val nextShrink = schedule.firstOrNull { it.atMinute > elapsedMinutes }
+        if (nextShrink != null && nextShrink.newRadiusMeters < state.currentZoneRadius) {
+            nextShrink.newRadiusMeters
+        } else null
     }
 
     // Configure osmdroid
@@ -63,13 +64,12 @@ fun MapScreen(
         Configuration.getInstance().userAgentValue = context.packageName
     }
 
-    // Hold a reference to the MapView so the FAB can access it
     val mapViewRef = remember { mutableStateOf<MapView?>(null) }
 
     // Auto-center on ping when map opens with active ping
     LaunchedEffect(activePing) {
         if (activePing != null && System.currentTimeMillis() < activePing.expiresAt) {
-            kotlinx.coroutines.delay(500) // wait for map to render
+            kotlinx.coroutines.delay(500)
             mapViewRef.value?.controller?.animateTo(
                 GeoPoint(activePing.lat, activePing.lng), 17.0, 1000L
             )
@@ -87,27 +87,20 @@ fun MapScreen(
         }
     }
 
-    val meetingLat = config?.meetingLat ?: 0.0
-    val meetingLng = config?.meetingLng ?: 0.0
+    // Colors
+    val primaryFillArgb = Primary.copy(alpha = 0.08f).toArgb()
+    val primaryStrokeArgb = Primary.copy(alpha = 0.8f).toArgb()
+    val nextZoneStrokeArgb = Warning.copy(alpha = 0.6f).toArgb()
 
-    // Colors matching the website's green scheme
-    val primaryArgb = Primary.toArgb()                           // #00FF88 — heatmap
-    val primaryFillArgb = Primary.copy(alpha = 0.08f).toArgb()   // zone fill
-    val primaryStrokeArgb = Primary.copy(alpha = 0.8f).toArgb()  // zone stroke
-    val meetingArgb = Warning.toArgb()                            // #FFBB00 — meeting point
-    val meetingFillArgb = Warning.copy(alpha = 0.9f).toArgb()
-
-    // Player marker colors (cyan = Shield)
     val shieldArgb = Shield.toArgb()
     val whiteArgb = Color.White.toArgb()
 
-    // Ping overlay colors
-    val pingTargetArgb = Primary.toArgb()      // green for target ping
-    val pingHunterArgb = Danger.toArgb()        // red for hunter ping
+    val pingTargetArgb = Primary.toArgb()
+    val pingHunterArgb = Danger.toArgb()
     val pingTargetFillArgb = Primary.copy(alpha = 0.15f).toArgb()
     val pingHunterFillArgb = Danger.copy(alpha = 0.15f).toArgb()
 
-    // Pulse animation for player marker outer ring
+    // Pulse animation for player marker
     val infiniteTransition = rememberInfiniteTransition(label = "playerPulse")
     val pulseAlpha by infiniteTransition.animateFloat(
         initialValue = 0.15f,
@@ -182,7 +175,7 @@ fun MapScreen(
 
                     val center = GeoPoint(zoneCenterLat, zoneCenterLng)
 
-                    // Current zone circle — green stroke + fill (matches website initial zone)
+                    // Current zone circle — green stroke + fill
                     mapView.overlays.add(object : Overlay() {
                         override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
                             if (shadow) return
@@ -212,57 +205,32 @@ fun MapScreen(
                         }
                     })
 
-                    // Heatmap blobs — green glow
-                    blobsState.forEach { blob ->
+                    // Next shrink zone — dashed yellow/warning circle
+                    if (nextShrinkRadius != null) {
                         mapView.overlays.add(object : Overlay() {
                             override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
                                 if (shadow) return
                                 val projection = mapView.projection
-                                val blobGeo = GeoPoint(blob.lat, blob.lng)
-                                val blobPoint = android.graphics.Point()
-                                projection.toPixels(blobGeo, blobPoint)
+                                val centerPoint = android.graphics.Point()
+                                projection.toPixels(center, centerPoint)
 
-                                val blobRadius = 50.0 + (blob.intensity * 100).toDouble()
-                                val edgePoint = blobGeo.destinationPoint(blobRadius, 90.0)
+                                val edgePoint = center.destinationPoint(nextShrinkRadius, 90.0)
                                 val edgePixel = android.graphics.Point()
                                 projection.toPixels(GeoPoint(edgePoint.latitude, edgePoint.longitude), edgePixel)
-                                val pixelRadius = Math.abs(edgePixel.x - blobPoint.x).toFloat().coerceAtLeast(4f)
+                                val pixelRadius = Math.abs(edgePixel.x - centerPoint.x).toFloat()
 
-                                val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                    style = Paint.Style.FILL
-                                    color = primaryArgb
-                                    alpha = (blob.intensity * 0.3f * 255).toInt()
-                                }
-                                canvas.drawCircle(blobPoint.x.toFloat(), blobPoint.y.toFloat(), pixelRadius, paint)
-                            }
-                        })
-                    }
-
-                    // Meeting point marker — yellow circle (matches website)
-                    if (meetingLat != 0.0 && meetingLng != 0.0) {
-                        val meetingPoint = GeoPoint(meetingLat, meetingLng)
-                        mapView.overlays.add(object : Overlay() {
-                            override fun draw(canvas: Canvas, mapView: MapView, shadow: Boolean) {
-                                if (shadow) return
-                                val projection = mapView.projection
-                                val pt = android.graphics.Point()
-                                projection.toPixels(meetingPoint, pt)
-                                canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
-                                    Paint(Paint.ANTI_ALIAS_FLAG).apply {
-                                        style = Paint.Style.FILL
-                                        color = meetingFillArgb
-                                    })
-                                canvas.drawCircle(pt.x.toFloat(), pt.y.toFloat(), 10f,
+                                canvas.drawCircle(centerPoint.x.toFloat(), centerPoint.y.toFloat(), pixelRadius,
                                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                         style = Paint.Style.STROKE
-                                        color = meetingArgb
+                                        color = nextZoneStrokeArgb
                                         strokeWidth = 2f
+                                        pathEffect = DashPathEffect(floatArrayOf(12f, 8f), 0f)
                                     })
                             }
                         })
                     }
 
-                    // Active player marker — cyan pulsing "radar blip" with white center
+                    // Own position — cyan pulsing marker with white center
                     if (locationState.isTracking) {
                         val playerGeo = GeoPoint(locationState.lat, locationState.lng)
                         mapView.overlays.add(object : Overlay() {
@@ -274,7 +242,7 @@ fun MapScreen(
                                 val px = pt.x.toFloat()
                                 val py = pt.y.toFloat()
 
-                                // Outer pulse ring (cyan, animated alpha)
+                                // Outer pulse ring
                                 canvas.drawCircle(px, py, 22f,
                                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                         style = Paint.Style.FILL
@@ -282,7 +250,7 @@ fun MapScreen(
                                         alpha = pulseAlphaInt
                                     })
 
-                                // Middle glow (cyan, 35% opacity)
+                                // Middle glow
                                 canvas.drawCircle(px, py, 14f,
                                     Paint(Paint.ANTI_ALIAS_FLAG).apply {
                                         style = Paint.Style.FILL
@@ -308,7 +276,7 @@ fun MapScreen(
                         })
                     }
 
-                    // Ping circle overlay (50m radius, pulsing)
+                    // Ping circle overlay from items (50m radius, pulsing)
                     if (activePing != null && System.currentTimeMillis() < activePing.expiresAt) {
                         val pingGeo = GeoPoint(activePing.lat, activePing.lng)
                         val isTarget = activePing.type == "ping_target"
@@ -356,7 +324,7 @@ fun MapScreen(
                 }
             )
 
-            // Center-on-me button (bottom-right corner)
+            // Center-on-me button
             if (locationState.isTracking) {
                 SmallFloatingActionButton(
                     onClick = {

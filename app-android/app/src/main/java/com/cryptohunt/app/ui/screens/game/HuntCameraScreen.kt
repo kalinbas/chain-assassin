@@ -40,6 +40,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.game.KillResult
+import com.cryptohunt.app.domain.model.HeartbeatResult
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.util.QrGenerator
@@ -59,11 +60,17 @@ fun HuntCameraScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
 
+    // Kill scan state
     var scannedTarget by remember { mutableStateOf(false) }
     var wrongTarget by remember { mutableStateOf(false) }
     var holdProgress by remember { mutableStateOf(0f) }
     var killConfirmed by remember { mutableStateOf(false) }
     var lastScannedPayload by remember { mutableStateOf("") }
+
+    // Heartbeat scan state
+    var heartbeatSuccess by remember { mutableStateOf(false) }
+    var heartbeatPlayerNumber by remember { mutableIntStateOf(0) }
+    var heartbeatError by remember { mutableStateOf<String?>(null) }
 
     // Hold timer for kill confirmation
     LaunchedEffect(scannedTarget) {
@@ -90,6 +97,22 @@ fun HuntCameraScreen(
         if (wrongTarget) {
             delay(1500)
             wrongTarget = false
+        }
+    }
+
+    // Auto-navigate back after heartbeat success
+    LaunchedEffect(heartbeatSuccess) {
+        if (heartbeatSuccess) {
+            delay(1500)
+            onKillConfirmed() // reuse same callback to pop back
+        }
+    }
+
+    // Reset heartbeat error
+    LaunchedEffect(heartbeatError) {
+        if (heartbeatError != null) {
+            delay(2000)
+            heartbeatError = null
         }
     }
 
@@ -126,16 +149,55 @@ fun HuntCameraScreen(
                                     for (barcode in barcodes) {
                                         if (barcode.format == Barcode.FORMAT_QR_CODE) {
                                             val raw = barcode.rawValue ?: continue
-                                            if (!scannedTarget && !killConfirmed) {
+                                            if (!scannedTarget && !killConfirmed && !heartbeatSuccess) {
                                                 val parsed = QrGenerator.parsePayload(raw)
                                                 if (parsed != null) {
                                                     val targetId = gameState?.currentTarget?.player?.id ?: ""
                                                     if (parsed.second == targetId) {
+                                                        // It's the target → kill flow
                                                         lastScannedPayload = raw
                                                         scannedTarget = true
                                                     } else {
-                                                        wrongTarget = true
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        // Not the target → try heartbeat
+                                                        val hbResult = viewModel.processHeartbeatScan(raw)
+                                                        when (hbResult) {
+                                                            is HeartbeatResult.Success -> {
+                                                                heartbeatSuccess = true
+                                                                heartbeatPlayerNumber = hbResult.scannedPlayerNumber
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.ScanYourself -> {
+                                                                heartbeatError = "You can\u2019t scan yourself!"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.ScanTarget -> {
+                                                                // Shouldn't reach here since we check target above,
+                                                                // but handle gracefully
+                                                                wrongTarget = true
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.ScanHunter -> {
+                                                                heartbeatError = "That\u2019s your hunter!"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.PlayerNotAlive -> {
+                                                                heartbeatError = "This player is eliminated"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.UnknownPlayer -> {
+                                                                heartbeatError = "Unknown player"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is HeartbeatResult.HeartbeatDisabled -> {
+                                                                // Heartbeat disabled (endgame) — just show wrong target
+                                                                wrongTarget = true
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            else -> {
+                                                                wrongTarget = true
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                        }
                                                     }
                                                 }
                                             }
@@ -194,8 +256,10 @@ fun HuntCameraScreen(
 
             val reticleColor = when {
                 killConfirmed -> Primary
+                heartbeatSuccess -> Primary
                 scannedTarget -> Primary
                 wrongTarget -> Danger
+                heartbeatError != null -> Danger
                 else -> Color.White
             }
 
@@ -272,6 +336,19 @@ fun HuntCameraScreen(
                         fontWeight = FontWeight.Black
                     )
                 }
+                heartbeatSuccess -> {
+                    Text(
+                        "\u2764\ufe0f HEARTBEAT OK",
+                        style = MaterialTheme.typography.headlineLarge,
+                        color = Primary,
+                        fontWeight = FontWeight.Black
+                    )
+                    Text(
+                        "Player #$heartbeatPlayerNumber scanned",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.7f)
+                    )
+                }
                 scannedTarget -> {
                     Text(
                         "TARGET LOCKED \u2014 HOLD",
@@ -288,9 +365,17 @@ fun HuntCameraScreen(
                         fontWeight = FontWeight.Bold
                     )
                 }
+                heartbeatError != null -> {
+                    Text(
+                        heartbeatError!!,
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Danger,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
                 else -> {
                     Text(
-                        "Scan target's QR code",
+                        "Scan any player\u2019s QR code",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.7f)
                     )
