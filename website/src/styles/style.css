@@ -1673,6 +1673,13 @@ ul { list-style: none; }
         display: flex;
     }
 
+    /* Make navbar solid when mobile menu is open */
+    .nav:has(.nav__links.open) {
+        background: var(--bg);
+        backdrop-filter: none;
+        -webkit-backdrop-filter: none;
+    }
+
     /* Mobile menu */
     .nav__links.open {
         display: flex;
