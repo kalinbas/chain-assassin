@@ -116,7 +116,7 @@ class GameEngine @Inject constructor() {
         startCheckInTimer()
     }
 
-    fun processCheckInScan(scannedPayload: String): CheckInResult {
+    fun processCheckInScan(scannedPayload: String, bluetoothId: String? = null): CheckInResult {
         val current = _state.value ?: return CheckInResult.NoGame
         if (current.phase != GamePhase.CHECK_IN) return CheckInResult.WrongPhase
         if (current.checkInVerified) return CheckInResult.AlreadyVerified
@@ -149,7 +149,8 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(
             checkInVerified = true,
             checkedInCount = checkedInPlayerIds.size,
-            checkedInPlayerNumbers = checkedInNumbers
+            checkedInPlayerNumbers = checkedInNumbers,
+            bluetoothId = bluetoothId
         )
         _events.tryEmit(GameEvent.CheckInVerified)
         return CheckInResult.Verified
@@ -314,10 +315,10 @@ class GameEngine @Inject constructor() {
         return HeartbeatResult.Success(scannedPlayer.number)
     }
 
-    fun debugVerifyCheckIn(): CheckInResult {
+    fun debugVerifyCheckIn(bluetoothId: String? = null): CheckInResult {
         val current = _state.value ?: return CheckInResult.NoGame
         val checkedInPlayer = checkedInPlayerIds.firstOrNull() ?: return CheckInResult.NoGame
-        return processCheckInScan(checkedInPlayer)
+        return processCheckInScan(checkedInPlayer, bluetoothId)
     }
 
     fun debugScanTarget(): KillResult {

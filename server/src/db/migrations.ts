@@ -96,4 +96,10 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(5);
     log.info("Migrated to v5: added sub_phase column to games");
   }
+
+  if (currentVersion < 6 && currentVersion > 0) {
+    db.exec(`ALTER TABLE players ADD COLUMN bluetooth_id TEXT`);
+    db.prepare("UPDATE schema_version SET version = ?").run(6);
+    log.info("Migrated to v6: added bluetooth_id column to players");
+  }
 }

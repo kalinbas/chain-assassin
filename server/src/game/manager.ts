@@ -440,7 +440,8 @@ export function handleCheckin(
   address: string,
   lat: number,
   lng: number,
-  qrPayload?: string
+  qrPayload?: string,
+  bluetoothId?: string
 ): { success: boolean; error?: string } {
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
@@ -497,7 +498,7 @@ export function handleCheckin(
     }
   }
 
-  setPlayerCheckedIn(gameId, address);
+  setPlayerCheckedIn(gameId, address, bluetoothId);
   const checkedIn = getCheckedInCount(gameId);
   const total = getPlayerCount(gameId);
 
@@ -506,6 +507,7 @@ export function handleCheckin(
     checkedInCount: checkedIn,
     totalPlayers: total,
     player: address,
+    bluetoothId: bluetoothId ?? null,
   });
 
   return { success: true };

@@ -2,6 +2,8 @@ package com.cryptohunt.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cryptohunt.app.domain.ble.BleScanner
+import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.game.GameEvent
 import com.cryptohunt.app.domain.game.KillResult
@@ -21,11 +23,13 @@ import javax.inject.Inject
 class GameViewModel @Inject constructor(
     private val gameEngine: GameEngine,
     private val locationTracker: LocationTracker,
-    private val walletManager: WalletManager
+    private val walletManager: WalletManager,
+    private val bleScanner: BleScanner
 ) : ViewModel() {
 
     val gameState: StateFlow<GameState?> = gameEngine.state
     val locationState: StateFlow<LocationState> = locationTracker.state
+    val bleScanState: StateFlow<BleScanState> = bleScanner.state
     val events: SharedFlow<GameEvent> = gameEngine.events
 
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 20)
@@ -77,12 +81,20 @@ class GameViewModel @Inject constructor(
         locationTracker.stopTracking()
     }
 
+    fun startBleScanning() {
+        bleScanner.startScanning()
+    }
+
+    fun stopBleScanning() {
+        bleScanner.stopScanning()
+    }
+
     fun processKill(qrPayload: String): KillResult {
         return gameEngine.processKill(qrPayload)
     }
 
     fun processCheckInScan(qrPayload: String): CheckInResult {
-        return gameEngine.processCheckInScan(qrPayload)
+        return gameEngine.processCheckInScan(qrPayload, bleScanner.getLocalBluetoothId())
     }
 
     fun processHeartbeatScan(qrPayload: String): HeartbeatResult {
@@ -122,12 +134,13 @@ class GameViewModel @Inject constructor(
     fun debugSetPlayersRemaining(count: Int) = gameEngine.debugSetPlayersRemaining(count)
     fun debugSkipToEndgame() = gameEngine.debugSkipToEndgame()
     fun debugScanTarget() = gameEngine.debugScanTarget()
-    fun debugVerifyCheckIn() = gameEngine.debugVerifyCheckIn()
+    fun debugVerifyCheckIn() = gameEngine.debugVerifyCheckIn(bleScanner.getLocalBluetoothId())
     fun debugStartGame() = gameEngine.startGame()
 
     override fun onCleared() {
         super.onCleared()
         locationTracker.stopTracking()
+        bleScanner.stopScanning()
     }
 }
 

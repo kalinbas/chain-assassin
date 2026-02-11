@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 5;
+export const SCHEMA_VERSION = 6;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -53,6 +53,7 @@ CREATE TABLE IF NOT EXISTS players (
   is_alive      INTEGER NOT NULL DEFAULT 1,
   kills         INTEGER NOT NULL DEFAULT 0,
   checked_in    INTEGER NOT NULL DEFAULT 0,
+  bluetooth_id  TEXT,
   eliminated_at INTEGER,
   eliminated_by TEXT,
   last_heartbeat_at INTEGER,

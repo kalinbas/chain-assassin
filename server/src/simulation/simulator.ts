@@ -162,17 +162,24 @@ export class GameSimulator {
     // Scatter players near the meeting point
     scatterPlayers(this.players, cfg.centerLat, cfg.centerLng, cfg.initialRadiusMeters);
 
+    // Generate fake bluetooth IDs for simulated players
+    const simBluetoothIds = this.players.map((_, i) => {
+      const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
+      return `SIM:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
+    });
+
     const gpsOnlySlots = Math.max(1, Math.ceil(cfg.playerCount * 0.05));
     for (let i = 0; i < this.players.length; i++) {
       const p = this.players[i];
+      const bleId = simBluetoothIds[i];
       if (i < gpsOnlySlots) {
         // GPS-only check-in
-        handleCheckin(this.gameId, p.address, p.lat, p.lng);
+        handleCheckin(this.gameId, p.address, p.lat, p.lng, undefined, bleId);
       } else {
         // Need QR from a checked-in player
         const checkedInPlayer = this.players[Math.floor(Math.random() * gpsOnlySlots)];
         const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
-        handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload);
+        handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId);
       }
     }
 

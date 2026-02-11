@@ -83,6 +83,7 @@ data class GameState(
     val checkInTimeRemainingSeconds: Int = 0,
     val checkedInCount: Int = 0,
     val checkedInPlayerNumbers: Set<Int> = emptySet(),
+    val bluetoothId: String? = null,
     // Pregame countdown
     val pregameTimeRemainingSeconds: Int = 0,
     // Heartbeat (anti-QR-hiding fairplay)

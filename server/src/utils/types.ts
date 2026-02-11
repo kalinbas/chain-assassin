@@ -64,6 +64,7 @@ export interface Player {
   isAlive: boolean;
   kills: number;
   checkedIn: boolean;
+  bluetoothId: string | null;
   eliminatedAt: number | null;
   eliminatedBy: string | null;
   lastHeartbeatAt: number | null;

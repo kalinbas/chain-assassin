@@ -12,6 +12,7 @@ export function Footer() {
         <div className="footer__links">
           <a href="https://x.com/assassin_chain" target="_blank" rel="noopener">Twitter / X</a>
           <a href="https://discord.gg/SayMP2cJsp" target="_blank" rel="noopener">Discord</a>
+          <a href="https://t.me/chainassassin" target="_blank" rel="noopener">Telegram</a>
           <a href="https://github.com/kalinbas/chain-assassin" target="_blank" rel="noopener">GitHub</a>
         </div>
         <div className="footer__base">

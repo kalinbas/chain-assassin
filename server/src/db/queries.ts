@@ -298,12 +298,12 @@ export function incrementPlayerKills(gameId: number, address: string): void {
     .run(gameId, address.toLowerCase());
 }
 
-export function setPlayerCheckedIn(gameId: number, address: string): void {
+export function setPlayerCheckedIn(gameId: number, address: string, bluetoothId?: string): void {
   getDb()
     .prepare(
-      "UPDATE players SET checked_in = 1 WHERE game_id = ? AND address = ?"
+      "UPDATE players SET checked_in = 1, bluetooth_id = ? WHERE game_id = ? AND address = ?"
     )
-    .run(gameId, address.toLowerCase());
+    .run(bluetoothId ?? null, gameId, address.toLowerCase());
 }
 
 export function getCheckedInCount(gameId: number): number {
@@ -323,6 +323,7 @@ function mapPlayer(row: Record<string, unknown>): Player {
     isAlive: (row.is_alive as number) === 1,
     kills: row.kills as number,
     checkedIn: (row.checked_in as number) === 1,
+    bluetoothId: (row.bluetooth_id as string | null) ?? null,
     eliminatedAt: row.eliminated_at as number | null,
     eliminatedBy: row.eliminated_by as string | null,
     lastHeartbeatAt: row.last_heartbeat_at as number | null,

@@ -4,7 +4,6 @@ import { BackIcon } from '../icons/Icons';
 import { GameStatsGrid } from './GameStatsGrid';
 import { GameMap } from './GameMap';
 import { PrizeBreakdown } from './PrizeBreakdown';
-import { ActivityFeed } from './ActivityFeed';
 import { ShareButton } from './ShareButton';
 import { Leaderboard } from './Leaderboard';
 import { PhotoGallery } from './PhotoGallery';
@@ -70,10 +69,7 @@ export function GameDetailPage({ game }: { game: Game }) {
             {game.zoneShrinks.length > 0 && <GameMap game={game} />}
 
             {game.phase !== 'ended' && game.phase !== 'cancelled' && (
-              <>
-                <PrizeBreakdown game={game} />
-                <ActivityFeed events={game.activity} />
-              </>
+              <PrizeBreakdown game={game} />
             )}
           </>
         )}

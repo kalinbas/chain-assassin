@@ -115,13 +115,13 @@ export function submitCheckin(req: Request, res: Response): void {
     return;
   }
 
-  const { lat, lng, qrPayload } = req.body;
+  const { lat, lng, qrPayload, bluetoothId } = req.body;
   if (lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: lat, lng" });
     return;
   }
 
-  const result = handleCheckin(gameId, authReq.playerAddress, lat, lng, qrPayload);
+  const result = handleCheckin(gameId, authReq.playerAddress, lat, lng, qrPayload, bluetoothId);
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;

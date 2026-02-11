@@ -1180,57 +1180,175 @@ ul { list-style: none; }
     margin-bottom: 40px;
 }
 
-/* Prize breakdown bars (compact) */
-.game-detail__prize-row {
+/* Prize breakdown — pedestal design */
+.prize-breakdown {
+    margin-bottom: 8px;
+}
+
+.prize-pool {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--surface-alt);
+    border-radius: 8px;
+    margin-bottom: 20px;
+}
+
+.prize-pool__label {
+    font-family: var(--font-mono);
+    font-size: 0.75rem;
+    color: var(--text-sec);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.prize-pool__amount {
+    font-family: var(--font-mono);
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--primary);
+}
+
+/* Pedestal — 3 columns: 2nd | 1st | 3rd */
+.prize-pedestal {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 8px;
+    align-items: end;
+    margin-bottom: 16px;
+}
+
+.prize-pedestal__place {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.prize-pedestal__icon {
+    margin-bottom: 6px;
+    line-height: 0;
+}
+
+.prize-pedestal__label {
+    font-family: var(--font-mono);
+    font-size: 0.65rem;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 2px;
+}
+
+.prize-pedestal__pct {
+    font-family: var(--font-mono);
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 2px;
+}
+
+.prize-pedestal__place--1st .prize-pedestal__pct { color: #FFD700; }
+.prize-pedestal__place--2nd .prize-pedestal__pct { color: #C0C0C0; }
+.prize-pedestal__place--3rd .prize-pedestal__pct { color: #CD7F32; }
+
+.prize-pedestal__amount {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    color: var(--text-sec);
+    margin-bottom: 8px;
+}
+
+/* Pedestal bars — different heights to form the podium */
+.prize-pedestal__bar {
+    width: 100%;
+    border-radius: 4px 4px 0 0;
+}
+
+.prize-pedestal__bar--1st {
+    background: linear-gradient(180deg, #FFD700 0%, rgba(255, 215, 0, 0.25) 100%);
+    border: 1px solid rgba(255, 215, 0, 0.4);
+    border-bottom: none;
+}
+
+.prize-pedestal__bar--2nd {
+    background: linear-gradient(180deg, #C0C0C0 0%, rgba(192, 192, 192, 0.2) 100%);
+    border: 1px solid rgba(192, 192, 192, 0.35);
+    border-bottom: none;
+}
+
+.prize-pedestal__bar--3rd {
+    background: linear-gradient(180deg, #CD7F32 0%, rgba(205, 127, 50, 0.2) 100%);
+    border: 1px solid rgba(205, 127, 50, 0.35);
+    border-bottom: none;
+}
+
+/* Bottom extras row: kills, creator, platform (columns set inline) */
+.prize-extras {
+    display: grid;
+    gap: 8px;
+}
+
+.prize-extras__item {
     display: flex;
     align-items: center;
     gap: 8px;
-    margin-bottom: 6px;
-}
-
-.game-detail__prize-label {
-    font-family: var(--font-mono);
-    font-size: 0.75rem;
-    color: var(--text-sec);
-    width: 70px;
-    flex-shrink: 0;
-}
-
-.game-detail__prize-bar {
-    flex: 1;
-    height: 18px;
+    padding: 8px 12px;
     background: var(--surface-alt);
-    border-radius: 3px;
-    overflow: hidden;
-    position: relative;
+    border-radius: 6px;
+    border: 1px solid transparent;
 }
 
-.game-detail__prize-fill {
-    height: 100%;
-    border-radius: 3px;
+.prize-extras__item--kills {
+    border-color: rgba(255, 59, 59, 0.2);
+}
+
+.prize-extras__item--creator {
+    border-color: rgba(0, 255, 136, 0.2);
+}
+
+.prize-extras__item--platform {
+    border-color: rgba(85, 85, 119, 0.3);
+}
+
+.prize-extras__icon {
+    flex-shrink: 0;
+    line-height: 0;
+}
+
+.prize-extras__info {
     display: flex;
-    align-items: center;
-    padding-left: 6px;
+    flex-direction: column;
+    flex: 1;
+    min-width: 0;
+}
+
+.prize-extras__label {
     font-family: var(--font-mono);
     font-size: 0.65rem;
-    font-weight: 600;
-    color: var(--bg);
-    white-space: nowrap;
+    color: var(--text-dim);
+    text-transform: uppercase;
 }
 
-.game-detail__prize-fill--1st { background: #FFD700; }
-.game-detail__prize-fill--2nd { background: #C0C0C0; }
-.game-detail__prize-fill--3rd { background: #CD7F32; }
-.game-detail__prize-fill--kills { background: var(--danger); color: var(--text); }
-.game-detail__prize-fill--platform { background: var(--text-dim); color: var(--text-sec); }
-
-.game-detail__prize-amount {
+.prize-extras__amount {
     font-family: var(--font-mono);
-    font-size: 0.75rem;
+    font-size: 0.65rem;
     color: var(--text-sec);
-    width: 70px;
-    text-align: right;
+}
+
+.prize-extras__pct {
+    font-family: var(--font-mono);
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: var(--text-sec);
     flex-shrink: 0;
+}
+
+.prize-extras__item--kills .prize-extras__pct {
+    color: var(--danger);
+}
+
+.prize-extras__item--creator .prize-extras__pct {
+    color: var(--primary-dim);
 }
 
 /* Zone schedule table (compact) */
@@ -1421,10 +1539,6 @@ ul { list-style: none; }
 
     .game-detail__two-col {
         grid-template-columns: 1fr;
-    }
-
-    .game-detail__prize-row {
-        flex-wrap: wrap;
     }
 
     .game-detail__activity-item {
