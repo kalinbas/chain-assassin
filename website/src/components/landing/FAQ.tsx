@@ -1,7 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Section } from '../layout/Section';
+import { EXPLORER_URL } from '../../config/constants';
 
-const FAQ_ITEMS = [
+const CONTRACT_ADDRESS = '0x0ABfD376Bd339A6dcd885F37aB0A9cE761c2F99e';
+
+const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   {
     q: 'What is Chain-Assassin?',
     a: 'Chain-Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees are paid in ETH on Base blockchain, and the prize pool is split among the top players.',
@@ -16,11 +19,15 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How are prizes distributed?',
-    a: '90% of all entry fees go to the prize pool. 1st place wins 40%, 2nd place wins 15%, and 3rd place wins 10%. The remaining 10% is the platform fee. Use the prize calculator above to see exact payouts for different game configurations.',
+    a: 'Each game has its own prize split configured by the host. The entry fees are divided between 1st, 2nd, and 3rd place, a kill bonus pool, a creator fee, and a platform fee — all defined as basis points (bps) that must total 100%. This means every game can have a unique payout structure. Check the game detail page to see the exact split before joining.',
   },
   {
     q: 'What blockchain does it use?',
     a: 'Chain-Assassin runs on Base, an Ethereum Layer 2 blockchain. Base offers low transaction fees, fast confirmations, and the full security of Ethereum. All entry fees, prize distributions, and game records are on-chain.',
+  },
+  {
+    q: 'Where is the smart contract?',
+    a: (<>The Chain-Assassin smart contract is deployed on Base Sepolia (testnet) at address <a href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="faq-contract-link"><code>{CONTRACT_ADDRESS}</code></a>. The contract handles game creation, player registration, entry fee escrow, kill verification, prize distribution, and refunds for cancelled games — all fully on-chain and verifiable.</>),
   },
   {
     q: 'What if a game is cancelled?',
@@ -40,7 +47,7 @@ const FAQ_ITEMS = [
   },
   {
     q: 'How do I host a game?',
-    a: 'Game hosting is coming soon. Hosts will be able to create games with custom locations, zone sizes, entry fees, player caps, durations, and zone shrink schedules. Follow our social channels for updates.',
+    a: 'Game creation is fully permissionless. Anyone can create a game by calling the createGame function on the smart contract. You set the location, zone size, entry fee, player limits, duration, zone shrink schedule, and prize split — all on-chain. No approval needed. Once created, the game appears on the website and players can register.',
   },
 ];
 

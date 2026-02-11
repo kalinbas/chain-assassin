@@ -1,4 +1,3 @@
-import { truncAddr } from '../../lib/contract';
 import { CrosshairIcon } from '../icons/Icons';
 import type { SpectatorState } from '../../hooks/useSpectatorSocket';
 
@@ -22,8 +21,7 @@ export function SpectatorLeaderboard({ state }: { state: SpectatorState }) {
             className={`spectator__lb-row ${!entry.isAlive ? 'spectator__lb-row--dead' : ''}`}
           >
             <span className={`spectator__lb-rank ${rankClass(i + 1)}`}>{i + 1}</span>
-            <span className="spectator__lb-player">#{entry.playerNumber}</span>
-            <span className="spectator__lb-addr">{truncAddr(entry.address)}</span>
+            <span className="spectator__lb-player">Player #{entry.playerNumber}</span>
             <span className="spectator__lb-kills">
               <CrosshairIcon width={12} height={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />
               {entry.kills}

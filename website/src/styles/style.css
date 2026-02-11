@@ -1473,7 +1473,7 @@ ul { list-style: none; }
 }
 
 .faq-item.active .faq-item__a {
-    max-height: 300px;
+    max-height: 400px;
 }
 
 .faq-item__a p {
@@ -1481,6 +1481,24 @@ ul { list-style: none; }
     font-size: 0.92rem;
     color: var(--text-sec);
     line-height: 1.7;
+}
+
+.faq-contract-link {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 0.2s;
+}
+.faq-contract-link:hover {
+    color: var(--accent-hover);
+    text-decoration: underline;
+}
+.faq-contract-link code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82em;
+    background: rgba(0, 255, 136, 0.08);
+    padding: 2px 6px;
+    border-radius: 4px;
+    word-break: break-all;
 }
 
 /* ========== FOOTER ========== */
@@ -2023,6 +2041,11 @@ ul { list-style: none; }
     gap: 4px;
     max-height: 400px;
     overflow-y: auto;
+    scrollbar-width: none;            /* Firefox */
+    -ms-overflow-style: none;         /* IE/Edge */
+}
+.spectator__feed-list::-webkit-scrollbar {
+    display: none;                    /* Chrome/Safari */
 }
 
 .spectator__feed-item {

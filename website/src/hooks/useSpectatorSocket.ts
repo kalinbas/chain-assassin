@@ -1,6 +1,5 @@
 import { useEffect, useReducer, useRef, useCallback } from 'react';
 import { SERVER_WS_URL } from '../config/server';
-import { truncAddr } from '../lib/contract';
 
 export interface SpectatorPlayer {
   address: string;
@@ -44,6 +43,7 @@ export interface SpectatorState {
   trails: Record<string, { lat: number; lng: number; timestamp: number }[]>;
   huntLinks: { hunter: string; target: string }[];
   ghostedPlayers: Record<string, number>; // address → expiresAt timestamp
+  playerMap: Record<string, number>; // lowercase address → playerNumber
   totalKills: number;
   gameStartedAt: number | null;
 }
@@ -62,6 +62,7 @@ const initialState: SpectatorState = {
   trails: {},
   huntLinks: [],
   ghostedPlayers: {},
+  playerMap: {},
   totalKills: 0,
   gameStartedAt: null,
 };
@@ -84,6 +85,12 @@ function addEvent(events: SpectatorEvent[], text: string, type: string, meta?: S
   return updated.slice(0, 50);
 }
 
+/** Resolve address → "Player #N" using the player list, with truncated address fallback */
+function playerLabel(address: string, playerMap: Record<string, number>): string {
+  const num = playerMap[address.toLowerCase()];
+  return num != null ? `Player #${num}` : address.slice(0, 6) + '…' + address.slice(-4);
+}
+
 function reducer(state: SpectatorState, action: Action): SpectatorState {
   switch (action.type) {
     case 'connected':
@@ -94,6 +101,11 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'init': {
       const p = action.payload;
+      const players = p.players as SpectatorPlayer[];
+      const pMap: Record<string, number> = { ...state.playerMap };
+      for (const pl of players) {
+        pMap[pl.address.toLowerCase()] = pl.playerNumber;
+      }
       return {
         ...state,
         connected: true,
@@ -102,7 +114,8 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         aliveCount: p.aliveCount as number,
         leaderboard: p.leaderboard as SpectatorState['leaderboard'],
         zone: p.zone as SpectatorState['zone'],
-        players: p.players as SpectatorPlayer[],
+        players,
+        playerMap: pMap,
         winners: (p.winner1 && p.winner1 !== '0x0000000000000000000000000000000000000000')
           ? { winner1: p.winner1 as string, winner2: p.winner2 as string, winner3: p.winner3 as string, topKiller: p.topKiller as string }
           : null,
@@ -114,6 +127,12 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       const p = action.payload;
       const newPlayers = p.players as SpectatorPlayer[];
       const now = Date.now();
+
+      // Keep playerMap up to date
+      const pMap: Record<string, number> = { ...state.playerMap };
+      for (const pl of newPlayers) {
+        pMap[pl.address.toLowerCase()] = pl.playerNumber;
+      }
 
       // Build trails from position history
       const newTrails = { ...state.trails };
@@ -143,13 +162,14 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         trails: newTrails,
         killFlashes,
         ghostedPlayers,
+        playerMap: pMap,
       };
     }
 
     case 'kill': {
       const p = action.payload;
-      const hunter = truncAddr(p.hunter as string);
-      const target = truncAddr(p.target as string);
+      const hunter = playerLabel(p.hunter as string, state.playerMap);
+      const target = playerLabel(p.target as string, state.playerMap);
       const targetAddr = p.target as string;
 
       // Find target's last position for kill flash
@@ -169,7 +189,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'eliminated': {
       const p = action.payload;
-      const player = truncAddr(p.player as string);
+      const player = playerLabel(p.player as string, state.playerMap);
       const reason = p.reason as string;
       if (reason === 'zone_violation') {
         return {
@@ -225,13 +245,13 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
           winner3: p.winner3 as string,
           topKiller: p.topKiller as string,
         },
-        events: addEvent(state.events, `Game ended! Winner: ${truncAddr(p.winner1 as string)}`, 'end'),
+        events: addEvent(state.events, `Game ended! Winner: ${playerLabel(p.winner1 as string, state.playerMap)}`, 'end'),
       };
     }
 
     case 'item_used': {
       const p = action.payload;
-      const player = truncAddr(p.playerAddress as string);
+      const player = playerLabel(p.playerAddress as string, state.playerMap);
       const itemName = p.itemName as string;
       const itemId = p.itemId as string;
 
