@@ -55,9 +55,12 @@ class GameViewModel @Inject constructor(
                     is GameEvent.TargetReassigned -> _uiEvents.emit(UiEvent.ShowNewTarget)
                     is GameEvent.ZoneShrink -> _uiEvents.emit(UiEvent.ShowZoneShrinkWarning)
                     is GameEvent.CheckInStarted -> _uiEvents.emit(UiEvent.NavigateToCheckIn)
+                    is GameEvent.PregameStarted -> _uiEvents.emit(UiEvent.NavigateToPregame)
                     is GameEvent.GameStarted -> _uiEvents.emit(UiEvent.NavigateToMainGame)
                     is GameEvent.CheckInVerified -> _uiEvents.emit(UiEvent.CheckInVerified)
                     is GameEvent.HeartbeatEliminated -> _uiEvents.emit(UiEvent.NavigateToEliminated)
+                    is GameEvent.NoCheckInEliminated -> _uiEvents.emit(UiEvent.NavigateToEliminated)
+                    is GameEvent.GameCancelled -> _uiEvents.emit(UiEvent.GameCancelled)
                     else -> {}
                 }
             }
@@ -135,8 +138,10 @@ sealed class UiEvent {
     data object ShowNewTarget : UiEvent()
     data object ShowZoneShrinkWarning : UiEvent()
     data object NavigateToCheckIn : UiEvent()
+    data object NavigateToPregame : UiEvent()
     data object NavigateToMainGame : UiEvent()
     data object CheckInVerified : UiEvent()
+    data object GameCancelled : UiEvent()
 }
 
 data class IntelItem(

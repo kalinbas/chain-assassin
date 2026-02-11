@@ -63,6 +63,9 @@ export const config = {
   heartbeatProximityMeters: envInt("HEARTBEAT_PROXIMITY_METERS", 100),
   heartbeatDisableThreshold: envInt("HEARTBEAT_DISABLE_THRESHOLD", 4),  // disable when ≤ this many alive
 
+  // Pregame
+  pregameDurationSeconds: envInt("PREGAME_DURATION_SECONDS", 180),  // 3 minutes
+
   // Photos
   photosDir: optionalEnv("PHOTOS_DIR", "./data/photos"),
   maxPhotoSizeMb: envInt("MAX_PHOTO_SIZE_MB", 5),

@@ -30,8 +30,7 @@ import kotlinx.coroutines.delay
 
 @Composable
 fun MainGameScreen(
-    onHunt: () -> Unit,
-    onHeartbeat: () -> Unit,
+    onScan: () -> Unit,
     onPhoto: () -> Unit,
     onMap: () -> Unit,
     onIntel: () -> Unit,
@@ -76,8 +75,10 @@ fun MainGameScreen(
                     bannerText = null
                 }
                 is UiEvent.NavigateToCheckIn -> { /* handled elsewhere */ }
+                is UiEvent.NavigateToPregame -> { /* handled elsewhere */ }
                 is UiEvent.NavigateToMainGame -> { /* already on main game */ }
                 is UiEvent.CheckInVerified -> { /* handled in CheckInScreen */ }
+                is UiEvent.GameCancelled -> { /* handled elsewhere */ }
             }
         }
     }
@@ -265,7 +266,7 @@ fun MainGameScreen(
                         )
                     }
 
-                    // Heartbeat timer (clickable to open heartbeat scan)
+                    // Heartbeat timer (tap opens scan screen)
                     if (!state.heartbeatDisabled && state.lastHeartbeatAt > 0) {
                         val now = System.currentTimeMillis() / 1000
                         val deadline = state.lastHeartbeatAt + state.heartbeatIntervalSeconds
@@ -280,7 +281,7 @@ fun MainGameScreen(
                         }
 
                         TextButton(
-                            onClick = onHeartbeat,
+                            onClick = onScan,
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             Text(
@@ -387,7 +388,7 @@ fun MainGameScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         Button(
-                            onClick = onHunt,
+                            onClick = onScan,
                             modifier = Modifier
                                 .weight(1f)
                                 .height(64.dp),
@@ -399,7 +400,7 @@ fun MainGameScreen(
                         ) {
                             Icon(Icons.Default.CenterFocusStrong, null, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.width(8.dp))
-                            Text("HUNT", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                            Text("SCAN", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                         }
 
                         Button(

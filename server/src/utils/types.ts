@@ -7,6 +7,8 @@ export enum GamePhase {
   CANCELLED = 3,
 }
 
+export type ActiveSubPhase = 'checkin' | 'pregame' | 'game';
+
 export interface GameConfig {
   gameId: number;
   title: string;

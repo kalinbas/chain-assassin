@@ -47,7 +47,7 @@ fun GameBrowserScreen(
     val error by viewModel.error.collectAsState()
 
     val activePhase = gameState?.phase
-    val hasActiveGame = activePhase in listOf(GamePhase.ACTIVE, GamePhase.ELIMINATED)
+    val hasActiveGame = activePhase in listOf(GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)
 
     Scaffold(
         topBar = {
@@ -240,7 +240,7 @@ fun GameBrowserScreen(
                 items(games) { game ->
                     val isRegistered = game.isPlayerRegistered ||
                             (gameState?.config?.id == game.config.id &&
-                            gameState?.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN))
+                            gameState?.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN, GamePhase.PREGAME))
                     GameCard(
                         game = game,
                         isRegistered = isRegistered,

@@ -34,6 +34,8 @@ export interface PingCircle {
 export interface SpectatorState {
   connected: boolean;
   phase: string | null;
+  subPhase: string | null;
+  pregameEndsAt: number | null;
   zone: {
     centerLat: number;
     centerLng: number;
@@ -59,6 +61,8 @@ export interface SpectatorState {
 const initialState: SpectatorState = {
   connected: false,
   phase: null,
+  subPhase: null,
+  pregameEndsAt: null,
   zone: null,
   players: [],
   leaderboard: [],
@@ -84,6 +88,7 @@ type Action =
   | { type: 'eliminated'; payload: Record<string, unknown> }
   | { type: 'zone_shrink'; payload: Record<string, unknown> }
   | { type: 'leaderboard'; payload: Record<string, unknown> }
+  | { type: 'pregame_started'; payload: Record<string, unknown> }
   | { type: 'game_started'; payload: Record<string, unknown> }
   | { type: 'game_ended'; payload: Record<string, unknown> }
   | { type: 'item_used'; payload: Record<string, unknown> };
@@ -118,6 +123,8 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         ...state,
         connected: true,
         phase: p.phase as string,
+        subPhase: (p.subPhase as string | null) ?? null,
+        pregameEndsAt: (p.pregameEndsAt as number | null) ?? null,
         playerCount: p.playerCount as number,
         aliveCount: p.aliveCount as number,
         leaderboard: p.leaderboard as SpectatorState['leaderboard'],
@@ -234,13 +241,28 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       };
     }
 
+    case 'pregame_started': {
+      const p = action.payload;
+      const duration = (p.pregameDurationSeconds as number) || 180;
+      return {
+        ...state,
+        phase: 'active',
+        subPhase: 'pregame',
+        pregameEndsAt: Math.floor(Date.now() / 1000) + duration,
+        aliveCount: (p.playerCount as number) ?? state.aliveCount,
+        events: addEvent(state.events, 'Pregame started — players dispersing!', 'pregame'),
+      };
+    }
+
     case 'game_started': {
       const p = action.payload;
       return {
         ...state,
         phase: 'active',
+        subPhase: 'game',
+        pregameEndsAt: null,
         playerCount: p.playerCount as number,
-        events: addEvent(state.events, 'Game started!', 'start'),
+        events: addEvent(state.events, 'Game started — hunt begins!', 'start'),
         gameStartedAt: Date.now(),
       };
     }
@@ -334,6 +356,9 @@ export function useSpectatorSocket(gameId: number): SpectatorState {
             break;
           case 'leaderboard:update':
             dispatch({ type: 'leaderboard', payload: msg });
+            break;
+          case 'game:pregame_started':
+            dispatch({ type: 'pregame_started', payload: msg });
             break;
           case 'game:started_broadcast':
             dispatch({ type: 'game_started', payload: msg });

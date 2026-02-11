@@ -1,7 +1,8 @@
 import { WebSocket } from "ws";
 import { verifySignature, validateAuthMessage } from "../utils/crypto.js";
-import { getPlayer, getTargetAssignment, findHunterOf, getAlivePlayers, getAlivePlayerCount, getLatestLocationPing } from "../db/queries.js";
+import { getPlayer, getGame, getTargetAssignment, findHunterOf, getAlivePlayers, getAlivePlayerCount, getLatestLocationPing } from "../db/queries.js";
 import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../game/manager.js";
+import { config } from "../config.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
@@ -76,6 +77,7 @@ function handleAuth(
   const targetAssignment = getTargetAssignment(gameId, address.toLowerCase());
   const hunterAddress = findHunterOf(gameId, address.toLowerCase());
   const hunterPlayer = hunterAddress ? getPlayer(gameId, hunterAddress) : null;
+  const game = getGame(gameId);
 
   ws.send(
     JSON.stringify({
@@ -94,6 +96,10 @@ function handleAuth(
         : null,
       hunterPlayerNumber: hunterPlayer?.playerNumber ?? null,
       lastHeartbeatAt: player.lastHeartbeatAt,
+      subPhase: game?.subPhase ?? null,
+      pregameEndsAt: game?.subPhase === "pregame" && game?.startedAt
+        ? game.startedAt + config.pregameDurationSeconds
+        : null,
     })
   );
 
@@ -151,6 +157,8 @@ function handleSpectate(
       type: "spectate:init",
       gameId,
       phase: status.phase,
+      subPhase: status.subPhase,
+      pregameEndsAt: status.pregameEndsAt,
       playerCount: status.playerCount,
       aliveCount: status.aliveCount,
       leaderboard: status.leaderboard,

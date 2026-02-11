@@ -42,6 +42,15 @@ function getKPM(totalKills: number, gameStartedAt: number | null): string {
   return (totalKills / minutes).toFixed(1);
 }
 
+function formatPregameCountdown(pregameEndsAt: number | null): string | null {
+  if (!pregameEndsAt) return null;
+  const remaining = Math.max(0, Math.round(pregameEndsAt - Date.now() / 1000));
+  if (remaining <= 0) return null;
+  const m = Math.floor(remaining / 60);
+  const s = remaining % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function SpectatorView({ state }: { state: SpectatorState }) {
   const zone = state.zone;
   const countdown = formatCountdown(zone?.nextShrinkAt);
@@ -49,6 +58,37 @@ export function SpectatorView({ state }: { state: SpectatorState }) {
   const [soundEnabled, setSoundEnabled] = useState(false);
   const { resumeAudio } = useSpectatorSound(state, soundEnabled);
   const aliveFlash = useAliveFlash(state.aliveCount);
+
+  // Force re-render every second during pregame for countdown
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (state.subPhase !== 'pregame') return;
+    const timer = setInterval(() => setTick((t) => t + 1), 1000);
+    return () => clearInterval(timer);
+  }, [state.subPhase]);
+
+  // Show pregame countdown overlay
+  if (state.subPhase === 'pregame') {
+    const pregameCountdown = formatPregameCountdown(state.pregameEndsAt);
+    return (
+      <div className="spectator">
+        <div className="spectator__pregame">
+          <div className="spectator__pregame-badge">PREGAME</div>
+          <h3 className="spectator__pregame-title">Players Dispersing</h3>
+          {pregameCountdown && (
+            <div className="spectator__pregame-timer">{pregameCountdown}</div>
+          )}
+          <p className="spectator__pregame-desc">
+            Targets will be assigned when the countdown ends. Players are spreading out and finding hiding spots.
+          </p>
+          <div className="spectator__pregame-stats">
+            <span>Players: <strong>{state.aliveCount}</strong></span>
+          </div>
+        </div>
+        <SpectatorKillFeed events={state.events} />
+      </div>
+    );
+  }
 
   // Show winners if game ended
   if (state.phase === 'ended' && state.winners) {

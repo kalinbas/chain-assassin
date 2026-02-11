@@ -31,7 +31,9 @@ import kotlinx.coroutines.flow.collectLatest
 fun CheckInScreen(
     gameId: String = "",
     onScanPlayer: () -> Unit,
+    onPregame: () -> Unit,
     onGameStart: () -> Unit,
+    onEliminated: () -> Unit,
     onBack: () -> Unit,
     viewModel: GameViewModel = hiltViewModel()
 ) {
@@ -44,17 +46,22 @@ fun CheckInScreen(
     val checkedInCount = state.checkedInCount
     val totalPlayers = state.playersRemaining
 
-    // Navigate to main game when phase changes to ACTIVE
+    // Navigate based on phase change
     LaunchedEffect(state.phase) {
-        if (state.phase == GamePhase.ACTIVE) {
-            onGameStart()
+        when (state.phase) {
+            GamePhase.PREGAME -> onPregame()
+            GamePhase.ACTIVE -> onGameStart()
+            GamePhase.CANCELLED -> onBack()
+            GamePhase.ELIMINATED -> onEliminated()
+            else -> {}
         }
     }
 
-    // Also listen for GameStarted event
+    // Also listen for events
     LaunchedEffect(Unit) {
         viewModel.uiEvents.collectLatest { event ->
             when (event) {
+                is UiEvent.NavigateToPregame -> onPregame()
                 is UiEvent.NavigateToMainGame -> onGameStart()
                 else -> {}
             }
@@ -128,7 +135,7 @@ fun CheckInScreen(
                         )
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            "Waiting for all players to check in\u2026",
+                            "Waiting for the check-in period to end\u2026",
                             style = MaterialTheme.typography.bodyMedium,
                             color = TextSecondary,
                             textAlign = TextAlign.Center
@@ -250,7 +257,7 @@ fun CheckInScreen(
                     Spacer(Modifier.height(8.dp))
 
                     Text(
-                        "Min ${config.minPlayers} players required to start",
+                        "Game starts when check-in period ends",
                         style = MaterialTheme.typography.bodySmall,
                         color = TextDim
                     )
@@ -352,16 +359,15 @@ fun CheckInScreen(
 
             Spacer(Modifier.height(8.dp))
 
-            // Debug: skip to game
+            // Debug: skip to pregame
             OutlinedButton(
                 onClick = {
                     viewModel.debugStartGame()
-                    onGameStart()
                 },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextDim)
             ) {
-                Text("Debug: Skip to Game", style = MaterialTheme.typography.bodySmall)
+                Text("Debug: Skip to Pregame", style = MaterialTheme.typography.bodySmall)
             }
 
             Spacer(Modifier.height(32.dp))

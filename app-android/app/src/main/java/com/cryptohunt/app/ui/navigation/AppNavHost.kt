@@ -16,7 +16,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.cryptohunt.app.ui.screens.game.CheckInCameraScreen
 import com.cryptohunt.app.ui.screens.game.CheckInScreen
-import com.cryptohunt.app.ui.screens.game.HeartbeatScanScreen
+import com.cryptohunt.app.ui.screens.game.PregameScreen
 import com.cryptohunt.app.ui.screens.game.HuntCameraScreen
 import com.cryptohunt.app.ui.screens.game.PhotoCaptureScreen
 import com.cryptohunt.app.ui.screens.game.IntelScreen
@@ -178,9 +178,40 @@ fun AppNavHost(
                 onScanPlayer = {
                     navController.navigate(NavRoutes.CheckInCamera.route)
                 },
+                onPregame = {
+                    navController.navigate(NavRoutes.Pregame.withId(gameId)) {
+                        popUpTo(NavRoutes.GameBrowser.route)
+                    }
+                },
                 onGameStart = {
                     navController.navigate(NavRoutes.MainGame.route) {
                         popUpTo(NavRoutes.GameBrowser.route) { inclusive = true }
+                    }
+                },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.GameBrowser.route)
+                    }
+                },
+                onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(
+            route = NavRoutes.Pregame.route,
+            arguments = listOf(navArgument("gameId") { type = NavType.StringType })
+        ) { backStackEntry ->
+            val gameId = backStackEntry.arguments?.getString("gameId") ?: ""
+            PregameScreen(
+                gameId = gameId,
+                onGameStart = {
+                    navController.navigate(NavRoutes.MainGame.route) {
+                        popUpTo(NavRoutes.GameBrowser.route) { inclusive = true }
+                    }
+                },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.GameBrowser.route)
                     }
                 },
                 onBack = { navController.popBackStack() }
@@ -208,8 +239,7 @@ fun AppNavHost(
         // Game
         composable(NavRoutes.MainGame.route) {
             MainGameScreen(
-                onHunt = { navController.navigate(NavRoutes.HuntCamera.route) },
-                onHeartbeat = { navController.navigate(NavRoutes.HeartbeatScan.route) },
+                onScan = { navController.navigate(NavRoutes.HuntCamera.route) },
                 onPhoto = { navController.navigate(NavRoutes.PhotoCapture.route) },
                 onMap = { navController.navigate(NavRoutes.Map.route) },
                 onIntel = { navController.navigate(NavRoutes.Intel.route) },
@@ -229,13 +259,6 @@ fun AppNavHost(
         composable(NavRoutes.HuntCamera.route) {
             HuntCameraScreen(
                 onKillConfirmed = { navController.popBackStack() },
-                onBack = { navController.popBackStack() }
-            )
-        }
-
-        composable(NavRoutes.HeartbeatScan.route) {
-            HeartbeatScanScreen(
-                onSuccess = { navController.popBackStack() },
                 onBack = { navController.popBackStack() }
             )
         }

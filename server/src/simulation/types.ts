@@ -14,7 +14,7 @@ export interface SimulationConfig {
 export interface SimulationStatus {
   gameId: number;
   title: string;
-  phase: "setup" | "registration" | "checkin" | "active" | "ended" | "aborted";
+  phase: "setup" | "registration" | "checkin" | "pregame" | "active" | "ended" | "aborted";
   playerCount: number;
   aliveCount: number;
   killCount: number;

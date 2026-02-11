@@ -28,6 +28,7 @@ class GameEngine @Inject constructor() {
     private var timerJob: Job? = null
     private var simulationJob: Job? = null
     private var checkInTimerJob: Job? = null
+    private var pregameTimerJob: Job? = null
 
     private val mockPlayers = mutableListOf<Player>()
     private val killFeedList = mutableListOf<KillEvent>()
@@ -42,6 +43,7 @@ class GameEngine @Inject constructor() {
         timerJob?.cancel()
         simulationJob?.cancel()
         checkInTimerJob?.cancel()
+        pregameTimerJob?.cancel()
         mockPlayers.clear()
         killFeedList.clear()
         checkedInPlayerIds.clear()
@@ -162,7 +164,12 @@ class GameEngine @Inject constructor() {
     }
 
     fun startGame() {
-        completeCheckInAndStartGame()
+        val current = _state.value ?: return
+        when (current.phase) {
+            GamePhase.CHECK_IN -> startPregame()
+            GamePhase.PREGAME -> completePregameAndStartGame()
+            else -> startPregame()
+        }
     }
 
     fun processKill(scannedPayload: String): KillResult {
@@ -362,6 +369,7 @@ class GameEngine @Inject constructor() {
     fun cleanup() {
         stopTimers()
         checkInTimerJob?.cancel()
+        pregameTimerJob?.cancel()
         _state.value = null
         mockPlayers.clear()
         killFeedList.clear()
@@ -392,7 +400,15 @@ class GameEngine @Inject constructor() {
                 val myCheckIn = if (current.checkInVerified) 1 else 0
 
                 if (remaining <= 0) {
-                    completeCheckInAndStartGame()
+                    val myCheckInFinal = if (current.checkInVerified) 1 else 0
+                    val totalCheckedIn = checkedInPlayerIds.size + myCheckInFinal
+                    if (totalCheckedIn == 0) {
+                        // No one checked in — cancel game
+                        _state.value = current.copy(phase = GamePhase.CANCELLED)
+                        _events.tryEmit(GameEvent.GameCancelled)
+                    } else {
+                        startPregame()
+                    }
                     break
                 }
                 val checkedInNumbers = mockPlayers
@@ -411,24 +427,100 @@ class GameEngine @Inject constructor() {
         }
     }
 
-    private fun completeCheckInAndStartGame() {
+    private fun startPregame() {
         val current = _state.value ?: return
+        val now = System.currentTimeMillis()
+
+        // Eliminate mock players who didn't check in
+        val uncheckedMockPlayers = mockPlayers.filter { it.id !in checkedInPlayerIds }
+        for (player in uncheckedMockPlayers) {
+            val killEvent = KillEvent(
+                id = UUID.randomUUID().toString(),
+                hunterNumber = 0,
+                targetNumber = player.number,
+                timestamp = now,
+                zone = "",
+                isNoCheckIn = true
+            )
+            killFeedList.add(0, killEvent)
+            mockPlayers.remove(player)
+        }
+
+        // Check if current player didn't check in
+        val currentPlayerEliminated = !current.checkInVerified
+
+        val playersRemaining = mockPlayers.size + 1 - (if (currentPlayerEliminated) 1 else 0)
+
+        if (currentPlayerEliminated) {
+            // Current player eliminated for no check-in
+            val killEvent = KillEvent(
+                id = UUID.randomUUID().toString(),
+                hunterNumber = 0,
+                targetNumber = current.currentPlayer.number,
+                timestamp = now,
+                zone = "",
+                isNoCheckIn = true
+            )
+            killFeedList.add(0, killEvent)
+            _state.value = current.copy(
+                phase = GamePhase.ELIMINATED,
+                playersRemaining = playersRemaining,
+                killFeed = killFeedList.toList()
+            )
+            _events.tryEmit(GameEvent.NoCheckInEliminated)
+            return
+        }
+
+        // Transition to PREGAME
+        _state.value = current.copy(
+            phase = GamePhase.PREGAME,
+            playersRemaining = playersRemaining,
+            pregameTimeRemainingSeconds = current.config.pregameDurationMinutes * 60,
+            killFeed = killFeedList.toList()
+        )
+        _events.tryEmit(GameEvent.PregameStarted)
+        startPregameTimer()
+    }
+
+    private fun completePregameAndStartGame() {
+        val current = _state.value ?: return
+        val now = System.currentTimeMillis()
+        val nowSeconds = now / 1000
+
         val target = pickRandomTarget()
-        val now = System.currentTimeMillis() / 1000
         // Pick a random hunter number for the prototype
         val hunterNum = mockPlayers.filter { it.id != target?.id }.randomOrNull()?.number
         _state.value = current.copy(
             phase = GamePhase.ACTIVE,
-            currentTarget = target?.let { Target(it, System.currentTimeMillis()) },
+            currentTarget = target?.let { Target(it, now) },
             hunterPlayerNumber = hunterNum,
             nextShrinkSeconds = if (current.config.shrinkSchedule.isNotEmpty())
                 current.config.shrinkSchedule[0].atMinute * 60 else 0,
-            lastHeartbeatAt = now,
-            heartbeatDisabled = false
+            lastHeartbeatAt = nowSeconds,
+            heartbeatDisabled = false,
+            pregameTimeRemainingSeconds = 0
         )
         updateLeaderboard()
         startTimers()
         _events.tryEmit(GameEvent.GameStarted)
+    }
+
+    private fun startPregameTimer() {
+        pregameTimerJob?.cancel()
+        pregameTimerJob = scope.launch {
+            while (isActive) {
+                delay(1000)
+                val current = _state.value ?: break
+                if (current.phase != GamePhase.PREGAME) break
+
+                val remaining = current.pregameTimeRemainingSeconds - 1
+                if (remaining <= 0) {
+                    completePregameAndStartGame()
+                    break
+                }
+                _state.value = current.copy(pregameTimeRemainingSeconds = remaining)
+            }
+        }
     }
 
     private fun startTimers() {
@@ -458,6 +550,7 @@ class GameEngine @Inject constructor() {
         timerJob?.cancel()
         simulationJob?.cancel()
         checkInTimerJob?.cancel()
+        pregameTimerJob?.cancel()
     }
 
     private fun tick() {
@@ -661,8 +754,11 @@ sealed class GameEvent {
     data object OutOfZoneEliminated : GameEvent()
     data object CheckInStarted : GameEvent()
     data object CheckInVerified : GameEvent()
+    data object PregameStarted : GameEvent()
     data object GameStarted : GameEvent()
     data object RefundClaimed : GameEvent()
+    data object GameCancelled : GameEvent()
+    data object NoCheckInEliminated : GameEvent()
     data class HeartbeatRefreshed(val scannedPlayerNumber: Int) : GameEvent()
     data object HeartbeatEliminated : GameEvent()
 }

@@ -5,6 +5,7 @@ import { createLogger } from "../utils/logger.js";
 import type {
   GameConfig,
   GamePhase,
+  ActiveSubPhase,
   Player,
   TargetAssignment,
   Kill,
@@ -73,6 +74,7 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
 
 export function getGame(gameId: number): (GameConfig & {
   phase: GamePhase;
+  subPhase: ActiveSubPhase | null;
   startedAt: number | null;
   endedAt: number | null;
   winner1: string | null;
@@ -104,6 +106,7 @@ export function getGame(gameId: number): (GameConfig & {
     bpsKills: row.bps_kills as number,
     bpsPlatform: row.bps_platform as number,
     phase: row.phase as GamePhase,
+    subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
     startedAt: row.started_at as number | null,
     endedAt: row.ended_at as number | null,
     winner1: row.winner1 as string | null,
@@ -116,7 +119,7 @@ export function getGame(gameId: number): (GameConfig & {
 export function updateGamePhase(
   gameId: number,
   phase: GamePhase,
-  extra?: { startedAt?: number; endedAt?: number; winner1?: string; winner2?: string; winner3?: string; topKiller?: string }
+  extra?: { startedAt?: number; endedAt?: number; subPhase?: ActiveSubPhase | null; winner1?: string; winner2?: string; winner3?: string; topKiller?: string }
 ): void {
   let sql = "UPDATE games SET phase = ?";
   const params: unknown[] = [phase];
@@ -128,6 +131,10 @@ export function updateGamePhase(
   if (extra?.endedAt !== undefined) {
     sql += ", ended_at = ?";
     params.push(extra.endedAt);
+  }
+  if (extra?.subPhase !== undefined) {
+    sql += ", sub_phase = ?";
+    params.push(extra.subPhase);
   }
   if (extra?.winner1 !== undefined) {
     sql += ", winner1 = ?";
@@ -150,6 +157,12 @@ export function updateGamePhase(
   params.push(gameId);
 
   getDb().prepare(sql).run(...params);
+}
+
+export function updateSubPhase(gameId: number, subPhase: ActiveSubPhase | null): void {
+  getDb()
+    .prepare("UPDATE games SET sub_phase = ? WHERE game_id = ?")
+    .run(subPhase, gameId);
 }
 
 export function getGamesInPhase(phase: GamePhase): GameConfig[] {

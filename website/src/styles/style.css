@@ -2134,6 +2134,61 @@ ul { list-style: none; }
     color: var(--text-sec);
 }
 
+/* Pregame */
+.spectator__pregame {
+    text-align: center;
+    padding: 3rem 1rem;
+    background: var(--surface);
+    border-radius: var(--radius);
+    border: 1px solid var(--divider);
+    margin-bottom: 1.5rem;
+}
+
+.spectator__pregame-badge {
+    display: inline-block;
+    padding: 0.25rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    background: rgba(0, 255, 136, 0.15);
+    color: var(--primary);
+    border: 1px solid var(--primary);
+    border-radius: 999px;
+    margin-bottom: 1rem;
+}
+
+.spectator__pregame-title {
+    font-family: var(--font-heading);
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: var(--text);
+    margin-bottom: 1rem;
+}
+
+.spectator__pregame-timer {
+    font-family: var(--font-mono);
+    font-size: 3rem;
+    font-weight: 700;
+    color: var(--primary);
+    margin-bottom: 1rem;
+}
+
+.spectator__pregame-desc {
+    color: var(--text-sec);
+    max-width: 400px;
+    margin: 0 auto 1.5rem;
+    line-height: 1.5;
+}
+
+.spectator__pregame-stats {
+    color: var(--text-sec);
+    font-size: 0.9rem;
+}
+
+.spectator__pregame-stats strong {
+    color: var(--text);
+}
+
 /* Game Ended */
 .spectator__ended {
     text-align: center;

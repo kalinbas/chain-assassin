@@ -48,7 +48,8 @@ object ChainMapper {
             bpsKills = config.bpsKills,
             entryFeeWei = config.entryFee,
             registrationDeadline = config.registrationDeadline * 1000,
-            gameDate = config.gameDate * 1000
+            gameDate = config.gameDate * 1000,
+            pregameDurationMinutes = 3
         )
     }
 }

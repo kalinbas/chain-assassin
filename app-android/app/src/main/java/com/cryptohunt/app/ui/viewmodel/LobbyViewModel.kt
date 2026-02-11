@@ -6,6 +6,7 @@ import com.cryptohunt.app.domain.chain.ChainMapper
 import com.cryptohunt.app.domain.chain.ContractService
 import com.cryptohunt.app.domain.chain.OnChainPhase
 import com.cryptohunt.app.domain.game.GameEngine
+import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.wallet.WalletManager
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -48,11 +49,13 @@ data class GameHistoryItem(
 class LobbyViewModel @Inject constructor(
     private val gameEngine: GameEngine,
     private val walletManager: WalletManager,
-    private val contractService: ContractService
+    private val contractService: ContractService,
+    private val locationTracker: LocationTracker
 ) : ViewModel() {
 
     val walletState: StateFlow<WalletState> = walletManager.state
     val gameState: StateFlow<GameState?> = gameEngine.state
+    val locationState: StateFlow<LocationState> = locationTracker.state
 
     private val _games = MutableStateFlow<List<GameListItem>>(emptyList())
     val games: StateFlow<List<GameListItem>> = _games.asStateFlow()
@@ -340,6 +343,14 @@ class LobbyViewModel @Inject constructor(
         }
     }
 
+    fun startLocationTracking() {
+        locationTracker.startTracking()
+    }
+
+    fun stopLocationTracking() {
+        locationTracker.stopTracking()
+    }
+
     fun beginCheckIn() {
         gameEngine.beginCheckIn()
     }
@@ -355,7 +366,7 @@ class LobbyViewModel @Inject constructor(
     fun ensureRegisteredState(gameId: String) {
         val existing = gameEngine.state.value
         if (existing != null && existing.config.id == gameId &&
-            existing.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN)) {
+            existing.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN, GamePhase.PREGAME)) {
             return // Already have local state
         }
         // Find in local list or selected game
@@ -375,7 +386,7 @@ class LobbyViewModel @Inject constructor(
     fun isRegisteredForGame(gameId: String): Boolean {
         val state = gameEngine.state.value ?: return false
         return state.config.id == gameId &&
-                state.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN)
+                state.phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN, GamePhase.PREGAME)
     }
 
     fun shortenedAddress(): String = walletManager.shortenedAddress()

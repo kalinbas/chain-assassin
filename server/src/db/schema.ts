@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 4;
+export const SCHEMA_VERSION = 5;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -27,6 +27,7 @@ CREATE TABLE IF NOT EXISTS games (
   bps_kills             INTEGER NOT NULL,
   bps_platform          INTEGER NOT NULL,
   phase                 INTEGER NOT NULL DEFAULT 0,
+  sub_phase             TEXT,
   started_at            INTEGER,
   ended_at              INTEGER,
   winner1               TEXT,

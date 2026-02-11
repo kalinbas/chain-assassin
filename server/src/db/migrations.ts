@@ -90,4 +90,10 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(4);
     log.info("Migrated to v4: added game_photos table");
   }
+
+  if (currentVersion < 5 && currentVersion > 0) {
+    db.exec(`ALTER TABLE games ADD COLUMN sub_phase TEXT`);
+    db.prepare("UPDATE schema_version SET version = ?").run(5);
+    log.info("Migrated to v5: added sub_phase column to games");
+  }
 }

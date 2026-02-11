@@ -26,6 +26,7 @@ import { movePlayer, scatterPlayers, shouldAttemptKill } from "./playerAgent.js"
 import type { SimulationConfig, SimulationStatus, SimulatedPlayer } from "./types.js";
 import { DEFAULT_ZONE_SHRINKS, ITEM_DEFINITIONS } from "./types.js";
 import type { ItemId } from "./types.js";
+import { GamePhase } from "../utils/types.js";
 import type { GameConfig, ZoneShrink } from "../utils/types.js";
 
 const log = createLogger("simulator");
@@ -178,14 +179,31 @@ export class GameSimulator {
     // Small delay to let WS clients connect before game starts
     await sleep(500);
 
-    // --- Start game ---
+    // --- Pregame phase ---
+    this.phase = "pregame";
+    onGameStarted(this.gameId); // Sets ACTIVE + sub_phase='pregame', schedules completePregame timer
+
+    // Wait for manager's completePregame timer to fire
+    while (this.phase === "pregame") {
+      const dbGame = getGame(this.gameId);
+      if (dbGame && dbGame.subPhase === "game") break;
+      if (!dbGame || dbGame.phase === GamePhase.CANCELLED) {
+        this.phase = "aborted";
+        this.cleanup();
+        return;
+      }
+      await sleep(500);
+    }
+
+    // --- Active play ---
     this.phase = "active";
     this.startedAtWall = Math.floor(Date.now() / 1000);
-    onGameStarted(this.gameId);
 
     // Send initial location pings for all players
     for (const p of this.players) {
-      handleLocationUpdate(this.gameId, p.address, p.lat, p.lng);
+      if (p.isAlive) {
+        handleLocationUpdate(this.gameId, p.address, p.lat, p.lng);
+      }
     }
 
     // --- Active play tick ---
@@ -200,7 +218,7 @@ export class GameSimulator {
 
     // Check if game is still active in the DB
     const game = getGame(this.gameId);
-    if (!game || game.phase !== 1) {
+    if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "game") {
       // Game ended (the manager ended it)
       this.phase = "ended";
       this.cleanup();

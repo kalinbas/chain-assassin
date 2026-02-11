@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.js";
 import { contractCoordToDegrees, haversineDistance } from "../utils/geo.js";
 import { parseKillQrPayload } from "../utils/crypto.js";
 import { GamePhase } from "../utils/types.js";
-import type { GameConfig, ZoneShrink, ActiveGame, Player } from "../utils/types.js";
+import type { GameConfig, ZoneShrink, ActiveGame, Player, ActiveSubPhase } from "../utils/types.js";
 import {
   insertGame,
   insertZoneShrinks,
@@ -26,6 +26,7 @@ import {
   getPlayerByNumber,
   getGamesInPhase,
   pruneLocationPings,
+  updateSubPhase,
   initPlayersHeartbeat,
   updateLastHeartbeat,
   getHeartbeatExpiredPlayers,
@@ -50,6 +51,9 @@ const activeGames = new Map<number, {
 
 // Per-game deadline timers (replaces 10s polling interval)
 const deadlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+// Per-game pregame timers — fires when pregame countdown ends
+const pregameTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // Simulated game IDs — skip on-chain operator calls for these
 const simulatedGames = new Set<number>();
@@ -135,7 +139,8 @@ export function onPlayerRegistered(gameId: number, playerAddress: string, player
 
 /**
  * Start a game — called after operator.startGame() tx confirms.
- * Sets up target chain, zone tracker, and game tick.
+ * Transitions to ACTIVE phase with sub_phase='pregame'.
+ * Eliminates non-checked-in players, then starts pregame countdown.
  */
 export function onGameStarted(gameId: number): void {
   cancelDeadlineTimer(gameId);
@@ -147,33 +152,84 @@ export function onGameStarted(gameId: number): void {
   }
 
   const now = Math.floor(Date.now() / 1000);
-  updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now });
 
-  // Get all registered players
+  // Eliminate players who didn't check in
   const players = getPlayers(gameId);
-  const addresses = players.map((p) => p.address);
+  for (const player of players) {
+    if (!player.checkedIn && player.isAlive) {
+      dbEliminatePlayer(gameId, player.address, "no_checkin", now);
+      log.info({ gameId, address: player.address }, "Eliminated for no check-in");
+      broadcast(gameId, {
+        type: "player:eliminated",
+        player: player.address,
+        eliminator: "no_checkin",
+        reason: "no_checkin",
+      });
+    }
+  }
+
+  // Check if any players remain after elimination
+  const aliveCount = getAlivePlayerCount(gameId);
+  if (aliveCount === 0) {
+    log.info({ gameId }, "No checked-in players, cancelling game");
+    onGameCancelled(gameId);
+    return;
+  }
+
+  // Set phase to ACTIVE with sub_phase='pregame'
+  updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now, subPhase: "pregame" });
+
+  const checkedInCount = getCheckedInCount(gameId);
+
+  broadcast(gameId, {
+    type: "game:pregame_started",
+    pregameDurationSeconds: config.pregameDurationSeconds,
+    checkedInCount,
+    playerCount: aliveCount,
+  });
+
+  // Schedule pregame timer
+  const timer = setTimeout(() => {
+    pregameTimers.delete(gameId);
+    completePregame(gameId);
+  }, config.pregameDurationSeconds * 1000);
+  pregameTimers.set(gameId, timer);
+
+  log.info({ gameId, aliveCount, pregameDurationSeconds: config.pregameDurationSeconds }, "Pregame started");
+}
+
+/**
+ * Complete the pregame phase — assign targets, start zone tracker, heartbeats, game tick.
+ * Transitions sub_phase from 'pregame' to 'game'.
+ */
+export function completePregame(gameId: number): void {
+  const game = getGame(gameId);
+  if (!game) {
+    log.error({ gameId }, "Game not found for pregame completion");
+    return;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+
+  // Update sub_phase to 'game'
+  updateSubPhase(gameId, "game");
+
+  // Get alive (checked-in) players only
+  const alivePlayers = getAlivePlayers(gameId);
+  const addresses = alivePlayers.map((p) => p.address);
 
   // Initialize target chain
   const chain = initializeTargetChain(gameId, addresses);
 
   // Initialize zone tracker
-  const zoneTracker = new ZoneTracker(
-    gameId,
-    game.centerLat,
-    game.centerLng,
-    [], // will be loaded from DB inside constructor
-    now
-  );
-
-  // Re-create with DB shrinks
-  const zoneTrackerFull = ZoneTracker.fromDb(gameId, game.centerLat, game.centerLng, now);
+  const zoneTrackerFull = ZoneTracker.fromDb(gameId, game.centerLat, game.centerLng, game.startedAt ?? now);
 
   // Start game tick (1 second interval)
   const tickInterval = setInterval(() => gameTick(gameId), 1000);
 
   activeGames.set(gameId, { zoneTracker: zoneTrackerFull, tickInterval });
 
-  // Initialize heartbeats for all players
+  // Initialize heartbeats for alive players
   initPlayersHeartbeat(gameId, now);
 
   // Notify all players of their targets + hunter number
@@ -199,7 +255,7 @@ export function onGameStarted(gameId: number): void {
     playerCount: addresses.length,
   });
 
-  log.info({ gameId, playerCount: addresses.length }, "Game started");
+  log.info({ gameId, playerCount: addresses.length }, "Pregame completed, game started");
 }
 
 /**
@@ -213,6 +269,12 @@ export async function handleKillSubmission(
   hunterLng: number,
   bleNearbyAddresses: string[]
 ): Promise<{ success: boolean; error?: string }> {
+  // Reject kills during pregame
+  const game = getGame(gameId);
+  if (game && game.subPhase !== "game") {
+    return { success: false, error: "Game has not started yet" };
+  }
+
   // Verify the kill
   const result = verifyKill(
     gameId,
@@ -382,6 +444,11 @@ export function handleCheckin(
 ): { success: boolean; error?: string } {
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
+
+  // Reject check-ins once game is ACTIVE (pregame or game sub-phase)
+  if (game.phase === GamePhase.ACTIVE) {
+    return { success: false, error: "Check-in period has ended" };
+  }
 
   const player = getPlayer(gameId, address);
   if (!player) return { success: false, error: "Not registered" };
@@ -683,10 +750,13 @@ export function handleHeartbeatScan(
   lng: number,
   bleNearbyAddresses: string[]
 ): { success: boolean; error?: string; scannedPlayerNumber?: number } {
-  // 1. Verify game is active
+  // 1. Verify game is active and in 'game' sub-phase
   const game = getGame(gameId);
   if (!game || game.phase !== GamePhase.ACTIVE) {
     return { success: false, error: "Game is not active" };
+  }
+  if (game.subPhase !== "game") {
+    return { success: false, error: "Game has not started yet" };
   }
 
   // 2. Check if heartbeat is disabled (too few players)
@@ -962,17 +1032,45 @@ export function recoverGames(): void {
     const fullGame = getGame(game.gameId);
     if (!fullGame || !fullGame.startedAt) continue;
 
-    log.info({ gameId: game.gameId }, "Recovering active game");
-
-    const zoneTracker = ZoneTracker.fromDb(
-      game.gameId,
-      game.centerLat,
-      game.centerLng,
-      fullGame.startedAt
-    );
-    const tickInterval = setInterval(() => gameTick(game.gameId), 1000);
-
-    activeGames.set(game.gameId, { zoneTracker, tickInterval });
+    if (fullGame.subPhase === "pregame") {
+      // Recover pregame timer — calculate remaining time
+      const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
+      const remaining = Math.max(0, config.pregameDurationSeconds - elapsed);
+      if (remaining <= 0) {
+        // Pregame expired while server was down — complete it now
+        log.info({ gameId: game.gameId }, "Completing expired pregame on recovery");
+        completePregame(game.gameId);
+      } else {
+        log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering pregame timer");
+        const timer = setTimeout(() => {
+          pregameTimers.delete(game.gameId);
+          completePregame(game.gameId);
+        }, remaining * 1000);
+        pregameTimers.set(game.gameId, timer);
+      }
+    } else if (fullGame.subPhase === "game") {
+      // Recover active game with zone tracker and tick
+      log.info({ gameId: game.gameId }, "Recovering active game");
+      const zoneTracker = ZoneTracker.fromDb(
+        game.gameId,
+        game.centerLat,
+        game.centerLng,
+        fullGame.startedAt
+      );
+      const tickInterval = setInterval(() => gameTick(game.gameId), 1000);
+      activeGames.set(game.gameId, { zoneTracker, tickInterval });
+    } else {
+      // Legacy or checkin sub-phase — restore as active game
+      log.info({ gameId: game.gameId, subPhase: fullGame.subPhase }, "Recovering active game (legacy)");
+      const zoneTracker = ZoneTracker.fromDb(
+        game.gameId,
+        game.centerLat,
+        game.centerLng,
+        fullGame.startedAt
+      );
+      const tickInterval = setInterval(() => gameTick(game.gameId), 1000);
+      activeGames.set(game.gameId, { zoneTracker, tickInterval });
+    }
   }
 
   // Schedule deadline timers for registration-phase games
@@ -994,8 +1092,13 @@ function cleanupActiveGame(gameId: number): void {
   if (active) {
     clearInterval(active.tickInterval);
     activeGames.delete(gameId);
-    log.info({ gameId }, "Active game cleaned up");
   }
+  const pregameTimer = pregameTimers.get(gameId);
+  if (pregameTimer) {
+    clearTimeout(pregameTimer);
+    pregameTimers.delete(gameId);
+  }
+  log.info({ gameId }, "Active game cleaned up");
 }
 
 /**
@@ -1012,6 +1115,11 @@ export function cleanupAll(): void {
     clearTimeout(timer);
   }
   deadlineTimers.clear();
+
+  for (const [gameId, timer] of pregameTimers) {
+    clearTimeout(timer);
+  }
+  pregameTimers.clear();
 }
 
 // ============ Query Helpers ============
@@ -1031,6 +1139,10 @@ export function getGameStatus(gameId: number) {
   return {
     gameId,
     phase: game.phase,
+    subPhase: game.subPhase,
+    pregameEndsAt: game.subPhase === "pregame" && game.startedAt
+      ? game.startedAt + config.pregameDurationSeconds
+      : null,
     playerCount: players.length,
     aliveCount: players.filter((p) => p.isAlive).length,
     leaderboard,

@@ -22,7 +22,8 @@ data class GameConfig(
     val bpsKills: Int = 2000,
     val entryFeeWei: BigInteger = BigInteger.ZERO,
     val registrationDeadline: Long = 0L,
-    val gameDate: Long = 0L
+    val gameDate: Long = 0L,
+    val pregameDurationMinutes: Int = 3
 )
 
 data class ZoneShrink(val atMinute: Int, val newRadiusMeters: Double)
@@ -51,11 +52,12 @@ data class KillEvent(
     val hunterNumber: Int,
     val targetNumber: Int,
     val timestamp: Long,
-    val zone: String
+    val zone: String,
+    val isNoCheckIn: Boolean = false
 )
 
 enum class GamePhase {
-    NOT_JOINED, REGISTERED, CHECK_IN, ACTIVE, ELIMINATED, ENDED, CANCELLED
+    NOT_JOINED, REGISTERED, CHECK_IN, PREGAME, ACTIVE, ELIMINATED, ENDED, CANCELLED
 }
 
 data class GameState(
@@ -81,6 +83,8 @@ data class GameState(
     val checkInTimeRemainingSeconds: Int = 0,
     val checkedInCount: Int = 0,
     val checkedInPlayerNumbers: Set<Int> = emptySet(),
+    // Pregame countdown
+    val pregameTimeRemainingSeconds: Int = 0,
     // Heartbeat (anti-QR-hiding fairplay)
     val lastHeartbeatAt: Long = 0L,
     val heartbeatIntervalSeconds: Int = 600,
