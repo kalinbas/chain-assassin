@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { loadAllGames } from '../lib/contract';
-import { onContractEvent } from '../lib/contractEvents';
+import { loadAllGames } from '../lib/api';
 import type { Game } from '../types/game';
 
 export function useGames() {
@@ -20,7 +19,8 @@ export function useGames() {
 
   useEffect(() => {
     fetchGames();
-    return onContractEvent(fetchGames);
+    const interval = setInterval(fetchGames, 30000);
+    return () => clearInterval(interval);
   }, [fetchGames]);
 
   return { games, loading, error };

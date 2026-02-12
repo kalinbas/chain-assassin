@@ -28,18 +28,26 @@ export interface GameConfig {
   bps2nd: number;
   bps3rd: number;
   bpsKills: number;
-  bpsPlatform: number;
+  bpsCreator: number;
   baseReward: bigint;
+  maxDuration: number;
 }
 
 export interface GameState {
   phase: GamePhase;
   playerCount: number;
   totalCollected: bigint;
-  winner1: string;
-  winner2: string;
-  winner3: string;
-  topKiller: string;
+  winner1: number;  // playerNumber (0 = none)
+  winner2: number;
+  winner3: number;
+  topKiller: number;
+}
+
+export interface PlayerStateOnChain {
+  addr: string;
+  alive: boolean;
+  claimed: boolean;
+  killCount: number;
 }
 
 export interface ZoneShrink {
@@ -70,6 +78,7 @@ export interface Player {
   eliminatedAt: number | null;
   eliminatedBy: string | null;
   lastHeartbeatAt: number | null;
+  hasClaimed: boolean;
 }
 
 export interface TargetAssignment {

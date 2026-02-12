@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { walletAuth } from "./middleware.js";
-import { healthCheck, gameStatus, submitKill, submitLocation, submitCheckin, submitHeartbeat, triggerAutoStart, uploadPhoto, getPhotos } from "./handlers.js";
+import { healthCheck, gameStatus, listGames, gameDetail, playerInfo, submitKill, submitLocation, submitCheckin, submitHeartbeat, triggerAutoStart, uploadPhoto, getPhotos } from "./handlers.js";
 import { simulationRouter } from "./simulationRoutes.js";
 import { config } from "../config.js";
 
@@ -17,8 +17,11 @@ router.use(simulationRouter);
 
 // Public
 router.get("/health", healthCheck);
+router.get("/api/games", listGames);
 router.get("/api/games/:gameId/status", gameStatus);
+router.get("/api/games/:gameId/player/:address", playerInfo);
 router.get("/api/games/:gameId/photos", getPhotos);
+router.get("/api/games/:gameId", gameDetail);
 
 // Authenticated
 router.post("/api/games/:gameId/kill", walletAuth, submitKill);

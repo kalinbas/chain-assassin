@@ -274,7 +274,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(player1);
         vm.expectEmit(true, true, false, true);
-        emit IChainAssassin.PlayerRegistered(gameId, player1, 1);
+        emit IChainAssassin.PlayerRegistered(gameId, 1);
         game.register{value: ENTRY_FEE}(gameId);
 
         (bool registered, bool alive,,, uint16 number) = game.getPlayerInfo(gameId, player1);
@@ -400,7 +400,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.recordKill(gameId, player1, player2);
+        game.recordKill(gameId, 1, 2);
 
         (, bool alive, uint16 kills,,) = game.getPlayerInfo(gameId, player1);
         assertTrue(alive);
@@ -415,11 +415,11 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.recordKill(gameId, player1, player2);
+        game.recordKill(gameId, 1, 2);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.TargetNotAlive.selector);
-        game.recordKill(gameId, player3, player2);
+        game.recordKill(gameId, 3, 2);
     }
 
     function test_recordKill_revertsIfSelfKill() public {
@@ -428,7 +428,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.CannotSelfKill.selector);
-        game.recordKill(gameId, player1, player1);
+        game.recordKill(gameId, 1, 1);
     }
 
     function test_recordKill_revertsIfHunterDead() public {
@@ -436,31 +436,29 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.recordKill(gameId, player2, player1);
+        game.recordKill(gameId, 2, 1);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.HunterNotAlive.selector);
-        game.recordKill(gameId, player1, player3);
+        game.recordKill(gameId, 1, 3);
     }
 
     function test_recordKill_revertsIfHunterNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.HunterNotRegistered.selector);
-        game.recordKill(gameId, outsider, player1);
+        game.recordKill(gameId, 99, 1);
     }
 
     function test_recordKill_revertsIfTargetNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.TargetNotRegistered.selector);
-        game.recordKill(gameId, player1, outsider);
+        game.recordKill(gameId, 1, 99);
     }
 
     function test_recordKill_revertsIfNotActive() public {
@@ -468,7 +466,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         // Game is in REGISTRATION, not ACTIVE
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WrongPhase.selector);
-        game.recordKill(gameId, player1, player2);
+        game.recordKill(gameId, 1, 2);
     }
 
     function test_recordKill_multipleKills() public {
@@ -476,9 +474,9 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.recordKill(gameId, player1, player2);
+        game.recordKill(gameId, 1, 2);
         vm.prank(operator);
-        game.recordKill(gameId, player1, player3);
+        game.recordKill(gameId, 1, 3);
 
         (, , uint16 kills,,) = game.getPlayerInfo(gameId, player1);
         assertEq(kills, 2);
@@ -492,8 +490,8 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectEmit(true, true, true, true);
-        emit IChainAssassin.PlayerEliminated(gameId, player1, address(0));
-        game.eliminatePlayer(gameId, player1);
+        emit IChainAssassin.PlayerEliminated(gameId, 1, 0);
+        game.eliminatePlayer(gameId, 1);
 
         (, bool alive,,,) = game.getPlayerInfo(gameId, player1);
         assertFalse(alive);
@@ -504,21 +502,20 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.eliminatePlayer(gameId, player1);
+        game.eliminatePlayer(gameId, 1);
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.PlayerNotAlive.selector);
-        game.eliminatePlayer(gameId, player1);
+        game.eliminatePlayer(gameId, 1);
     }
 
     function test_eliminatePlayer_revertsIfNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
-        game.eliminatePlayer(gameId, outsider);
+        game.eliminatePlayer(gameId, 99);
     }
 
     function test_eliminatePlayer_revertsIfNotOperator() public {
@@ -527,7 +524,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(player1);
         vm.expectRevert(IChainAssassin.NotOperator.selector);
-        game.eliminatePlayer(gameId, player2);
+        game.eliminatePlayer(gameId, 2);
     }
 
     // ============ End Game Tests ============
@@ -537,24 +534,23 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player4);
+        game.endGame(gameId, 1, 2, 3, 4);
 
         IChainAssassin.GameState memory state = game.getGameState(gameId);
         assertEq(uint8(state.phase), uint8(IChainAssassin.GamePhase.ENDED));
-        assertEq(state.winner1, player1);
-        assertEq(state.winner2, player2);
-        assertEq(state.winner3, player3);
-        assertEq(state.topKiller, player4);
+        assertEq(state.winner1, 1);
+        assertEq(state.winner2, 2);
+        assertEq(state.winner3, 3);
+        assertEq(state.topKiller, 4);
     }
 
     function test_endGame_revertsIfWinnerNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address unregistered = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerNotRegistered.selector);
-        game.endGame(gameId, unregistered, player2, player3, player1);
+        game.endGame(gameId, 99, 2, 3, 1);
     }
 
     function test_endGame_revertsIfWinner1Zero() public {
@@ -563,7 +559,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
-        game.endGame(gameId, address(0), player2, player3, player1);
+        game.endGame(gameId, 0, 2, 3, 1);
     }
 
     function test_endGame_revertsIfWinner2ZeroWhenBps2ndSet() public {
@@ -573,7 +569,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
-        game.endGame(gameId, player1, address(0), player3, player1);
+        game.endGame(gameId, 1, 0, 3, 1);
     }
 
     function test_endGame_revertsIfWinner3ZeroWhenBps3rdSet() public {
@@ -583,7 +579,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerZeroAddress.selector);
-        game.endGame(gameId, player1, player2, address(0), player1);
+        game.endGame(gameId, 1, 2, 0, 1);
     }
 
     function test_endGame_revertsIfTopKillerZeroWhenBpsKillsSet() public {
@@ -593,7 +589,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.TopKillerZeroAddress.selector);
-        game.endGame(gameId, player1, player2, player3, address(0));
+        game.endGame(gameId, 1, 2, 3, 0);
     }
 
     function test_endGame_allowsZeroWinner2WhenBps2ndZero() public {
@@ -615,13 +611,13 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, address(0), address(0), address(0));
+        game.endGame(gameId, 1, 0, 0, 0);
 
         IChainAssassin.GameState memory state = game.getGameState(gameId);
-        assertEq(state.winner1, player1);
-        assertEq(state.winner2, address(0));
-        assertEq(state.winner3, address(0));
-        assertEq(state.topKiller, address(0));
+        assertEq(state.winner1, 1);
+        assertEq(state.winner2, 0);
+        assertEq(state.winner3, 0);
+        assertEq(state.topKiller, 0);
     }
 
     function test_endGame_allowsZeroWinner3WhenBps3rdZero() public {
@@ -643,12 +639,12 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, address(0), address(0));
+        game.endGame(gameId, 1, 2, 0, 0);
 
         IChainAssassin.GameState memory state = game.getGameState(gameId);
-        assertEq(state.winner1, player1);
-        assertEq(state.winner2, player2);
-        assertEq(state.winner3, address(0));
+        assertEq(state.winner1, 1);
+        assertEq(state.winner2, 2);
+        assertEq(state.winner3, 0);
     }
 
     function test_endGame_allowsZeroTopKillerWhenBpsKillsZero() public {
@@ -669,10 +665,10 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, address(0));
+        game.endGame(gameId, 1, 2, 3, 0);
 
         IChainAssassin.GameState memory state = game.getGameState(gameId);
-        assertEq(state.topKiller, address(0));
+        assertEq(state.topKiller, 0);
     }
 
     function test_endGame_revertsIfNotOperator() public {
@@ -681,7 +677,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(player1);
         vm.expectRevert(IChainAssassin.NotOperator.selector);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
     }
 
     function test_endGame_revertsIfNotActive() public {
@@ -689,37 +685,34 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         // Game is in REGISTRATION, not ACTIVE
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WrongPhase.selector);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
     }
 
     function test_endGame_revertsIfTopKillerNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.TopKillerNotRegistered.selector);
-        game.endGame(gameId, player1, player2, player3, outsider);
+        game.endGame(gameId, 1, 2, 3, 99);
     }
 
     function test_endGame_revertsIfWinner2NotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerNotRegistered.selector);
-        game.endGame(gameId, player1, outsider, player3, player1);
+        game.endGame(gameId, 1, 99, 3, 1);
     }
 
     function test_endGame_revertsIfWinner3NotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
 
-        address outsider = address(0x99);
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnerNotRegistered.selector);
-        game.endGame(gameId, player1, player2, outsider, player1);
+        game.endGame(gameId, 1, 2, 99, 1);
     }
 
     function test_endGame_topKillerCanOverlapWithWinner() public {
@@ -728,11 +721,11 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         // player1 is both winner1 and topKiller
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         IChainAssassin.GameState memory state = game.getGameState(gameId);
-        assertEq(state.winner1, player1);
-        assertEq(state.topKiller, player1);
+        assertEq(state.winner1, 1);
+        assertEq(state.topKiller, 1);
     }
 
     function test_endGame_revertsIfUnusedWinner2NotZero() public {
@@ -755,7 +748,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.UnusedWinnerNotZero.selector);
-        game.endGame(gameId, player1, player2, address(0), address(0));
+        game.endGame(gameId, 1, 2, 0, 0);
     }
 
     function test_endGame_revertsIfUnusedWinner3NotZero() public {
@@ -779,7 +772,7 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.UnusedWinnerNotZero.selector);
-        game.endGame(gameId, player1, player2, player3, address(0));
+        game.endGame(gameId, 1, 2, 3, 0);
     }
 
     function test_endGame_revertsIfUnusedTopKillerNotZero() public {
@@ -801,6 +794,6 @@ contract ChainAssassinTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.UnusedTopKillerNotZero.selector);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
     }
 }

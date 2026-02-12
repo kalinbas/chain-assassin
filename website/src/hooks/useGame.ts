@@ -1,6 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { loadGame, loadGameEvents } from '../lib/contract';
-import { onContractEvent } from '../lib/contractEvents';
+import { loadGame } from '../lib/api';
 import type { Game } from '../types/game';
 
 export function useGame(id: number) {
@@ -13,17 +12,16 @@ export function useGame(id: number) {
       setLoading(false);
       return;
     }
-    Promise.all([loadGame(id), loadGameEvents(id)])
-      .then(([gameData, events]) => {
+    loadGame(id)
+      .then((gameData) => {
         if (gameData) {
-          gameData.activity = events;
           setGame(gameData);
           document.title = `${gameData.title} — Chain Assassin`;
         }
       })
       .catch((err) => {
         console.error('Failed to load game:', err);
-        setError('Could not fetch game data from the blockchain.');
+        setError('Could not fetch game data.');
       })
       .finally(() => setLoading(false));
   }, [id]);
@@ -31,7 +29,8 @@ export function useGame(id: number) {
   useEffect(() => {
     fetchGame();
     if (id <= 0) return;
-    return onContractEvent(fetchGame);
+    const interval = setInterval(fetchGame, 30000);
+    return () => clearInterval(interval);
   }, [id, fetchGame]);
 
   return { game, loading, error };

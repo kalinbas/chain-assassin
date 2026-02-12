@@ -54,12 +54,13 @@ fun CheckInScreen(
         }
     }
 
-    // Ensure server connection
+    // Ensure server connection and start sending location for auto-seed
     LaunchedEffect(Unit) {
         val id = gameId.toIntOrNull() ?: config.id.toIntOrNull()
         if (id != null) {
             viewModel.connectToServer(id)
         }
+        viewModel.startLocationTracking()
     }
 
     // Navigate based on phase change

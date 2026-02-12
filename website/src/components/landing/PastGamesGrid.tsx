@@ -1,13 +1,10 @@
 import { Link } from 'react-router-dom';
 import { Section } from '../layout/Section';
 import { PinIcon, ClockIcon, TrophyIcon } from '../icons/Icons';
-import { truncAddr } from '../../lib/contract';
 import { useGames } from '../../hooks/useGames';
 import { gameUrl } from '../../lib/url';
 import { SkeletonGameCard } from '../ui/Skeleton';
 import type { Game } from '../../types/game';
-
-const ZERO = '0x0000000000000000000000000000000000000000';
 
 function PastGameCard({ game }: { game: Game }) {
   const prizePoolBps = game.bps.first + game.bps.second + game.bps.third + game.bps.kills;
@@ -15,7 +12,7 @@ function PastGameCard({ game }: { game: Game }) {
   const totalPool = playerCount * game.entryFee + game.baseReward;
   const prizePool = (totalPool * prizePoolBps / 10000).toFixed(4);
   const isEnded = game.phase === 'ended';
-  const hasWinner = game.winner1 !== ZERO;
+  const hasWinner = game.winner1 !== 0;
 
   return (
     <Link to={gameUrl(game.id, game.title)} className="game-card__link">
@@ -37,7 +34,7 @@ function PastGameCard({ game }: { game: Game }) {
         {isEnded && hasWinner && (
           <div className="past-game-card__result">
             <TrophyIcon width={14} height={14} />
-            <span>Winner: <strong>{truncAddr(game.winner1)}</strong></span>
+            <span>Winner: <strong>Player #{game.winner1}</strong></span>
           </div>
         )}
         {!isEnded && (

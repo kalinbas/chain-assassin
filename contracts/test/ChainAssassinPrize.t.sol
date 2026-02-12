@@ -55,7 +55,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         // player1 is both winner1 AND topKiller
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // 3 players * 0.05 = 0.15 ETH total
         // player1 gets 35% + 20% = 55%
@@ -79,7 +79,11 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
     }
 
     function test_claimPrize_revertsNonWinner() public {
-        uint256 gameId = _setupEndedGame();
+        // Register 5 players, end with only 4 as winners; player5 has no prize
+        uint256 gameId = _createAndRegisterPlayers(5);
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, 1, 2, 3, 4);
 
         vm.prank(player5);
         vm.expectRevert(IChainAssassin.NoPrize.selector);
@@ -108,7 +112,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
-        game.endGame(gameId, player1, player1, player3, player1);
+        game.endGame(gameId, 1, 1, 3, 1);
     }
 
     function test_endGame_revertsIfWinner3SameAsWinner1() public {
@@ -117,7 +121,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
-        game.endGame(gameId, player1, player2, player1, player1);
+        game.endGame(gameId, 1, 2, 1, 1);
     }
 
     function test_endGame_revertsIfWinner3SameAsWinner2() public {
@@ -126,7 +130,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.WinnersNotUnique.selector);
-        game.endGame(gameId, player1, player2, player2, player1);
+        game.endGame(gameId, 1, 2, 2, 1);
     }
 
     // ============ Platform Fee Tests ============
@@ -171,7 +175,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Creator fees should be 0 (operator is the game creator)
         assertEq(game.creatorFeesAccrued(operator), 0);
@@ -322,7 +326,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         uint256 gameId2 = _createAndRegisterPlayers(3);
         _startGame(gameId2);
         vm.prank(operator);
-        game.endGame(gameId2, player1, player2, player3, player1);
+        game.endGame(gameId2, 1, 2, 3, 1);
 
         // game 2: 3 players × 0.05 = 0.15 ETH
         uint256 expectedFee = (0.2 ether * 1000 / 10000) + (0.15 ether * 1000 / 10000);
@@ -366,7 +370,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Platform fee is the remainder (absorbs dust)
         uint256 total = 0.15 ether; // 3 players * 0.05 ETH
@@ -396,7 +400,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         // End the game — platform fee should still be 1000 (locked at creation).
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Verify: platform fee is derived from stored game BPS, not current global rate.
         uint256 total = 0.15 ether; // 3 players * 0.05 ETH
@@ -467,7 +471,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // total = 0.5 + 3 * 0.05 = 0.65 ETH
         uint256 total = BASE_REWARD + 3 * ENTRY_FEE;
@@ -488,7 +492,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player4);
+        game.endGame(gameId, 1, 2, 3, 4);
 
         // Claim all prizes
         vm.prank(player1); game.claimPrize(gameId);
@@ -593,7 +597,7 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // 1st place gets 35% of 1 ETH = 0.35 ETH, plus topKiller 20% = 0.55 ETH
         uint256 expected = 1 ether * (3500 + 2000) / 10000;

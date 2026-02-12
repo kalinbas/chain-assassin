@@ -191,12 +191,12 @@ export async function startGame(gameId: number): Promise<TxResult> {
 }
 
 /**
- * Record a kill on-chain.
+ * Record a kill on-chain. Takes playerNumbers (uint16).
  */
 export async function recordKill(
   gameId: number,
-  hunter: string,
-  target: string
+  hunter: number,
+  target: number
 ): Promise<TxResult> {
   return enqueueTx(
     gameId,
@@ -210,19 +210,19 @@ export async function recordKill(
 }
 
 /**
- * Eliminate a player on-chain (e.g., zone violation).
+ * Eliminate a player on-chain (e.g., zone violation). Takes playerNumber (uint16).
  */
 export async function eliminatePlayer(
   gameId: number,
-  player: string
+  playerNumber: number
 ): Promise<TxResult> {
   return enqueueTx(
     gameId,
     "eliminatePlayer",
-    { gameId, player },
+    { gameId, playerNumber },
     async (nonce) => {
       const contract = getWriteContract();
-      return contract.eliminatePlayer(gameId, player, { nonce });
+      return contract.eliminatePlayer(gameId, playerNumber, { nonce });
     }
   );
 }
@@ -258,14 +258,14 @@ export async function triggerCancellation(gameId: number): Promise<TxResult> {
 }
 
 /**
- * End a game on-chain with winners and top killer.
+ * End a game on-chain with winners and top killer. Takes playerNumbers (uint16).
  */
 export async function endGame(
   gameId: number,
-  winner1: string,
-  winner2: string,
-  winner3: string,
-  topKiller: string
+  winner1: number,
+  winner2: number,
+  winner3: number,
+  topKiller: number
 ): Promise<TxResult> {
   return enqueueTx(
     gameId,

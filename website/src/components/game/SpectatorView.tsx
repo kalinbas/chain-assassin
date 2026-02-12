@@ -4,10 +4,7 @@ import { useSpectatorSound } from '../../hooks/useSpectatorSound';
 import { SpectatorMap } from './SpectatorMap';
 import { SpectatorLeaderboard } from './SpectatorLeaderboard';
 import { SpectatorKillFeed } from './SpectatorKillFeed';
-import { truncAddr } from '../../lib/contract';
 import { EyeIcon, EyeOffIcon, SoundOnIcon, SoundOffIcon } from '../icons/Icons';
-
-const ZERO = '0x0000000000000000000000000000000000000000';
 
 function formatCountdown(nextShrinkAt: number | null | undefined): string | null {
   if (!nextShrinkAt) return null;
@@ -97,22 +94,22 @@ export function SpectatorView({ state }: { state: SpectatorState }) {
         <div className="spectator__ended">
           <h3 className="spectator__ended-title">Game Over</h3>
           <div className="spectator__winners">
-            {state.winners.winner1 !== ZERO && (
+            {state.winners.winner1 !== 0 && (
               <div className="spectator__winner spectator__winner--1st">
                 <span className="spectator__winner-rank">1st</span>
-                <span className="spectator__winner-addr">{truncAddr(state.winners.winner1)}</span>
+                <span className="spectator__winner-addr">Player #{state.winners.winner1}</span>
               </div>
             )}
-            {state.winners.winner2 !== ZERO && (
+            {state.winners.winner2 !== 0 && (
               <div className="spectator__winner spectator__winner--2nd">
                 <span className="spectator__winner-rank">2nd</span>
-                <span className="spectator__winner-addr">{truncAddr(state.winners.winner2)}</span>
+                <span className="spectator__winner-addr">Player #{state.winners.winner2}</span>
               </div>
             )}
-            {state.winners.winner3 !== ZERO && (
+            {state.winners.winner3 !== 0 && (
               <div className="spectator__winner spectator__winner--3rd">
                 <span className="spectator__winner-rank">3rd</span>
-                <span className="spectator__winner-addr">{truncAddr(state.winners.winner3)}</span>
+                <span className="spectator__winner-addr">Player #{state.winners.winner3}</span>
               </div>
             )}
           </div>

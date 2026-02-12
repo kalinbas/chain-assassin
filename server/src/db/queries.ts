@@ -2,9 +2,9 @@ import Database from "better-sqlite3";
 import { config } from "../config.js";
 import { runMigrations } from "./migrations.js";
 import { createLogger } from "../utils/logger.js";
+import { GamePhase } from "../utils/types.js";
 import type {
   GameConfig,
-  GamePhase,
   ActiveSubPhase,
   Player,
   TargetAssignment,
@@ -35,18 +35,40 @@ export function getDb(): Database.Database {
   return db;
 }
 
+// ============ Reset ============
+
+/**
+ * Wipe all game-related data from the DB (for full rebuild from chain).
+ * Preserves schema_version and sync_state structure but clears sync_state values.
+ */
+export function resetGameData(): void {
+  const d = getDb();
+  d.exec("DELETE FROM location_pings");
+  d.exec("DELETE FROM heartbeat_scans");
+  d.exec("DELETE FROM kills");
+  d.exec("DELETE FROM target_assignments");
+  d.exec("DELETE FROM operator_txs");
+  d.exec("DELETE FROM game_photos");
+  d.exec("DELETE FROM zone_shrinks");
+  d.exec("DELETE FROM players");
+  d.exec("DELETE FROM games");
+  d.exec("DELETE FROM sync_state");
+  log.info("All game data wiped for rebuild");
+}
+
 // ============ Games ============
 
-export function insertGame(game: GameConfig & { phase?: number }): void {
+export function insertGame(game: GameConfig & { phase?: number; totalCollected?: string; playerCount?: number }): void {
   getDb()
     .prepare(
       `INSERT INTO games (
         game_id, title, entry_fee, min_players, max_players,
         registration_deadline, game_date, expiry_deadline, created_at, creator,
         center_lat, center_lng, meeting_lat, meeting_lng,
-        bps_1st, bps_2nd, bps_3rd, bps_kills, bps_platform, base_reward, phase
+        bps_1st, bps_2nd, bps_3rd, bps_kills, bps_creator, base_reward,
+        total_collected, player_count, max_duration, phase
       ) VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
       )`
     )
     .run(
@@ -68,8 +90,11 @@ export function insertGame(game: GameConfig & { phase?: number }): void {
       game.bps2nd,
       game.bps3rd,
       game.bpsKills,
-      game.bpsPlatform,
+      game.bpsCreator,
       game.baseReward.toString(),
+      game.totalCollected ?? game.baseReward.toString(),
+      game.playerCount ?? 0,
+      game.maxDuration,
       game.phase ?? 0
     );
 }
@@ -83,6 +108,8 @@ export function getGame(gameId: number): (GameConfig & {
   winner2: string | null;
   winner3: string | null;
   topKiller: string | null;
+  totalCollected: string;
+  playerCount: number;
 }) | null {
   const row = getDb()
     .prepare("SELECT * FROM games WHERE game_id = ?")
@@ -107,8 +134,11 @@ export function getGame(gameId: number): (GameConfig & {
     bps2nd: row.bps_2nd as number,
     bps3rd: row.bps_3rd as number,
     bpsKills: row.bps_kills as number,
-    bpsPlatform: row.bps_platform as number,
+    bpsCreator: row.bps_creator as number,
     baseReward: BigInt((row.base_reward as string) ?? "0"),
+    maxDuration: (row.max_duration as number) ?? 0,
+    totalCollected: (row.total_collected as string) ?? "0",
+    playerCount: (row.player_count as number) ?? 0,
     phase: row.phase as GamePhase,
     subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
     startedAt: row.started_at as number | null,
@@ -192,9 +222,139 @@ export function getGamesInPhase(phase: GamePhase): GameConfig[] {
     bps2nd: row.bps_2nd as number,
     bps3rd: row.bps_3rd as number,
     bpsKills: row.bps_kills as number,
-    bpsPlatform: row.bps_platform as number,
+    bpsCreator: row.bps_creator as number,
     baseReward: BigInt((row.base_reward as string) ?? "0"),
+    maxDuration: (row.max_duration as number) ?? 0,
   }));
+}
+
+export function getAllGames(): Array<GameConfig & {
+  phase: GamePhase;
+  subPhase: ActiveSubPhase | null;
+  startedAt: number | null;
+  endedAt: number | null;
+  winner1: string | null;
+  winner2: string | null;
+  winner3: string | null;
+  topKiller: string | null;
+  totalCollected: string;
+  playerCount: number;
+}> {
+  const rows = getDb()
+    .prepare("SELECT * FROM games ORDER BY game_id DESC")
+    .all() as Record<string, unknown>[];
+  return rows.map((row) => ({
+    gameId: row.game_id as number,
+    title: row.title as string,
+    entryFee: BigInt(row.entry_fee as string),
+    minPlayers: row.min_players as number,
+    maxPlayers: row.max_players as number,
+    registrationDeadline: row.registration_deadline as number,
+    gameDate: row.game_date as number,
+    expiryDeadline: row.expiry_deadline as number,
+    createdAt: row.created_at as number,
+    creator: row.creator as string,
+    centerLat: row.center_lat as number,
+    centerLng: row.center_lng as number,
+    meetingLat: (row.meeting_lat as number) ?? 0,
+    meetingLng: (row.meeting_lng as number) ?? 0,
+    bps1st: row.bps_1st as number,
+    bps2nd: row.bps_2nd as number,
+    bps3rd: row.bps_3rd as number,
+    bpsKills: row.bps_kills as number,
+    bpsCreator: row.bps_creator as number,
+    baseReward: BigInt((row.base_reward as string) ?? "0"),
+    maxDuration: (row.max_duration as number) ?? 0,
+    totalCollected: (row.total_collected as string) ?? "0",
+    playerCount: (row.player_count as number) ?? 0,
+    phase: row.phase as GamePhase,
+    subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
+    startedAt: row.started_at as number | null,
+    endedAt: row.ended_at as number | null,
+    winner1: row.winner1 as string | null,
+    winner2: row.winner2 as string | null,
+    winner3: row.winner3 as string | null,
+    topKiller: row.top_killer as string | null,
+  }));
+}
+
+export interface ActivityEvent {
+  type: "create" | "register" | "start" | "kill" | "end" | "cancel";
+  text: string;
+  timestamp: number;
+  txHash: string | null;
+}
+
+export function getGameActivity(gameId: number): ActivityEvent[] {
+  const game = getGame(gameId);
+  if (!game) return [];
+
+  const events: ActivityEvent[] = [];
+
+  // Game created
+  events.push({
+    type: "create",
+    text: "Game created",
+    timestamp: game.createdAt,
+    txHash: null,
+  });
+
+  // Player registrations
+  const players = getPlayers(gameId);
+  for (const p of players) {
+    events.push({
+      type: "register",
+      text: `Player #${p.playerNumber} registered`,
+      timestamp: game.createdAt,
+      txHash: null,
+    });
+  }
+
+  // Game started
+  if (game.startedAt) {
+    events.push({
+      type: "start",
+      text: `Game started with ${game.playerCount} players`,
+      timestamp: game.startedAt,
+      txHash: null,
+    });
+  }
+
+  // Kills
+  const kills = getKills(gameId);
+  for (const k of kills) {
+    const hunter = getPlayer(gameId, k.hunterAddress);
+    const target = getPlayer(gameId, k.targetAddress);
+    const hunterNum = hunter?.playerNumber ?? 0;
+    const targetNum = target?.playerNumber ?? 0;
+    events.push({
+      type: "kill",
+      text: `Player #${hunterNum} eliminated Player #${targetNum}`,
+      timestamp: k.timestamp,
+      txHash: k.txHash,
+    });
+  }
+
+  // Game ended or cancelled
+  if (game.phase === GamePhase.ENDED && game.endedAt) {
+    events.push({
+      type: "end",
+      text: "Game ended",
+      timestamp: game.endedAt,
+      txHash: null,
+    });
+  } else if (game.phase === GamePhase.CANCELLED && game.endedAt) {
+    events.push({
+      type: "cancel",
+      text: "Game cancelled",
+      timestamp: game.endedAt,
+      txHash: null,
+    });
+  }
+
+  // Sort newest first
+  events.sort((a, b) => b.timestamp - a.timestamp);
+  return events;
 }
 
 // ============ Zone Shrinks ============
@@ -321,6 +481,26 @@ export function getCheckedInCount(gameId: number): number {
   return row.count;
 }
 
+export function setPlayerClaimed(gameId: number, address: string): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET has_claimed = 1 WHERE game_id = ? AND address = ?"
+    )
+    .run(gameId, address.toLowerCase());
+}
+
+export function updatePlayerCount(gameId: number, playerCount: number): void {
+  getDb()
+    .prepare("UPDATE games SET player_count = ? WHERE game_id = ?")
+    .run(playerCount, gameId);
+}
+
+export function updateTotalCollected(gameId: number, totalCollected: string): void {
+  getDb()
+    .prepare("UPDATE games SET total_collected = ? WHERE game_id = ?")
+    .run(totalCollected, gameId);
+}
+
 function mapPlayer(row: Record<string, unknown>): Player {
   return {
     address: row.address as string,
@@ -333,6 +513,7 @@ function mapPlayer(row: Record<string, unknown>): Player {
     eliminatedAt: row.eliminated_at as number | null,
     eliminatedBy: row.eliminated_by as string | null,
     lastHeartbeatAt: row.last_heartbeat_at as number | null,
+    hasClaimed: (row.has_claimed as number) === 1,
   };
 }
 

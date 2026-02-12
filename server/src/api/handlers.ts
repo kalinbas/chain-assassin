@@ -5,7 +5,8 @@ import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "./middleware.js";
 import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAllRegistrationGames } from "../game/manager.js";
 import { getOperatorWallet } from "../blockchain/client.js";
-import { getPlayer, insertPhoto, getGamePhotos } from "../db/queries.js";
+import { getPlayer, insertPhoto, getGamePhotos, getAllGames, getGame, getZoneShrinks, getGameActivity, getPlayers } from "../db/queries.js";
+import { getLeaderboard } from "../game/leaderboard.js";
 import { config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
 
@@ -254,4 +255,155 @@ export function getPhotos(req: Request, res: Response): void {
     caption: p.caption,
     timestamp: p.timestamp,
   })));
+}
+
+// ============ Helper: format a game row for API response ============
+
+function resolveWinnerNumber(gameId: number, address: string | null): number {
+  if (!address) return 0;
+  const p = getPlayer(gameId, address);
+  return p?.playerNumber ?? 0;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function formatGameResponse(game: NonNullable<ReturnType<typeof getGame>>): Record<string, unknown> {
+  const shrinks = getZoneShrinks(game.gameId);
+  return {
+    gameId: game.gameId,
+    title: game.title,
+    entryFee: game.entryFee.toString(),
+    baseReward: game.baseReward.toString(),
+    minPlayers: game.minPlayers,
+    maxPlayers: game.maxPlayers,
+    registrationDeadline: game.registrationDeadline,
+    gameDate: game.gameDate,
+    expiryDeadline: game.expiryDeadline,
+    maxDuration: game.maxDuration,
+    createdAt: game.createdAt,
+    creator: game.creator,
+    centerLat: game.centerLat,
+    centerLng: game.centerLng,
+    meetingLat: game.meetingLat,
+    meetingLng: game.meetingLng,
+    bps1st: game.bps1st,
+    bps2nd: game.bps2nd,
+    bps3rd: game.bps3rd,
+    bpsKills: game.bpsKills,
+    bpsCreator: game.bpsCreator,
+    totalCollected: game.totalCollected,
+    playerCount: game.playerCount,
+    phase: game.phase,
+    subPhase: game.subPhase,
+    winner1: resolveWinnerNumber(game.gameId, game.winner1),
+    winner2: resolveWinnerNumber(game.gameId, game.winner2),
+    winner3: resolveWinnerNumber(game.gameId, game.winner3),
+    topKiller: resolveWinnerNumber(game.gameId, game.topKiller),
+    zoneShrinks: shrinks.map((s) => ({ atSecond: s.atSecond, radiusMeters: s.radiusMeters })),
+  };
+}
+
+/**
+ * GET /api/games
+ * Public endpoint — returns all games.
+ */
+export function listGames(_req: Request, res: Response): void {
+  const games = getAllGames();
+  res.json(games.map((g) => formatGameResponse(g)));
+}
+
+/**
+ * GET /api/games/:gameId
+ * Public endpoint — returns full game detail including activity, leaderboard, zone.
+ */
+export function gameDetail(req: Request, res: Response): void {
+  const gameId = parseInt(req.params.gameId, 10);
+  if (isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game ID" });
+    return;
+  }
+
+  const game = getGame(gameId);
+  if (!game) {
+    res.status(404).json({ error: "Game not found" });
+    return;
+  }
+
+  const base = formatGameResponse(game);
+  const activity = getGameActivity(gameId);
+  const leaderboard = getLeaderboard(gameId);
+  const players = getPlayers(gameId);
+  const aliveCount = players.filter((p) => p.isAlive).length;
+  const checkedInCount = players.filter((p) => p.checkedIn).length;
+
+  const checkinEndsAt = game.subPhase === "checkin" && game.startedAt
+    ? game.startedAt + config.checkinDurationSeconds
+    : null;
+  const pregameEndsAt = game.subPhase === "pregame" && game.startedAt
+    ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
+    : null;
+
+  // Zone state: use initial radius from shrinks if game is active
+  let zone = null;
+  if (game.phase === 1 && game.centerLat && game.centerLng) {
+    const shrinks = getZoneShrinks(gameId);
+    const initialRadius = shrinks[0]?.radiusMeters ?? 500;
+    zone = { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null };
+  }
+
+  // Try to get live zone from getGameStatus (has in-memory active game data)
+  const liveStatus = getGameStatus(gameId);
+  if (liveStatus?.zone) {
+    zone = liveStatus.zone;
+  }
+
+  res.json({
+    ...base,
+    activity,
+    leaderboard,
+    aliveCount,
+    checkedInCount,
+    checkinEndsAt,
+    pregameEndsAt,
+    zone,
+  });
+}
+
+/**
+ * GET /api/games/:gameId/player/:address
+ * Public endpoint — returns player info for a specific address.
+ */
+export function playerInfo(req: Request, res: Response): void {
+  const gameId = parseInt(req.params.gameId, 10);
+  if (isNaN(gameId)) {
+    res.status(400).json({ error: "Invalid game ID" });
+    return;
+  }
+
+  const address = req.params.address;
+  if (!address) {
+    res.status(400).json({ error: "Address required" });
+    return;
+  }
+
+  const player = getPlayer(gameId, address);
+  if (!player) {
+    res.json({
+      registered: false,
+      alive: false,
+      kills: 0,
+      claimed: false,
+      playerNumber: 0,
+      checkedIn: false,
+    });
+    return;
+  }
+
+  res.json({
+    registered: true,
+    alive: player.isAlive,
+    kills: player.kills,
+    claimed: player.hasClaimed,
+    playerNumber: player.playerNumber,
+    checkedIn: player.checkedIn,
+  });
 }

@@ -7,7 +7,7 @@ import { createLogger } from "./utils/logger.js";
 import { initDb } from "./db/queries.js";
 import { initWebSocketServer } from "./ws/server.js";
 import { router } from "./api/routes.js";
-import { startEventListener, backfillEvents, stopEventListener } from "./blockchain/listener.js";
+import { startEventListener, backfillEvents, rebuildFromChain, stopEventListener } from "./blockchain/listener.js";
 import { recoverGames, cleanupAll } from "./game/manager.js";
 import { closeProviders } from "./blockchain/client.js";
 
@@ -36,24 +36,34 @@ async function main(): Promise<void> {
   // 4. Initialize WebSocket server
   initWebSocketServer(server);
 
-  // 5. Recover games from DB (active + registration-phase)
+  // 5. Rebuild or recover
+  if (config.rebuildDb) {
+    log.info("REBUILD_DB=true — wiping DB and rebuilding from blockchain...");
+    try {
+      await rebuildFromChain();
+    } catch (err) {
+      log.error({ error: (err as Error).message }, "DB rebuild from chain failed");
+    }
+  }
+
+  // 6. Recover games from DB (active + registration-phase)
   recoverGames();
 
-  // 6. Backfill missed blockchain events
+  // 7. Backfill missed blockchain events (since last processed block)
   try {
     await backfillEvents();
   } catch (err) {
     log.error({ error: (err as Error).message }, "Event backfill failed (continuing anyway)");
   }
 
-  // 7. Start live event listener
+  // 8. Start live event listener
   try {
     await startEventListener();
   } catch (err) {
     log.warn({ error: (err as Error).message }, "Event listener failed to start (simulation-only mode still works)");
   }
 
-  // 8. Start HTTP server
+  // 9. Start HTTP server
   server.listen(config.port, config.host, () => {
     log.info(
       { host: config.host, port: config.port },

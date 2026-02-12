@@ -54,9 +54,9 @@ export interface Game {
   aliveCount?: number;
   creator: string;
   createdAt: number;
-  winner1: string;
-  winner2: string;
-  winner3: string;
-  topKiller: string;
+  winner1: number;  // playerNumber (0 = none)
+  winner2: number;
+  winner3: number;
+  topKiller: number;
   activity: GameEvent[];
 }

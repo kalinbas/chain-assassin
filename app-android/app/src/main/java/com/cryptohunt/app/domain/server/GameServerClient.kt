@@ -282,6 +282,124 @@ class GameServerClient @Inject constructor(
         }
     }
 
+    // --- Public REST API (no auth) ---
+
+    /**
+     * GET /api/games — fetch all games from server.
+     */
+    fun fetchAllGames(): List<ServerGame>? {
+        val request = Request.Builder()
+            .url("${ServerConfig.SERVER_URL}/api/games")
+            .get()
+            .build()
+        return try {
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) { response.close(); return null }
+            val body = response.body?.string() ?: return null
+            response.close()
+            val array = JSONArray(body)
+            val games = mutableListOf<ServerGame>()
+            for (i in 0 until array.length()) {
+                games.add(parseServerGame(array.getJSONObject(i)))
+            }
+            games
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchAllGames error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * GET /api/games/:gameId — fetch single game detail.
+     */
+    fun fetchGameDetail(gameId: Int): ServerGame? {
+        val request = Request.Builder()
+            .url("${ServerConfig.SERVER_URL}/api/games/$gameId")
+            .get()
+            .build()
+        return try {
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) { response.close(); return null }
+            val body = response.body?.string() ?: return null
+            response.close()
+            parseServerGame(JSONObject(body))
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchGameDetail error: ${e.message}")
+            null
+        }
+    }
+
+    /**
+     * GET /api/games/:gameId/player/:address — fetch player info.
+     */
+    fun fetchPlayerInfo(gameId: Int, address: String): ServerPlayerInfo? {
+        val request = Request.Builder()
+            .url("${ServerConfig.SERVER_URL}/api/games/$gameId/player/$address")
+            .get()
+            .build()
+        return try {
+            val response = client.newCall(request).execute()
+            if (!response.isSuccessful) { response.close(); return null }
+            val body = response.body?.string() ?: return null
+            response.close()
+            val json = JSONObject(body)
+            ServerPlayerInfo(
+                registered = json.optBoolean("registered", false),
+                alive = json.optBoolean("alive", false),
+                kills = json.optInt("kills", 0),
+                claimed = json.optBoolean("claimed", false),
+                playerNumber = json.optInt("playerNumber", 0),
+                checkedIn = json.optBoolean("checkedIn", false)
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "fetchPlayerInfo error: ${e.message}")
+            null
+        }
+    }
+
+    private fun parseServerGame(obj: JSONObject): ServerGame {
+        val shrinksArray = obj.optJSONArray("zoneShrinks")
+        val shrinks = mutableListOf<ServerZoneShrink>()
+        if (shrinksArray != null) {
+            for (i in 0 until shrinksArray.length()) {
+                val s = shrinksArray.getJSONObject(i)
+                shrinks.add(ServerZoneShrink(s.optInt("atSecond"), s.optInt("radiusMeters")))
+            }
+        }
+        return ServerGame(
+            gameId = obj.optInt("gameId"),
+            title = obj.optString("title", ""),
+            entryFee = obj.optString("entryFee", "0"),
+            baseReward = obj.optString("baseReward", "0"),
+            minPlayers = obj.optInt("minPlayers"),
+            maxPlayers = obj.optInt("maxPlayers"),
+            registrationDeadline = obj.optLong("registrationDeadline"),
+            gameDate = obj.optLong("gameDate"),
+            expiryDeadline = obj.optLong("expiryDeadline"),
+            maxDuration = obj.optLong("maxDuration"),
+            createdAt = obj.optLong("createdAt"),
+            creator = obj.optString("creator", ""),
+            centerLat = obj.optInt("centerLat"),
+            centerLng = obj.optInt("centerLng"),
+            meetingLat = obj.optInt("meetingLat"),
+            meetingLng = obj.optInt("meetingLng"),
+            bps1st = obj.optInt("bps1st"),
+            bps2nd = obj.optInt("bps2nd"),
+            bps3rd = obj.optInt("bps3rd"),
+            bpsKills = obj.optInt("bpsKills"),
+            bpsCreator = obj.optInt("bpsCreator"),
+            totalCollected = obj.optString("totalCollected", "0"),
+            playerCount = obj.optInt("playerCount"),
+            phase = obj.optInt("phase"),
+            subPhase = if (obj.isNull("subPhase")) null else obj.optString("subPhase"),
+            winner1 = obj.optInt("winner1"),
+            winner2 = obj.optInt("winner2"),
+            winner3 = obj.optInt("winner3"),
+            topKiller = obj.optInt("topKiller"),
+            zoneShrinks = shrinks
+        )
+    }
+
     // --- Internal ---
 
     private fun doConnect() {

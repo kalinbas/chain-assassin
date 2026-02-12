@@ -104,13 +104,13 @@ abstract contract ChainAssassinTestBase is Test {
     }
 
     /// @dev Creates a game, registers 4 players, starts, and ends with all winners set.
-    /// player1=winner1, player2=winner2, player3=winner3, player4=topKiller
+    /// player1(#1)=winner1, player2(#2)=winner2, player3(#3)=winner3, player4(#4)=topKiller
     function _setupEndedGame() internal returns (uint256 gameId) {
         gameId = _createAndRegisterPlayers(4);
 
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player4);
+        game.endGame(gameId, 1, 2, 3, 4);
     }
 }

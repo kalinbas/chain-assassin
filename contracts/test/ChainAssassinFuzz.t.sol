@@ -59,12 +59,12 @@ contract ChainAssassinFuzzTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         // End game: pick winners from registered players
-        address w2 = bps2nd > 0 ? player2 : address(0);
-        address w3 = bps3rd > 0 ? player3 : address(0);
-        address tk = bpsKills > 0 ? player1 : address(0);
+        uint16 w2 = bps2nd > 0 ? uint16(2) : uint16(0);
+        uint16 w3 = bps3rd > 0 ? uint16(3) : uint16(0);
+        uint16 tk = bpsKills > 0 ? uint16(1) : uint16(0);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, w2, w3, tk);
+        game.endGame(gameId, 1, w2, w3, tk);
 
         // --- Verify solvency ---
         uint256 total = uint256(ENTRY_FEE) * minP;
@@ -103,7 +103,7 @@ contract ChainAssassinFuzzTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         uint256 total = uint256(entryFee) * 3;
 
@@ -141,7 +141,7 @@ contract ChainAssassinFuzzTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, address(0), player1);
+        game.endGame(gameId, 1, 2, 0, 1);
 
         uint256 total = uint256(ENTRY_FEE) * count;
 

@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -26,8 +26,11 @@ CREATE TABLE IF NOT EXISTS games (
   bps_2nd               INTEGER NOT NULL,
   bps_3rd               INTEGER NOT NULL,
   bps_kills             INTEGER NOT NULL,
-  bps_platform          INTEGER NOT NULL,
+  bps_creator           INTEGER NOT NULL,
   base_reward           TEXT NOT NULL DEFAULT '0',
+  total_collected       TEXT NOT NULL DEFAULT '0',
+  player_count          INTEGER NOT NULL DEFAULT 0,
+  max_duration          INTEGER NOT NULL DEFAULT 0,
   phase                 INTEGER NOT NULL DEFAULT 0,
   sub_phase             TEXT,
   started_at            INTEGER,
@@ -59,6 +62,7 @@ CREATE TABLE IF NOT EXISTS players (
   eliminated_at INTEGER,
   eliminated_by TEXT,
   last_heartbeat_at INTEGER,
+  has_claimed   INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, address)
 );
 

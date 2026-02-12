@@ -90,6 +90,11 @@ fun RegisteredDetailScreen(
         }
     }
 
+    // Connect to server so we receive phase transition messages (e.g. game:checkin_started)
+    LaunchedEffect(config.id) {
+        viewModel.connectToServer(config.id)
+    }
+
     val days = (timeRemainingMs / 86400000).coerceAtLeast(0)
     val hours = ((timeRemainingMs % 86400000) / 3600000).coerceAtLeast(0)
     val minutes = ((timeRemainingMs % 3600000) / 60000).coerceAtLeast(0)

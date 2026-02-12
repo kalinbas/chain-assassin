@@ -2,14 +2,15 @@ package com.cryptohunt.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.cryptohunt.app.domain.chain.ChainMapper
 import com.cryptohunt.app.domain.chain.ContractService
 import com.cryptohunt.app.domain.chain.OnChainPhase
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.GameServerClient
+import com.cryptohunt.app.domain.server.ServerMapper
 import com.cryptohunt.app.domain.wallet.WalletManager
+import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,10 +46,10 @@ data class GameHistoryItem(
     val isCancelled: Boolean = false,
     val gameId: Int = 0,
     val participated: Boolean = true,
-    val winner1: String = "",
-    val winner2: String = "",
-    val winner3: String = "",
-    val topKiller: String = ""
+    val winner1: Int = 0,      // playerNumber (0 = none)
+    val winner2: Int = 0,
+    val winner3: Int = 0,
+    val topKiller: Int = 0
 )
 
 @HiltViewModel
@@ -104,6 +105,14 @@ class LobbyViewModel @Inject constructor(
                 }
             }
         }
+
+        // Forward server messages to GameEngine (so phase transitions reach the UI)
+        viewModelScope.launch {
+            serverClient.serverMessages.collect { msg ->
+                Log.d("LobbyViewModel", "Server: $msg")
+                gameEngine.processServerMessage(msg)
+            }
+        }
     }
 
     fun loadGames() {
@@ -117,39 +126,42 @@ class LobbyViewModel @Inject constructor(
     private suspend fun loadGamesInternal() {
         _error.value = null
         try {
-            val nextId = contractService.getNextGameId()
+            val allGames = serverClient.fetchAllGames() ?: run {
+                _error.value = "Failed to load games from server"
+                return
+            }
             val address = walletManager.getAddress()
             val items = mutableListOf<GameListItem>()
-            for (gameId in 1 until nextId) {
+
+            for (game in allGames) {
                 try {
-                    val config = contractService.getGameConfig(gameId)
-                    val state = contractService.getGameState(gameId)
-                    val shrinks = contractService.getZoneShrinks(gameId)
-                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
+                    val appConfig = ServerMapper.toGameConfig(game)
+                    val phase = OnChainPhase.fromInt(game.phase)
+                    val totalCollected = java.math.BigInteger(game.totalCollected)
 
                     val nowMs = System.currentTimeMillis()
-                    if (state.phase == OnChainPhase.REGISTRATION && appConfig.registrationDeadline > nowMs) {
+                    if (phase == OnChainPhase.REGISTRATION && appConfig.registrationDeadline > nowMs) {
                         // Show REGISTRATION games in the upcoming list
                         val playerInfo = if (address.isNotEmpty()) {
-                            try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
+                            try { serverClient.fetchPlayerInfo(game.gameId, address) } catch (_: Exception) { null }
                         } else null
 
                         items.add(
                             GameListItem(
                                 config = appConfig,
-                                currentPlayers = state.playerCount,
+                                currentPlayers = game.playerCount,
                                 locationName = appConfig.name,
                                 startTime = appConfig.gameDate,
-                                onChainPhase = state.phase,
-                                totalCollected = state.totalCollected,
+                                onChainPhase = phase,
+                                totalCollected = totalCollected,
                                 isPlayerRegistered = playerInfo?.registered == true,
-                                playerNumber = playerInfo?.number ?: 0
+                                playerNumber = playerInfo?.playerNumber ?: 0
                             )
                         )
-                    } else if (state.phase == OnChainPhase.ACTIVE && address.isNotEmpty()) {
+                    } else if (phase == OnChainPhase.ACTIVE && address.isNotEmpty()) {
                         // Check if we're a registered player in this active game
                         val playerInfo = try {
-                            contractService.getPlayerInfo(gameId, address)
+                            serverClient.fetchPlayerInfo(game.gameId, address)
                         } catch (_: Exception) { null }
 
                         if (playerInfo != null && playerInfo.registered) {
@@ -158,16 +170,15 @@ class LobbyViewModel @Inject constructor(
                             if (existingState == null || existingState.config.id != appConfig.id) {
                                 gameEngine.registerForGame(
                                     appConfig, address, appConfig.gameDate,
-                                    assignedPlayerNumber = playerInfo.number
+                                    assignedPlayerNumber = playerInfo.playerNumber
                                 )
-                                // Connect to server — auth:success will set the correct phase
-                                serverClient.connect(gameId)
+                                // Server connection deferred to when user navigates to the game screen
                             }
                             break // Player can only be in one active game at a time
                         }
                     }
                 } catch (_: Exception) {
-                    // Skip games that fail to load
+                    // Skip games that fail to parse
                 }
             }
             _games.value = items
@@ -183,31 +194,30 @@ class LobbyViewModel @Inject constructor(
     private suspend fun loadGameHistoryInternal() {
         val address = walletManager.getAddress()
         try {
-            val nextId = contractService.getNextGameId()
+            val allGames = serverClient.fetchAllGames() ?: return
             val items = mutableListOf<GameHistoryItem>()
-            for (gameId in 1 until nextId) {
+
+            for (game in allGames) {
                 try {
-                    val config = contractService.getGameConfig(gameId)
-                    val state = contractService.getGameState(gameId)
+                    val phase = OnChainPhase.fromInt(game.phase)
 
                     // Only include ended or cancelled games in history
-                    if (state.phase != OnChainPhase.ENDED && state.phase != OnChainPhase.CANCELLED) continue
+                    if (phase != OnChainPhase.ENDED && phase != OnChainPhase.CANCELLED) continue
 
-                    val shrinks = contractService.getZoneShrinks(gameId)
-                    val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
+                    val appConfig = ServerMapper.toGameConfig(game)
 
-                    val isCancelled = state.phase == OnChainPhase.CANCELLED
+                    val isCancelled = phase == OnChainPhase.CANCELLED
                     val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
 
                     // Check if current player participated
                     val playerInfo = if (address.isNotEmpty()) {
-                        try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
+                        try { serverClient.fetchPlayerInfo(game.gameId, address) } catch (_: Exception) { null }
                     } else null
                     val participated = playerInfo?.registered == true
 
-                    // Only fetch claimable if player participated
+                    // Only fetch claimable if player participated (stays on-chain)
                     val claimable = if (participated && address.isNotEmpty()) {
-                        try { contractService.getClaimableAmount(gameId, address) } catch (_: Exception) { BigInteger.ZERO }
+                        try { contractService.getClaimableAmount(game.gameId, address) } catch (_: Exception) { BigInteger.ZERO }
                     } else BigInteger.ZERO
                     val claimableEth = org.web3j.utils.Convert.fromWei(
                         java.math.BigDecimal(claimable),
@@ -215,11 +225,12 @@ class LobbyViewModel @Inject constructor(
                     ).toDouble()
 
                     // Determine rank based on winners (only relevant if participated)
-                    val rank = if (participated && address.isNotEmpty()) {
-                        when (address.lowercase()) {
-                            state.winner1.lowercase() -> 1
-                            state.winner2.lowercase() -> 2
-                            state.winner3.lowercase() -> 3
+                    val pNum = playerInfo?.playerNumber ?: 0
+                    val rank = if (participated && pNum != 0) {
+                        when (pNum) {
+                            game.winner1 -> 1
+                            game.winner2 -> 2
+                            game.winner3 -> 3
                             else -> 0
                         }
                     } else 0
@@ -231,23 +242,23 @@ class LobbyViewModel @Inject constructor(
                             kills = playerInfo?.kills ?: 0,
                             rank = rank,
                             survivalSeconds = 0L,
-                            playersTotal = state.playerCount,
+                            playersTotal = game.playerCount,
                             leaderboard = emptyList(),
-                            playedAt = config.gameDate * 1000,
+                            playedAt = game.gameDate * 1000,
                             prizeEth = claimableEth,
                             claimed = if (participated) (playerInfo?.claimed == true || claimable == BigInteger.ZERO) else true,
                             claimableWei = claimable,
                             isCancelled = isCancelled,
-                            gameId = gameId,
+                            gameId = game.gameId,
                             participated = participated,
-                            winner1 = state.winner1,
-                            winner2 = state.winner2,
-                            winner3 = state.winner3,
-                            topKiller = state.topKiller
+                            winner1 = game.winner1,
+                            winner2 = game.winner2,
+                            winner3 = game.winner3,
+                            topKiller = game.topKiller
                         )
                     )
                 } catch (_: Exception) {
-                    // Skip games that fail to load
+                    // Skip games that fail to parse
                 }
             }
             // Sort by date descending
@@ -258,7 +269,7 @@ class LobbyViewModel @Inject constructor(
     }
 
     private fun saveGameToHistory(state: GameState) {
-        // After local gameplay ends, reload history from chain
+        // After local gameplay ends, reload history from server
         loadGameHistory()
     }
 
@@ -306,27 +317,29 @@ class LobbyViewModel @Inject constructor(
             _selectedGame.value = local
             return
         }
-        // Load from chain if not in local list (e.g. fresh ViewModel instance)
+        // Load from server if not in local list (e.g. fresh ViewModel instance)
         viewModelScope.launch {
             try {
                 val gameIdInt = gameId.toIntOrNull() ?: return@launch
-                val config = contractService.getGameConfig(gameIdInt)
-                val state = contractService.getGameState(gameIdInt)
-                val shrinks = contractService.getZoneShrinks(gameIdInt)
-                val appConfig = ChainMapper.toGameConfig(gameIdInt, config, shrinks)
+                val game = serverClient.fetchGameDetail(gameIdInt) ?: run {
+                    _error.value = "Game not found"
+                    return@launch
+                }
+                val appConfig = ServerMapper.toGameConfig(game)
+                val phase = OnChainPhase.fromInt(game.phase)
                 val address = walletManager.getAddress()
                 val playerInfo = if (address.isNotEmpty()) {
-                    try { contractService.getPlayerInfo(gameIdInt, address) } catch (_: Exception) { null }
+                    try { serverClient.fetchPlayerInfo(gameIdInt, address) } catch (_: Exception) { null }
                 } else null
                 _selectedGame.value = GameListItem(
                     config = appConfig,
-                    currentPlayers = state.playerCount,
+                    currentPlayers = game.playerCount,
                     locationName = appConfig.name,
                     startTime = appConfig.gameDate,
-                    onChainPhase = state.phase,
-                    totalCollected = state.totalCollected,
+                    onChainPhase = phase,
+                    totalCollected = java.math.BigInteger(game.totalCollected),
                     isPlayerRegistered = playerInfo?.registered == true,
-                    playerNumber = playerInfo?.number ?: 0
+                    playerNumber = playerInfo?.playerNumber ?: 0
                 )
             } catch (e: Exception) {
                 _error.value = "Failed to load game: ${e.message}"
@@ -383,6 +396,16 @@ class LobbyViewModel @Inject constructor(
                 _txPending.value = false
             }
         }
+    }
+
+    /**
+     * Connect to server for receiving phase transition messages.
+     * Called from RegisteredDetailScreen so we get game:checkin_started etc.
+     */
+    fun connectToServer(gameId: String) {
+        val gameIdInt = gameId.toIntOrNull() ?: return
+        Log.d("LobbyViewModel", "Connecting to server for game $gameIdInt")
+        serverClient.connect(gameIdInt)
     }
 
     fun startLocationTracking() {

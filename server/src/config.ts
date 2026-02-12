@@ -73,6 +73,12 @@ export const config = {
   photosDir: optionalEnv("PHOTOS_DIR", "./data/photos"),
   maxPhotoSizeMb: envInt("MAX_PHOTO_SIZE_MB", 5),
 
+  // Game ID filtering — ignore games before this ID
+  startGameId: envInt("START_GAME_ID", 1),
+
+  // Rebuild — wipe DB and re-sync all game data from blockchain on startup
+  rebuildDb: envBool("REBUILD_DB", false),
+
   // Logging
   logLevel: optionalEnv("LOG_LEVEL", "info"),
 } as const;

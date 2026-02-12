@@ -62,7 +62,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, attackerAddr, player1, player2, attackerAddr);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         attacker.setGameId(gameId);
         uint256 balBefore = attackerAddr.balance;
@@ -75,7 +75,8 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         assertEq(attackerAddr.balance - balBefore, expected);
 
         // Verify claimed flag is set
-        assertTrue(game.hasClaimed(gameId, attackerAddr));
+        (,,, bool claimed1,) = game.getPlayerInfo(gameId, attackerAddr);
+        assertTrue(claimed1);
     }
 
     function test_reentrancy_claimRefund() public {
@@ -99,7 +100,8 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         // Should only receive refund once
         assertEq(attackerAddr.balance - balBefore, ENTRY_FEE);
-        assertTrue(game.hasClaimed(gameId, attackerAddr));
+        (,,, bool claimed2,) = game.getPlayerInfo(gameId, attackerAddr);
+        assertTrue(claimed2);
     }
 
     // ============ Multiple Games ============
@@ -124,7 +126,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         // Start and end game1
         _startGame(game1);
         vm.prank(operator);
-        game.endGame(game1, player1, player2, player3, player1);
+        game.endGame(game1, 1, 2, 3, 1);
 
         // Game2 still in registration
         IChainAssassin.GameState memory s1 = game.getGameState(game1);
@@ -147,7 +149,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Prize should be 0
         assertEq(game.getClaimableAmount(gameId, player1), 0);
@@ -226,7 +228,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         vm.warp(block.timestamp + 3 days);
         vm.expectRevert(IChainAssassin.WrongPhase.selector);
@@ -240,7 +242,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         // End game normally
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Now try to trigger expiry after deadline
         vm.warp(block.timestamp + 3 days);
@@ -317,7 +319,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, address(0), address(0), address(0));
+        game.endGame(gameId, 1, 0, 0, 0);
 
         // player1 gets 80% of 0.10 ETH (2 players × 0.05)
         uint256 expected = 0.10 ether * 8000 / 10000;
@@ -347,7 +349,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         _startGame(gameId);
 
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, address(0), address(0));
+        game.endGame(gameId, 1, 2, 0, 0);
 
         uint256 total = 0.1 ether; // 2 * 0.05
         uint256 expected1 = total * 5000 / 10000;
@@ -402,7 +404,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         _startGame(gameId);
         vm.prank(operator);
-        game.endGame(gameId, player1, player2, player3, player1);
+        game.endGame(gameId, 1, 2, 3, 1);
 
         // Attacker has creator fees — try reentrancy
         uint256 creatorFee = game.creatorFeesAccrued(attackerAddr);
@@ -475,7 +477,7 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         _registerPlayer(gameId2, player3);
         _startGame(gameId2);
         vm.prank(operator);
-        game.endGame(gameId2, player1, player2, address(0), address(0));
+        game.endGame(gameId2, 1, 2, 0, 0);
 
         // Claim all game1 prizes
         vm.prank(player1); game.claimPrize(gameId1);

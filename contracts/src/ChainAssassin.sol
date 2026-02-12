@@ -27,8 +27,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     /// @notice BPS denominator — all bps* fields must sum to this value.
     uint256 public constant BPS_TOTAL = 10_000;
 
-    /// @notice Maximum allowed platform fee in BPS (50% = 5000).
-    uint16 public constant MAX_PLATFORM_FEE_BPS = 5000;
+    /// @notice Maximum allowed platform fee in BPS (20% = 2000).
+    uint16 public constant MAX_PLATFORM_FEE_BPS = 2000;
 
     /// @notice Hard cap on maxPlayers per game.
     /// @dev Keeps killCount (uint16, max 65 535) safe from overflow since a player
@@ -50,16 +50,9 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     /// @dev gameId → zone-shrink schedule (ordered by atSecond, ascending).
     mapping(uint256 => ZoneShrink[]) internal _zoneShrinks;
 
-    /// @notice gameId → player → has registered.
-    mapping(uint256 => mapping(address => bool)) public isRegistered;
-    /// @notice gameId → player → has claimed prize or refund.
-    mapping(uint256 => mapping(address => bool)) public hasClaimed;
-    /// @notice gameId → player → still alive.
-    mapping(uint256 => mapping(address => bool)) public isAlive;
-    /// @notice gameId → player → number of kills.
-    /// @dev uint16 is safe because MAX_PLAYERS (9 999) bounds the maximum possible kills.
-    mapping(uint256 => mapping(address => uint16)) public killCount;
-    /// @notice gameId → player → 1-based registration number (order of registration).
+    /// @notice gameId → playerNumber → per-player state (1-based, iterable up to playerCount).
+    mapping(uint256 => mapping(uint16 => PlayerState)) public players;
+    /// @notice gameId → address → playerNumber (0 = not registered).
     mapping(uint256 => mapping(address => uint16)) public playerNumber;
 
     /// @notice Accumulated platform fees across all games, withdrawable by owner.
@@ -88,12 +81,22 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         _;
     }
 
+    // ============ Internal Helpers ============
+
+    /// @dev Return storage ref to the PlayerState for a registered player; reverts if unregistered.
+    function _player(uint256 gameId, address addr) internal view returns (PlayerState storage) {
+        uint16 pNum = playerNumber[gameId][addr];
+        if (pNum == 0) revert PlayerNotRegistered();
+        return players[gameId][pNum];
+    }
+
     // ============ Constructor ============
 
     /// @param _platformFeeBps Initial global platform fee in BPS.
     constructor(uint16 _platformFeeBps) Ownable(msg.sender) {
         if (_platformFeeBps > MAX_PLATFORM_FEE_BPS) revert PlatformFeeTooHigh();
         platformFeeBps = _platformFeeBps;
+        emit PlatformFeeBpsUpdated(0, _platformFeeBps);
     }
 
     // ============ Admin Functions ============
@@ -242,21 +245,26 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     /// @notice Record a kill: mark target as eliminated and increment hunter's kill count.
     /// @dev Called by the off-chain server after verifying QR-scan proof.
     /// @param gameId The active game.
-    /// @param hunter The player who made the kill.
-    /// @param target The player who was eliminated.
+    /// @param hunter The hunter's playerNumber.
+    /// @param target The target's playerNumber.
     function recordKill(
         uint256 gameId,
-        address hunter,
-        address target
+        uint16 hunter,
+        uint16 target
     ) external onlyOperator inPhase(gameId, GamePhase.ACTIVE) {
-        if (!isRegistered[gameId][hunter]) revert HunterNotRegistered();
-        if (!isRegistered[gameId][target]) revert TargetNotRegistered();
-        if (!isAlive[gameId][hunter]) revert HunterNotAlive();
-        if (!isAlive[gameId][target]) revert TargetNotAlive();
+        if (hunter == 0) revert HunterNotRegistered();
+        if (target == 0) revert TargetNotRegistered();
+
+        PlayerState storage h = players[gameId][hunter];
+        PlayerState storage t = players[gameId][target];
+        if (h.addr == address(0)) revert HunterNotRegistered();
+        if (t.addr == address(0)) revert TargetNotRegistered();
+        if (!h.alive) revert HunterNotAlive();
+        if (!t.alive) revert TargetNotAlive();
         if (hunter == target) revert CannotSelfKill();
 
-        killCount[gameId][hunter]++;
-        isAlive[gameId][target] = false;
+        h.killCount++;
+        t.alive = false;
 
         emit KillRecorded(gameId, hunter, target);
         emit PlayerEliminated(gameId, target, hunter);
@@ -264,63 +272,67 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
 
     /// @notice Eliminate a player without crediting any hunter (zone death, disconnect, etc.).
     /// @param gameId The active game.
-    /// @param player The player to eliminate.
+    /// @param pNum The playerNumber to eliminate.
     function eliminatePlayer(
         uint256 gameId,
-        address player
+        uint16 pNum
     ) external onlyOperator inPhase(gameId, GamePhase.ACTIVE) {
-        if (!isRegistered[gameId][player]) revert PlayerNotRegistered();
-        if (!isAlive[gameId][player]) revert PlayerNotAlive();
+        if (pNum == 0) revert PlayerNotRegistered();
+        PlayerState storage p = players[gameId][pNum];
+        if (p.addr == address(0)) revert PlayerNotRegistered();
+        if (!p.alive) revert PlayerNotAlive();
 
-        isAlive[gameId][player] = false;
+        p.alive = false;
 
-        emit PlayerEliminated(gameId, player, address(0));
+        emit PlayerEliminated(gameId, pNum, 0);
     }
 
     /// @notice End a game and record the final standings.
     /// @dev A player may hold multiple roles (e.g. winner1 + topKiller) and will receive
     ///      the sum of all matching BPS shares in a single `claimPrize` call.
-    ///      Winner addresses must be distinct from each other when their BPS > 0.
+    ///      Winner playerNumbers must be distinct from each other when their BPS > 0.
     ///      topKiller is allowed to overlap with any winner.
     ///      Winners are only required to be registered, not alive — final standings are
     ///      determined by the off-chain server which may use custom scoring rules.
     /// @param gameId  The active game.
-    /// @param winner1  1st place (required).
-    /// @param winner2  2nd place (required if bps2nd > 0, must be address(0) otherwise).
-    /// @param winner3  3rd place (required if bps3rd > 0, must be address(0) otherwise).
-    /// @param topKiller  Top killer (required if bpsKills > 0, must be address(0) otherwise).
+    /// @param winner1  1st place playerNumber (required).
+    /// @param winner2  2nd place playerNumber (required if bps2nd > 0, must be 0 otherwise).
+    /// @param winner3  3rd place playerNumber (required if bps3rd > 0, must be 0 otherwise).
+    /// @param topKiller  Top killer playerNumber (required if bpsKills > 0, must be 0 otherwise).
     function endGame(
         uint256 gameId,
-        address winner1,
-        address winner2,
-        address winner3,
-        address topKiller
+        uint16 winner1,
+        uint16 winner2,
+        uint16 winner3,
+        uint16 topKiller
     ) external onlyOperator inPhase(gameId, GamePhase.ACTIVE) {
         GameConfig storage config = _gameConfigs[gameId];
 
         // --- Validate winners ---
-        if (winner1 == address(0)) revert WinnerZeroAddress();
-        if (!isRegistered[gameId][winner1]) revert WinnerNotRegistered();
+        if (winner1 == 0) revert WinnerZeroAddress();
+        if (players[gameId][winner1].addr == address(0)) revert WinnerNotRegistered();
 
         if (config.bps2nd > 0) {
-            if (winner2 == address(0)) revert WinnerZeroAddress();
-            if (!isRegistered[gameId][winner2]) revert WinnerNotRegistered();
+            if (winner2 == 0) revert WinnerZeroAddress();
+            if (players[gameId][winner2].addr == address(0)) revert WinnerNotRegistered();
             if (winner2 == winner1) revert WinnersNotUnique();
         } else {
-            if (winner2 != address(0)) revert UnusedWinnerNotZero();
+            if (winner2 != 0) revert UnusedWinnerNotZero();
         }
+
         if (config.bps3rd > 0) {
-            if (winner3 == address(0)) revert WinnerZeroAddress();
-            if (!isRegistered[gameId][winner3]) revert WinnerNotRegistered();
+            if (winner3 == 0) revert WinnerZeroAddress();
+            if (players[gameId][winner3].addr == address(0)) revert WinnerNotRegistered();
             if (winner3 == winner1 || winner3 == winner2) revert WinnersNotUnique();
         } else {
-            if (winner3 != address(0)) revert UnusedWinnerNotZero();
+            if (winner3 != 0) revert UnusedWinnerNotZero();
         }
+
         if (config.bpsKills > 0) {
-            if (topKiller == address(0)) revert TopKillerZeroAddress();
-            if (!isRegistered[gameId][topKiller]) revert TopKillerNotRegistered();
+            if (topKiller == 0) revert TopKillerZeroAddress();
+            if (players[gameId][topKiller].addr == address(0)) revert TopKillerNotRegistered();
         } else {
-            if (topKiller != address(0)) revert UnusedTopKillerNotZero();
+            if (topKiller != 0) revert UnusedTopKillerNotZero();
         }
 
         // --- Update state ---
@@ -369,16 +381,21 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         if (block.timestamp > config.registrationDeadline) revert RegistrationClosed();
         if (msg.value != config.entryFee) revert WrongEntryFee();
         if (state.playerCount >= config.maxPlayers) revert GameFull();
-        if (isRegistered[gameId][msg.sender]) revert AlreadyRegistered();
+        if (playerNumber[gameId][msg.sender] != 0) revert AlreadyRegistered();
 
-        isRegistered[gameId][msg.sender] = true;
-        isAlive[gameId][msg.sender] = true;
         state.playerCount++;
-        playerNumber[gameId][msg.sender] = state.playerCount;
+        uint16 pNum = state.playerCount;
+        playerNumber[gameId][msg.sender] = pNum;
+        players[gameId][pNum] = PlayerState({
+            addr: msg.sender,
+            alive: true,
+            claimed: false,
+            killCount: 0
+        });
         // Safe cast: msg.value == config.entryFee which is uint128, so no truncation.
         state.totalCollected += uint128(msg.value);
 
-        emit PlayerRegistered(gameId, msg.sender, state.playerCount);
+        emit PlayerRegistered(gameId, pNum);
     }
 
     /// @notice Cancel a game that failed to reach minPlayers by the registration deadline.
@@ -431,17 +448,20 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     ///      Reentrancy-safe via OpenZeppelin ReentrancyGuard.
     /// @param gameId The game in ENDED phase.
     function claimPrize(uint256 gameId) external nonReentrant inPhase(gameId, GamePhase.ENDED) {
-        if (hasClaimed[gameId][msg.sender]) revert AlreadyClaimed();
+        uint16 pNum = playerNumber[gameId][msg.sender];
+        if (pNum == 0) revert PlayerNotRegistered();
+        PlayerState storage p = players[gameId][pNum];
+        if (p.claimed) revert AlreadyClaimed();
 
         uint256 amount = getClaimableAmount(gameId, msg.sender);
         if (amount == 0) revert NoPrize();
 
-        hasClaimed[gameId][msg.sender] = true;
+        p.claimed = true;
 
         (bool success,) = msg.sender.call{value: amount}("");
         if (!success) revert TransferFailed();
 
-        emit PrizeClaimed(gameId, msg.sender, amount);
+        emit PrizeClaimed(gameId, pNum, amount);
     }
 
     /// @notice Claim a full refund for the caller in a cancelled game.
@@ -450,18 +470,20 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     ///      Reentrancy-safe via OpenZeppelin ReentrancyGuard.
     /// @param gameId The game in CANCELLED phase.
     function claimRefund(uint256 gameId) external nonReentrant inPhase(gameId, GamePhase.CANCELLED) {
-        if (!isRegistered[gameId][msg.sender]) revert PlayerNotRegistered();
-        if (hasClaimed[gameId][msg.sender]) revert AlreadyClaimed();
+        uint16 pNum = playerNumber[gameId][msg.sender];
+        if (pNum == 0) revert PlayerNotRegistered();
+        PlayerState storage p = players[gameId][pNum];
+        if (p.claimed) revert AlreadyClaimed();
 
         GameConfig storage config = _gameConfigs[gameId];
         uint256 amount = config.entryFee;
 
-        hasClaimed[gameId][msg.sender] = true;
+        p.claimed = true;
 
         (bool success,) = msg.sender.call{value: amount}("");
         if (!success) revert TransferFailed();
 
-        emit RefundClaimed(gameId, msg.sender, amount);
+        emit RefundClaimed(gameId, pNum, amount);
     }
 
     /// @notice Withdraw all accumulated creator fees for the caller.
@@ -499,13 +521,19 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         view
         returns (bool registered, bool alive, uint16 kills, bool claimed, uint16 number)
     {
-        return (
-            isRegistered[gameId][player],
-            isAlive[gameId][player],
-            killCount[gameId][player],
-            hasClaimed[gameId][player],
-            playerNumber[gameId][player]
-        );
+        uint16 pNum = playerNumber[gameId][player];
+        if (pNum == 0) return (false, false, 0, false, 0);
+        PlayerState storage p = players[gameId][pNum];
+        return (true, p.alive, p.killCount, p.claimed, pNum);
+    }
+
+    /// @notice Return the PlayerState for a given playerNumber (enables iteration 1..playerCount).
+    function getPlayer(uint256 gameId, uint16 pNum)
+        external
+        view
+        returns (PlayerState memory)
+    {
+        return players[gameId][pNum];
     }
 
     /// @notice Calculate the claimable prize amount for `player` in game `gameId`.
@@ -515,16 +543,19 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     function getClaimableAmount(uint256 gameId, address player) public view returns (uint256) {
         GameState storage state = _gameStates[gameId];
         if (state.phase != GamePhase.ENDED) return 0;
-        if (hasClaimed[gameId][player]) return 0;
+
+        uint16 pNum = playerNumber[gameId][player];
+        if (pNum == 0) return 0;
+        if (players[gameId][pNum].claimed) return 0;
 
         GameConfig storage config = _gameConfigs[gameId];
         uint256 total = state.totalCollected;
         uint256 amount = 0;
 
-        if (player == state.winner1) amount += total * config.bps1st / BPS_TOTAL;
-        if (player == state.winner2) amount += total * config.bps2nd / BPS_TOTAL;
-        if (player == state.winner3) amount += total * config.bps3rd / BPS_TOTAL;
-        if (player == state.topKiller) amount += total * config.bpsKills / BPS_TOTAL;
+        if (pNum == state.winner1) amount += total * config.bps1st / BPS_TOTAL;
+        if (pNum == state.winner2) amount += total * config.bps2nd / BPS_TOTAL;
+        if (pNum == state.winner3) amount += total * config.bps3rd / BPS_TOTAL;
+        if (pNum == state.topKiller) amount += total * config.bpsKills / BPS_TOTAL;
 
         return amount;
     }

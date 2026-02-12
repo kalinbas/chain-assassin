@@ -46,10 +46,18 @@ interface IChainAssassin {
         GamePhase phase;
         uint16   playerCount;       // current registered player count
         uint128  totalCollected;    // cumulative entry fees + base reward in wei
-        address  winner1;           // 1st place (set in endGame)
-        address  winner2;           // 2nd place
-        address  winner3;           // 3rd place
-        address  topKiller;         // most kills
+        uint16   winner1;           // 1st place playerNumber (set in endGame)
+        uint16   winner2;           // 2nd place playerNumber
+        uint16   winner3;           // 3rd place playerNumber
+        uint16   topKiller;         // top killer playerNumber
+    }
+
+    /// @notice Per-player state within a game, keyed by playerNumber (1-based).
+    struct PlayerState {
+        address addr;       // player's wallet address
+        bool    alive;      // still in the game
+        bool    claimed;    // has claimed prize or refund
+        uint16  killCount;  // number of kills
     }
 
     /// @notice A single entry in the zone-shrink schedule.
@@ -137,9 +145,9 @@ interface IChainAssassin {
     error GameDateNotReached();
 
     // --- recordKill ---
-    /// @dev Hunter address is not registered for this game.
+    /// @dev Hunter playerNumber is not registered for this game.
     error HunterNotRegistered();
-    /// @dev Target address is not registered for this game.
+    /// @dev Target playerNumber is not registered for this game.
     error TargetNotRegistered();
     /// @dev Hunter is already eliminated.
     error HunterNotAlive();
@@ -155,19 +163,19 @@ interface IChainAssassin {
     error PlayerNotAlive();
 
     // --- endGame ---
-    /// @dev A required winner address is zero.
+    /// @dev A required winner playerNumber is zero.
     error WinnerZeroAddress();
-    /// @dev A winner is not registered for this game.
+    /// @dev A winner playerNumber is not registered for this game.
     error WinnerNotRegistered();
-    /// @dev Two or more winner slots share the same address.
+    /// @dev Two or more winner slots share the same playerNumber.
     error WinnersNotUnique();
     /// @dev topKiller is zero when bpsKills > 0.
     error TopKillerZeroAddress();
-    /// @dev topKiller is not registered for this game.
+    /// @dev topKiller playerNumber is not registered for this game.
     error TopKillerNotRegistered();
-    /// @dev An unused winner slot (bps == 0) was passed a non-zero address.
+    /// @dev An unused winner slot (bps == 0) was passed a non-zero playerNumber.
     error UnusedWinnerNotZero();
-    /// @dev topKiller was passed a non-zero address when bpsKills == 0.
+    /// @dev topKiller was passed a non-zero playerNumber when bpsKills == 0.
     error UnusedTopKillerNotZero();
 
     // --- register ---
@@ -224,8 +232,7 @@ interface IChainAssassin {
     /// @notice Emitted when a player registers for a game.
     event PlayerRegistered(
         uint256 indexed gameId,
-        address indexed player,
-        uint16  playerCount
+        uint16 indexed playerNumber
     );
 
     /// @notice Emitted when a game transitions to ACTIVE.
@@ -235,27 +242,27 @@ interface IChainAssassin {
     );
 
     /// @notice Emitted when a player is eliminated (by a kill or zone / admin action).
-    /// @param eliminator The hunter, or `address(0)` for admin/zone eliminations.
+    /// @param eliminator The hunter's playerNumber, or 0 for admin/zone eliminations.
     event PlayerEliminated(
         uint256 indexed gameId,
-        address indexed player,
-        address indexed eliminator
+        uint16 indexed playerNumber,
+        uint16 indexed eliminator
     );
 
     /// @notice Emitted alongside PlayerEliminated for hunter kills; carries the kill relationship.
     event KillRecorded(
         uint256 indexed gameId,
-        address indexed hunter,
-        address indexed target
+        uint16 indexed hunter,
+        uint16 indexed target
     );
 
     /// @notice Emitted when a game transitions to ENDED.
     event GameEnded(
         uint256 indexed gameId,
-        address winner1,
-        address winner2,
-        address winner3,
-        address topKiller
+        uint16 winner1,
+        uint16 winner2,
+        uint16 winner3,
+        uint16 topKiller
     );
 
     /// @notice Emitted when a game is cancelled (deadline or expiry).
@@ -264,14 +271,14 @@ interface IChainAssassin {
     /// @notice Emitted when a winner claims their prize.
     event PrizeClaimed(
         uint256 indexed gameId,
-        address indexed player,
+        uint16 indexed playerNumber,
         uint256 amount
     );
 
     /// @notice Emitted when a player claims their refund after cancellation.
     event RefundClaimed(
         uint256 indexed gameId,
-        address indexed player,
+        uint16 indexed playerNumber,
         uint256 amount
     );
 

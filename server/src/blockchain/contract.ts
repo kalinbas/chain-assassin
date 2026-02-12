@@ -5,7 +5,7 @@ import { fileURLToPath } from "url";
 import { config } from "../config.js";
 import { getHttpProvider, getWsProvider, getOperatorWallet } from "./client.js";
 import { createLogger } from "../utils/logger.js";
-import type { GameConfig, GameState, ZoneShrink, GamePhase } from "../utils/types.js";
+import type { GameConfig, GameState, ZoneShrink, GamePhase, PlayerStateOnChain } from "../utils/types.js";
 
 const log = createLogger("contract");
 
@@ -97,8 +97,9 @@ export async function fetchGameConfig(gameId: number): Promise<GameConfig> {
     bps2nd: Number(raw.bps2nd),
     bps3rd: Number(raw.bps3rd),
     bpsKills: Number(raw.bpsKills),
-    bpsPlatform: Number(raw.bpsCreator),
+    bpsCreator: Number(raw.bpsCreator),
     baseReward: raw.baseReward,
+    maxDuration: Number(raw.maxDuration),
   };
 }
 
@@ -109,10 +110,10 @@ export async function fetchGameState(gameId: number): Promise<GameState> {
     phase: Number(raw.phase) as GamePhase,
     playerCount: Number(raw.playerCount),
     totalCollected: raw.totalCollected,
-    winner1: raw.winner1,
-    winner2: raw.winner2,
-    winner3: raw.winner3,
-    topKiller: raw.topKiller,
+    winner1: Number(raw.winner1),
+    winner2: Number(raw.winner2),
+    winner3: Number(raw.winner3),
+    topKiller: Number(raw.topKiller),
   };
 }
 
@@ -134,14 +135,30 @@ export async function fetchIsRegistered(
   gameId: number,
   address: string
 ): Promise<boolean> {
-  return getReadContract().isRegistered(gameId, address);
+  const pNum = Number(await getReadContract().playerNumber(gameId, address));
+  return pNum !== 0;
 }
 
 export async function fetchIsAlive(
   gameId: number,
   address: string
 ): Promise<boolean> {
-  return getReadContract().isAlive(gameId, address);
+  const info = await fetchPlayerInfo(gameId, address);
+  return info.registered && info.alive;
+}
+
+export async function fetchPlayer(
+  gameId: number,
+  playerNumber: number
+): Promise<PlayerStateOnChain> {
+  const c = getReadContract();
+  const raw = await c.getPlayer(gameId, playerNumber);
+  return {
+    addr: raw.addr,
+    alive: raw.alive,
+    claimed: raw.claimed,
+    killCount: Number(raw.killCount),
+  };
 }
 
 export async function fetchPlayerInfo(

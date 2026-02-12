@@ -23,6 +23,9 @@ import {
   insertLocationPing,
   getLatestLocationPing,
   setPlayerCheckedIn,
+  setPlayerClaimed,
+  updatePlayerCount,
+  updateTotalCollected,
   getPlayerByNumber,
   getGamesInPhase,
   pruneLocationPings,
@@ -40,6 +43,7 @@ import { ZoneTracker } from "./zoneTracker.js";
 import { verifyKill } from "./killVerifier.js";
 import { getLeaderboard, determineWinners } from "./leaderboard.js";
 import * as operator from "../blockchain/operator.js";
+import { fetchGameState } from "../blockchain/contract.js";
 import { getHttpProvider } from "../blockchain/client.js";
 
 const log = createLogger("gameManager");
@@ -64,6 +68,9 @@ const pregameTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // Per-game spectator position broadcast during checkin/pregame (before gameTick takes over)
 const preGameSpectatorIntervals = new Map<number, ReturnType<typeof setInterval>>();
+
+// Per-game auto-seed retry timers — retries every 60s until enough nearby players are seeded
+const autoSeedTimers = new Map<number, ReturnType<typeof setInterval>>();
 
 // Simulated game IDs — skip on-chain operator calls for these
 const simulatedGames = new Set<number>();
@@ -150,8 +157,18 @@ export function onGameCreated(gameConfig: GameConfig, shrinks: ZoneShrink[]): vo
 /**
  * Handle a player registration event from the chain.
  */
-export function onPlayerRegistered(gameId: number, playerAddress: string, playerCount: number): void {
+export async function onPlayerRegistered(gameId: number, playerAddress: string, playerCount: number): Promise<void> {
   insertPlayer(gameId, playerAddress, playerCount);
+  updatePlayerCount(gameId, playerCount);
+
+  // Fetch totalCollected from chain (increases with each registration as entry fees accumulate)
+  try {
+    const state = await fetchGameState(gameId);
+    updateTotalCollected(gameId, state.totalCollected.toString());
+  } catch (err) {
+    log.error({ gameId, error: (err as Error).message }, "Failed to fetch totalCollected after registration");
+  }
+
   log.info({ gameId, player: playerAddress, playerCount }, "Player registered");
 
   broadcast(gameId, {
@@ -159,6 +176,70 @@ export function onPlayerRegistered(gameId: number, playerAddress: string, player
     playerNumber: playerCount, // playerCount == new player's number (sequential)
     playerCount,
   });
+}
+
+/**
+ * Try to auto-seed nearby players as checked in.
+ * Only seeds players within 5km of the meeting point who aren't already checked in.
+ * Stops the retry interval once seedCount is reached or checkin phase ends.
+ */
+function tryAutoSeed(gameId: number, seedCount: number): void {
+  const checkedIn = getCheckedInCount(gameId);
+  if (checkedIn >= seedCount) {
+    const timer = autoSeedTimers.get(gameId);
+    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    log.info({ gameId, checkedIn, seedCount }, "Auto-seed: target reached, stopping retries");
+    return;
+  }
+
+  const game = getGame(gameId);
+  if (!game || game.subPhase !== "checkin") {
+    const timer = autoSeedTimers.get(gameId);
+    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    return;
+  }
+
+  const meetLat = game.meetingLat !== 0
+    ? contractCoordToDegrees(game.meetingLat) : contractCoordToDegrees(game.centerLat);
+  const meetLng = game.meetingLng !== 0
+    ? contractCoordToDegrees(game.meetingLng) : contractCoordToDegrees(game.centerLng);
+
+  const players = getPlayers(gameId).filter((p) => p.isAlive && !p.checkedIn);
+  const remaining = seedCount - checkedIn;
+
+  const nearby: { player: Player; distance: number }[] = [];
+  for (const p of players) {
+    const ping = getLatestLocationPing(gameId, p.address);
+    if (ping) {
+      const dist = haversineDistance(ping.lat, ping.lng, meetLat, meetLng);
+      if (dist <= 5000) nearby.push({ player: p, distance: dist });
+    }
+  }
+  nearby.sort((a, b) => a.distance - b.distance);
+  const seeds = nearby.slice(0, remaining);
+
+  for (const { player: seed } of seeds) {
+    setPlayerCheckedIn(gameId, seed.address);
+    broadcast(gameId, {
+      type: "checkin:update",
+      checkedInCount: getCheckedInCount(gameId),
+      totalPlayers: getPlayerCount(gameId),
+      playerNumber: seed.playerNumber,
+    });
+    log.info({ gameId, address: seed.address }, "Auto-seeded check-in");
+  }
+
+  if (seeds.length > 0) {
+    log.info({ gameId, seeded: seeds.length, remaining: remaining - seeds.length }, "Auto-seed: seeded nearby players");
+  } else {
+    log.info({ gameId, remaining }, "Auto-seed: no nearby players found, will retry in 60s");
+  }
+
+  if (getCheckedInCount(gameId) >= seedCount) {
+    const timer = autoSeedTimers.get(gameId);
+    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    log.info({ gameId }, "Auto-seed: target reached after seeding");
+  }
 }
 
 /**
@@ -186,24 +267,16 @@ export function onGameStarted(gameId: number): void {
     checkinEndsAt: now + config.checkinDurationSeconds,
   });
 
-  // Auto-seed: randomly check in 5% of players (min 1) so the QR chain can start
+  // Auto-seed: check in players near the meeting point (5% of total, min 1)
+  // Retries every 60s until enough nearby players are seeded or normal check-ins fill the gap
   const players = getPlayers(gameId).filter((p) => p.isAlive);
   const seedCount = Math.max(1, Math.ceil(players.length * 0.05));
-  const shuffled = [...players].sort(() => Math.random() - 0.5);
-  const seeds = shuffled.slice(0, seedCount);
 
-  for (const seed of seeds) {
-    setPlayerCheckedIn(gameId, seed.address);
-    const checkedIn = getCheckedInCount(gameId);
-    const total = getPlayerCount(gameId);
-    broadcast(gameId, {
-      type: "checkin:update",
-      checkedInCount: checkedIn,
-      totalPlayers: total,
-      playerNumber: seed.playerNumber,
-    });
-    log.info({ gameId, address: seed.address }, "Auto-seeded check-in");
-  }
+  tryAutoSeed(gameId, seedCount);
+  const autoSeedInterval = setInterval(() => {
+    tryAutoSeed(gameId, seedCount);
+  }, 60_000);
+  autoSeedTimers.set(gameId, autoSeedInterval);
 
   // Start spectator position broadcast during pre-game phases
   startPreGameSpectatorBroadcast(gameId);
@@ -222,6 +295,10 @@ export function onGameStarted(gameId: number): void {
  * Complete the check-in phase — eliminate non-checked-in players, then transition to pregame.
  */
 function completeCheckin(gameId: number): void {
+  // Stop auto-seed retries
+  const ast = autoSeedTimers.get(gameId);
+  if (ast) { clearInterval(ast); autoSeedTimers.delete(gameId); }
+
   const game = getGame(gameId);
   if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") return;
 
@@ -397,21 +474,25 @@ export async function handleKillSubmission(
     active.zoneTracker.clearPlayer(targetAddress);
   }
 
-  // Submit on-chain (fire and forget — don't block the response)
-  if (!isSimulatedGame(gameId)) {
-    operator
-      .recordKill(gameId, hunterAddress, targetAddress)
-      .then((tx) => {
-        updateKillTxHash(killId, tx.txHash);
-      })
-      .catch((err) => {
-        log.error({ gameId, killId, error: err.message }, "Failed to record kill on-chain");
-      });
-  }
-
   // Get updated hunter & target stats
   const hunter = getPlayer(gameId, hunterAddress);
   const target = getPlayer(gameId, targetAddress);
+
+  // Submit on-chain (fire and forget — don't block the response)
+  if (!isSimulatedGame(gameId)) {
+    const hunterNum = hunter?.playerNumber ?? 0;
+    const targetNum = target?.playerNumber ?? 0;
+    if (hunterNum > 0 && targetNum > 0) {
+      operator
+        .recordKill(gameId, hunterNum, targetNum)
+        .then((tx) => {
+          updateKillTxHash(killId, tx.txHash);
+        })
+        .catch((err) => {
+          log.error({ gameId, killId, error: err.message }, "Failed to record kill on-chain");
+        });
+    }
+  }
 
   // Broadcast kill event
   broadcast(gameId, {
@@ -752,9 +833,12 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
 
   // Submit on-chain
   if (!isSimulatedGame(gameId)) {
-    operator.eliminatePlayer(gameId, address).catch((err) => {
-      log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain");
-    });
+    const pNum = player?.playerNumber ?? 0;
+    if (pNum > 0) {
+      operator.eliminatePlayer(gameId, pNum).catch((err) => {
+        log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain");
+      });
+    }
   }
 
   // Broadcast elimination
@@ -827,9 +911,12 @@ async function handleHeartbeatElimination(gameId: number, address: string): Prom
 
   // Submit on-chain
   if (!isSimulatedGame(gameId)) {
-    operator.eliminatePlayer(gameId, address).catch((err) => {
-      log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain (heartbeat)");
-    });
+    const pNum = player?.playerNumber ?? 0;
+    if (pNum > 0) {
+      operator.eliminatePlayer(gameId, pNum).catch((err) => {
+        log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain (heartbeat)");
+      });
+    }
   }
 
   // Broadcast elimination
@@ -1018,9 +1105,21 @@ async function endGameWithWinners(gameId: number): Promise<void> {
     "Ending game with winners"
   );
 
+  // Resolve addresses to playerNumbers for on-chain call
+  const ZERO = "0x0000000000000000000000000000000000000000";
+  const w1Player = winner1 !== ZERO ? getPlayer(gameId, winner1) : null;
+  const w2Player = winner2 !== ZERO ? getPlayer(gameId, winner2) : null;
+  const w3Player = winner3 !== ZERO ? getPlayer(gameId, winner3) : null;
+  const tkPlayer = topKiller !== ZERO ? getPlayer(gameId, topKiller) : null;
+
+  const w1Num = w1Player?.playerNumber ?? 0;
+  const w2Num = w2Player?.playerNumber ?? 0;
+  const w3Num = w3Player?.playerNumber ?? 0;
+  const tkNum = tkPlayer?.playerNumber ?? 0;
+
   try {
     if (!isSimulatedGame(gameId) || isHybridSimulatedGame(gameId)) {
-      await operator.endGame(gameId, winner1, winner2, winner3, topKiller);
+      await operator.endGame(gameId, w1Num, w2Num, w3Num, tkNum);
     }
     updateGamePhase(gameId, GamePhase.ENDED, {
       endedAt: now,
@@ -1030,17 +1129,12 @@ async function endGameWithWinners(gameId: number): Promise<void> {
       topKiller,
     });
 
-    const w1Player = winner1 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner1) : null;
-    const w2Player = winner2 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner2) : null;
-    const w3Player = winner3 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner3) : null;
-    const tkPlayer = topKiller !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, topKiller) : null;
-
     broadcast(gameId, {
       type: "game:ended",
-      winner1: w1Player?.playerNumber ?? 0,
-      winner2: w2Player?.playerNumber ?? 0,
-      winner3: w3Player?.playerNumber ?? 0,
-      topKiller: tkPlayer?.playerNumber ?? 0,
+      winner1: w1Num,
+      winner2: w2Num,
+      winner3: w3Num,
+      topKiller: tkNum,
     });
   } catch (err) {
     log.error({ gameId, error: (err as Error).message }, "Failed to end game on-chain");
@@ -1062,24 +1156,55 @@ export function onGameCancelled(gameId: number): void {
 
 /**
  * Handle game ended event from chain (confirmation).
+ * Winners arrive as playerNumbers (uint16) from the contract events.
+ * Resolve to addresses for DB storage.
  */
 export function onGameEnded(
   gameId: number,
-  winner1: string,
-  winner2: string,
-  winner3: string,
-  topKiller: string
+  winner1: number,
+  winner2: number,
+  winner3: number,
+  topKiller: number
 ): void {
   const now = Math.floor(Date.now() / 1000);
+
+  // Resolve playerNumbers to addresses via DB
+  const resolveAddr = (pNum: number): string => {
+    if (pNum === 0) return "";
+    const player = getPlayerByNumber(gameId, pNum);
+    return player?.address ?? "";
+  };
+
+  const winner1Addr = resolveAddr(winner1);
+  const winner2Addr = resolveAddr(winner2);
+  const winner3Addr = resolveAddr(winner3);
+  const topKillerAddr = resolveAddr(topKiller);
+
   updateGamePhase(gameId, GamePhase.ENDED, {
     endedAt: now,
-    winner1,
-    winner2,
-    winner3,
-    topKiller,
+    winner1: winner1Addr,
+    winner2: winner2Addr,
+    winner3: winner3Addr,
+    topKiller: topKillerAddr,
   });
   cleanupActiveGame(gameId);
   log.info({ gameId, winner1, winner2, winner3, topKiller }, "Game ended (chain confirmed)");
+}
+
+/**
+ * Handle a prize claimed event from the chain.
+ */
+export function onPrizeClaimed(gameId: number, address: string): void {
+  setPlayerClaimed(gameId, address);
+  log.info({ gameId, address }, "Prize claimed");
+}
+
+/**
+ * Handle a refund claimed event from the chain.
+ */
+export function onRefundClaimed(gameId: number, address: string): void {
+  setPlayerClaimed(gameId, address);
+  log.info({ gameId, address }, "Refund claimed");
 }
 
 // ============ Scheduling ============
@@ -1365,9 +1490,9 @@ export function getGameStatus(gameId: number) {
     checkedInCount: players.filter((p) => p.checkedIn).length,
     leaderboard,
     zone,
-    winner1: game.winner1,
-    winner2: game.winner2,
-    winner3: game.winner3,
-    topKiller: game.topKiller,
+    winner1: game.winner1 ? getPlayer(gameId, game.winner1)?.playerNumber ?? 0 : 0,
+    winner2: game.winner2 ? getPlayer(gameId, game.winner2)?.playerNumber ?? 0 : 0,
+    winner3: game.winner3 ? getPlayer(gameId, game.winner3)?.playerNumber ?? 0 : 0,
+    topKiller: game.topKiller ? getPlayer(gameId, game.topKiller)?.playerNumber ?? 0 : 0,
   };
 }

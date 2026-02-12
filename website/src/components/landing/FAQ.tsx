@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { Section } from '../layout/Section';
 import { EXPLORER_URL } from '../../config/constants';
 
-const CONTRACT_ADDRESS = '0xA9AC5fe70646b7a24Cc7BFeDe2A367B7bF2015b2';
+const CONTRACT_ADDRESS = '0x94E2A4cA986b87e7534BFbeeC64bFfDe0528038F';
 
 const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   {

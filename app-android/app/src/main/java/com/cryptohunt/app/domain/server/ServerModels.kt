@@ -39,6 +39,63 @@ data class ServerLeaderboardEntry(
     val eliminatedAt: Long?
 )
 
+// ============ REST API Response Models ============
+
+/**
+ * Response from GET /api/games and GET /api/games/:gameId
+ */
+data class ServerGame(
+    val gameId: Int,
+    val title: String,
+    val entryFee: String,       // wei as string
+    val baseReward: String,     // wei as string
+    val minPlayers: Int,
+    val maxPlayers: Int,
+    val registrationDeadline: Long,
+    val gameDate: Long,
+    val expiryDeadline: Long,
+    val maxDuration: Long,
+    val createdAt: Long,
+    val creator: String,
+    val centerLat: Int,
+    val centerLng: Int,
+    val meetingLat: Int,
+    val meetingLng: Int,
+    val bps1st: Int,
+    val bps2nd: Int,
+    val bps3rd: Int,
+    val bpsKills: Int,
+    val bpsCreator: Int,
+    val totalCollected: String,
+    val playerCount: Int,
+    val phase: Int,
+    val subPhase: String?,
+    val winner1: Int,
+    val winner2: Int,
+    val winner3: Int,
+    val topKiller: Int,
+    val zoneShrinks: List<ServerZoneShrink>
+)
+
+data class ServerZoneShrink(
+    val atSecond: Int,
+    val radiusMeters: Int
+)
+
+/**
+ * Response from GET /api/games/:gameId/player/:address
+ */
+data class ServerPlayerInfo(
+    val registered: Boolean,
+    val alive: Boolean,
+    val kills: Int,
+    val claimed: Boolean,
+    val playerNumber: Int,
+    val checkedIn: Boolean
+)
+
+// ============ WebSocket Models ============
+
 /**
  * Sealed class hierarchy for all server WebSocket messages.
  * Each subclass maps to a specific `type` field in the JSON payload.

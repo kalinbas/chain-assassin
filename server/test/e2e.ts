@@ -325,7 +325,7 @@ async function scenarioA_createGame(): Promise<number> {
     bps2nd: 1500,
     bps3rd: 1000,
     bpsKills: 2500,
-    bpsPlatform: 1000,
+    bpsCreator: 1000,
   };
 
   const shrinks = [
@@ -1409,7 +1409,7 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
     bps2nd: 2000,
     bps3rd: 1000,
     bpsKills: 1000,
-    bpsPlatform: 1000,
+    bpsCreator: 1000,
   };
 
   const shrinks = [

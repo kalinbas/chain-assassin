@@ -178,7 +178,7 @@ fun GameHistoryDetailScreen(
                     }
 
                     // Winners section for non-participated games
-                    if (!item.participated && item.winner1.isNotEmpty() && item.winner1 != "0x0000000000000000000000000000000000000000") {
+                    if (!item.participated && item.winner1 != 0) {
                         Spacer(Modifier.height(16.dp))
                         Card(
                             modifier = Modifier.fillMaxWidth(),
@@ -189,11 +189,10 @@ fun GameHistoryDetailScreen(
                                 Text("WINNERS", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                                 Spacer(Modifier.height(12.dp))
 
-                                val zeroAddr = "0x0000000000000000000000000000000000000000"
                                 WinnerRow("1st Place", item.winner1, Warning)
-                                if (item.winner2 != zeroAddr) WinnerRow("2nd Place", item.winner2, TextPrimary)
-                                if (item.winner3 != zeroAddr) WinnerRow("3rd Place", item.winner3, TextPrimary)
-                                if (item.topKiller != zeroAddr) WinnerRow("Most Kills", item.topKiller, Primary)
+                                if (item.winner2 != 0) WinnerRow("2nd Place", item.winner2, TextPrimary)
+                                if (item.winner3 != 0) WinnerRow("3rd Place", item.winner3, TextPrimary)
+                                if (item.topKiller != 0) WinnerRow("Most Kills", item.topKiller, Primary)
                             }
                         }
                     }
@@ -423,8 +422,7 @@ private fun PrizeRow(label: String, value: String, valueColor: Color) {
 }
 
 @Composable
-private fun WinnerRow(label: String, address: String, labelColor: Color) {
-    val shortened = if (address.length > 10) "${address.take(6)}…${address.takeLast(4)}" else address
+private fun WinnerRow(label: String, playerNumber: Int, labelColor: Color) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -432,7 +430,7 @@ private fun WinnerRow(label: String, address: String, labelColor: Color) {
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(label, style = MaterialTheme.typography.bodyMedium, color = labelColor, fontWeight = FontWeight.SemiBold)
-        Text(shortened, style = MaterialTheme.typography.bodyMedium, color = TextDim)
+        Text("Player #$playerNumber", style = MaterialTheme.typography.bodyMedium, color = TextDim)
     }
 }
 

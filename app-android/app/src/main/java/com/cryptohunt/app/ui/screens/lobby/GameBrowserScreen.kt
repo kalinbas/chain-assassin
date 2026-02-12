@@ -47,7 +47,7 @@ fun GameBrowserScreen(
     val error by viewModel.error.collectAsState()
 
     val activePhase = gameState?.phase
-    val hasActiveGame = activePhase in listOf(GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)
+    val hasActiveGame = activePhase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)
 
     Scaffold(
         topBar = {
@@ -151,7 +151,7 @@ fun GameBrowserScreen(
                 if (hasActiveGame && gameState != null) {
                     item {
                         Text(
-                            "Active Game",
+                            "Game in Progress",
                             style = MaterialTheme.typography.titleMedium,
                             color = TextSecondary,
                             modifier = Modifier.padding(bottom = 4.dp)
@@ -165,6 +165,7 @@ fun GameBrowserScreen(
                             kills = gameState!!.currentPlayer.killCount,
                             onClick = {
                                 when (activePhase) {
+                                    GamePhase.REGISTERED -> onRegisteredGameClick(gameState!!.config.id)
                                     GamePhase.CHECK_IN -> onRegisteredGameClick(gameState!!.config.id)
                                     GamePhase.PREGAME -> onRegisteredGameClick(gameState!!.config.id)
                                     GamePhase.ACTIVE -> onActiveGameClick()
@@ -457,8 +458,9 @@ private fun ActiveGameCard(
     kills: Int,
     onClick: () -> Unit
 ) {
-    val isLive = phase in listOf(GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE)
+    val isLive = phase in listOf(GamePhase.REGISTERED, GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE)
     val phaseLabel = when (phase) {
+        GamePhase.REGISTERED -> "IN PROGRESS"
         GamePhase.CHECK_IN -> "CHECK-IN"
         GamePhase.PREGAME -> "PREGAME"
         GamePhase.ACTIVE -> "ACTIVE"
@@ -467,6 +469,7 @@ private fun ActiveGameCard(
     }
     val phaseColor = if (isLive) Primary else Danger
     val buttonLabel = when (phase) {
+        GamePhase.REGISTERED -> "Rejoin Game"
         GamePhase.CHECK_IN -> "Go to Check-in"
         GamePhase.PREGAME -> "View Pregame"
         GamePhase.ACTIVE -> "Resume Game"

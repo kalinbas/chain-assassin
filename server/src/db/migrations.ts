@@ -108,4 +108,14 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(8);
     log.info("Migrated to v8: added base_reward column to games");
   }
+
+  if (currentVersion < 9 && currentVersion > 0) {
+    db.exec(`ALTER TABLE games ADD COLUMN total_collected TEXT NOT NULL DEFAULT '0'`);
+    db.exec(`ALTER TABLE games ADD COLUMN player_count INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE games ADD COLUMN max_duration INTEGER NOT NULL DEFAULT 0`);
+    db.exec(`ALTER TABLE games RENAME COLUMN bps_platform TO bps_creator`);
+    db.exec(`ALTER TABLE players ADD COLUMN has_claimed INTEGER NOT NULL DEFAULT 0`);
+    db.prepare("UPDATE schema_version SET version = ?").run(9);
+    log.info("Migrated to v9: added total_collected, player_count, max_duration, has_claimed; renamed bps_platform to bps_creator");
+  }
 }

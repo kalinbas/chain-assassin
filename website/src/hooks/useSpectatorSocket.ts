@@ -49,7 +49,7 @@ export interface SpectatorState {
   aliveCount: number;
   playerCount: number;
   checkedInCount: number;
-  winners: { winner1: string; winner2: string; winner3: string; topKiller: string } | null;
+  winners: { winner1: number; winner2: number; winner3: number; topKiller: number } | null;
   killFlashes: KillFlash[];
   trails: Record<number, { lat: number; lng: number; timestamp: number }[]>;
   huntLinks: { hunter: number; target: number }[];
@@ -128,8 +128,8 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         leaderboard: p.leaderboard as SpectatorState['leaderboard'],
         zone: p.zone as SpectatorState['zone'],
         players,
-        winners: (p.winner1 && p.winner1 !== '0x0000000000000000000000000000000000000000')
-          ? { winner1: p.winner1 as string, winner2: p.winner2 as string, winner3: p.winner3 as string, topKiller: p.topKiller as string }
+        winners: (p.winner1 && Number(p.winner1) !== 0)
+          ? { winner1: Number(p.winner1), winner2: Number(p.winner2), winner3: Number(p.winner3), topKiller: Number(p.topKiller) }
           : null,
         gameStartedAt: state.gameStartedAt ?? Date.now(),
       };
@@ -271,10 +271,10 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         ...state,
         phase: 'ended',
         winners: {
-          winner1: p.winner1 as string,
-          winner2: p.winner2 as string,
-          winner3: p.winner3 as string,
-          topKiller: p.topKiller as string,
+          winner1: Number(p.winner1),
+          winner2: Number(p.winner2),
+          winner3: Number(p.winner3),
+          topKiller: Number(p.topKiller),
         },
         events: addEvent(state.events, 'Game ended!', 'end'),
       };
