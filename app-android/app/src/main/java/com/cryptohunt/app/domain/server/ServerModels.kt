@@ -55,6 +55,7 @@ sealed class ServerMessage {
         val hunterPlayerNumber: Int?,
         val lastHeartbeatAt: Long?,
         val subPhase: String?,
+        val checkinEndsAt: Long?,
         val pregameEndsAt: Long?
     ) : ServerMessage()
 
@@ -117,6 +118,7 @@ sealed class ServerMessage {
     /** Pregame phase started. */
     data class GamePregameStarted(
         val pregameDurationSeconds: Int,
+        val pregameEndsAt: Long,
         val checkedInCount: Int,
         val playerCount: Int
     ) : ServerMessage()
@@ -157,7 +159,8 @@ sealed class ServerMessage {
 
     /** Check-in phase started. */
     data class CheckinStarted(
-        val checkinDurationSeconds: Int
+        val checkinDurationSeconds: Int,
+        val checkinEndsAt: Long
     ) : ServerMessage()
 
     /** A player registered for the game. */

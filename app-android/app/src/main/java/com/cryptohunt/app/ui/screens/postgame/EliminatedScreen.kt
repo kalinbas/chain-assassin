@@ -82,7 +82,7 @@ fun EliminatedScreen(
                 // Survival time
                 StatRow(
                     label = "SURVIVED",
-                    value = TimeUtils.formatDuration(state?.gameTimeElapsedSeconds ?: 0)
+                    value = TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L)
                 )
 
                 Divider(
@@ -157,7 +157,7 @@ fun EliminatedScreen(
         OutlinedButton(
             onClick = {
                 val kills = state?.currentPlayer?.killCount ?: 0
-                val survived = TimeUtils.formatDuration(state?.gameTimeElapsedSeconds ?: 0)
+                val survived = TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L)
                 val totalPlayers = state?.config?.maxPlayers ?: 100
                 val rank = (state?.playersRemaining ?: 1) + 1
                 val gameName = state?.config?.name ?: "Chain Assassin"

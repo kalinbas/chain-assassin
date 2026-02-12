@@ -63,8 +63,17 @@ fun PregameScreen(
         }
     }
 
-    val minutes = state.pregameTimeRemainingSeconds / 60
-    val seconds = state.pregameTimeRemainingSeconds % 60
+    // Compute countdown from server timestamp (Unix seconds)
+    var timeRemaining by remember { mutableIntStateOf(0) }
+    LaunchedEffect(state.pregameEndsAt) {
+        while (true) {
+            timeRemaining = ((state.pregameEndsAt - System.currentTimeMillis() / 1000).toInt()).coerceAtLeast(0)
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
+    val minutes = timeRemaining / 60
+    val seconds = timeRemaining % 60
 
     Scaffold(
         topBar = {

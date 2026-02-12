@@ -48,10 +48,12 @@ fun MapScreen(
     val zoneCenterLat = config?.zoneCenterLat ?: 0.0
     val zoneCenterLng = config?.zoneCenterLng ?: 0.0
 
-    // Compute next shrink radius from schedule
-    val nextShrinkRadius = remember(gameState?.gameTimeElapsedSeconds, gameState?.currentZoneRadius) {
+    // Compute next shrink radius from schedule using server gameStartTime
+    val nextShrinkRadius = remember(gameState?.currentZoneRadius, gameState?.gameStartTime) {
         val state = gameState ?: return@remember null
-        val elapsedMinutes = (state.gameTimeElapsedSeconds / 60).toInt()
+        if (state.gameStartTime <= 0L) return@remember null
+        val elapsedSeconds = (System.currentTimeMillis() / 1000) - state.gameStartTime
+        val elapsedMinutes = (elapsedSeconds / 60).toInt()
         val schedule = state.config.shrinkSchedule
         val nextShrink = schedule.firstOrNull { it.atMinute > elapsedMinutes }
         if (nextShrink != null && nextShrink.newRadiusMeters < state.currentZoneRadius) {

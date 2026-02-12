@@ -110,11 +110,22 @@ fun MainGameScreen(
     val state = gameState ?: return
     val isSpectator = state.spectatorMode
 
+    // Compute zone shrink countdown from server timestamp
+    var nextShrinkSeconds by remember { mutableIntStateOf(0) }
+    LaunchedEffect(state.nextShrinkAt) {
+        while (true) {
+            nextShrinkSeconds = state.nextShrinkAt?.let {
+                ((it - System.currentTimeMillis() / 1000).toInt()).coerceAtLeast(0)
+            } ?: 0
+            kotlinx.coroutines.delay(1000)
+        }
+    }
+
     // Dynamic background
     val bgColor by animateColorAsState(
         targetValue = when {
             !state.isInZone && !isSpectator -> Danger.copy(alpha = 0.1f)
-            state.nextShrinkSeconds in 1..120 -> Warning.copy(alpha = 0.05f)
+            nextShrinkSeconds in 1..120 -> Warning.copy(alpha = 0.05f)
             else -> Background
         },
         animationSpec = tween(500),
@@ -148,7 +159,7 @@ fun MainGameScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        ZoneTimer(secondsRemaining = state.nextShrinkSeconds)
+                        ZoneTimer(secondsRemaining = nextShrinkSeconds)
                     }
 
                     Spacer(Modifier.height(12.dp))
@@ -320,7 +331,7 @@ fun MainGameScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        ZoneTimer(secondsRemaining = state.nextShrinkSeconds)
+                        ZoneTimer(secondsRemaining = nextShrinkSeconds)
                     }
 
                     Spacer(Modifier.height(8.dp))
@@ -449,9 +460,8 @@ fun MainGameScreen(
             }
         }
 
-        // Out-of-zone warning bar with countdown (only for active players)
+        // Out-of-zone warning bar (only for active players — server handles elimination)
         if (!state.isInZone && !isSpectator) {
-            val zoneSecondsLeft = (60 - state.outOfZoneSeconds).coerceAtLeast(0)
             Card(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -475,10 +485,9 @@ fun MainGameScreen(
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        "Eliminated in ${zoneSecondsLeft}s",
-                        style = MaterialTheme.typography.titleLarge,
+                        "Return to the zone or you will be eliminated!",
+                        style = MaterialTheme.typography.bodyMedium,
                         color = TextPrimary,
-                        fontWeight = FontWeight.Black,
                         textAlign = TextAlign.Center
                     )
                 }
@@ -518,15 +527,6 @@ fun MainGameScreen(
                         style = MaterialTheme.typography.headlineSmall,
                         color = TextPrimary,
                         fontWeight = FontWeight.Black,
-                        textAlign = TextAlign.Center
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    val secondsLeft = (60 - locationState.gpsLostSeconds).coerceAtLeast(0)
-                    Text(
-                        "Disqualified in ${secondsLeft}s",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = TextPrimary,
-                        fontWeight = FontWeight.Bold,
                         textAlign = TextAlign.Center
                     )
                     Spacer(Modifier.height(8.dp))

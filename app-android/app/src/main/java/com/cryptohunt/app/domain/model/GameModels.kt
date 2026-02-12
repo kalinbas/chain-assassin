@@ -69,11 +69,8 @@ data class GameState(
     val hunterPlayerNumber: Int? = null,
     val playersRemaining: Int = 100,
     val currentZoneRadius: Double = 0.0,
-    val nextShrinkSeconds: Int = 0,
     val killFeed: List<KillEvent> = emptyList(),
-    val gameTimeElapsedSeconds: Long = 0,
     val isInZone: Boolean = true,
-    val outOfZoneSeconds: Int = 0,
     val spectatorMode: Boolean = false,
     val itemCooldowns: Map<String, Long> = emptyMap(), // itemId -> timestamp when last used
     val activePing: PingOverlay? = null,
@@ -81,13 +78,14 @@ data class GameState(
     val registeredAt: Long = 0L,
     val gameStartTime: Long = 0L,
     val checkInVerified: Boolean = false,
-    val checkInTimeRemainingSeconds: Int = 0,
+    // Server-driven timestamps (Unix seconds)
+    val checkinEndsAt: Long = 0L,
+    val pregameEndsAt: Long = 0L,
+    val nextShrinkAt: Long? = null,
     val checkedInCount: Int = 0,
     val checkedInPlayerNumbers: Set<Int> = emptySet(),
     val bluetoothId: String? = null,
-    // Pregame countdown
-    val pregameTimeRemainingSeconds: Int = 0,
-    // Heartbeat (anti-QR-hiding fairplay)
+    // Heartbeat (anti-QR-hiding fairplay) — server-driven
     val lastHeartbeatAt: Long = 0L,
     val heartbeatIntervalSeconds: Int = 600,
     val heartbeatDisabled: Boolean = false

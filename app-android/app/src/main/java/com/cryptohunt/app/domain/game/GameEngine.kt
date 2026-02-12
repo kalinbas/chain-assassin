@@ -3,7 +3,6 @@ package com.cryptohunt.app.domain.game
 import android.util.Log
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.*
-import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -19,8 +18,6 @@ private const val TAG = "GameEngine"
 @Singleton
 class GameEngine @Inject constructor() {
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
-
     private val _state = MutableStateFlow<GameState?>(null)
     val state: StateFlow<GameState?> = _state.asStateFlow()
 
@@ -28,27 +25,17 @@ class GameEngine @Inject constructor() {
     private val _events = MutableSharedFlow<GameEvent>(extraBufferCapacity = 20)
     val events: SharedFlow<GameEvent> = _events.asSharedFlow()
 
-    private var timerJob: Job? = null
-    private var checkInTimerJob: Job? = null
-    private var pregameTimerJob: Job? = null
-
     private val killFeedList = mutableListOf<KillEvent>()
 
     // --- Public API ---
 
     /** Clear all game state (used on logout). */
     fun reset() {
-        timerJob?.cancel()
-        checkInTimerJob?.cancel()
-        pregameTimerJob?.cancel()
         killFeedList.clear()
         _state.value = null
     }
 
     fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long, assignedPlayerNumber: Int = 0) {
-        // Cancel any timers from a previous game before overwriting state
-        stopTimers()
-
         val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else 0
 
         val currentPlayer = Player(
@@ -71,18 +58,17 @@ class GameEngine @Inject constructor() {
         )
     }
 
-    fun beginCheckIn() {
+    fun beginCheckIn(checkinEndsAt: Long = 0L) {
         val current = _state.value ?: return
         if (current.phase != GamePhase.REGISTERED) return
 
         _state.value = current.copy(
             phase = GamePhase.CHECK_IN,
-            checkInTimeRemainingSeconds = current.config.checkInDurationMinutes * 60,
+            checkinEndsAt = checkinEndsAt,
             checkedInCount = 0,
             checkedInPlayerNumbers = emptySet()
         )
         _events.tryEmit(GameEvent.CheckInStarted)
-        startCheckInCountdown()
     }
 
     fun processCheckInScan(scannedPayload: String, bluetoothId: String? = null): CheckInResult {
@@ -149,20 +135,9 @@ class GameEngine @Inject constructor() {
         return KillResult.Confirmed(killEvent)
     }
 
-    fun eliminateForGpsLoss() {
-        val current = _state.value ?: return
-        if (current.phase != GamePhase.ACTIVE) return
-        _state.value = current.copy(phase = GamePhase.ELIMINATED)
-        _events.tryEmit(GameEvent.GpsDisqualified)
-        stopTimers()
-    }
-
     fun updateZoneStatus(isInZone: Boolean) {
         val current = _state.value ?: return
-        _state.value = current.copy(
-            isInZone = isInZone,
-            outOfZoneSeconds = if (isInZone) 0 else current.outOfZoneSeconds
-        )
+        _state.value = current.copy(isInZone = isInZone)
     }
 
     fun setSpectatorMode() {
@@ -222,9 +197,6 @@ class GameEngine @Inject constructor() {
     }
 
     fun cleanup() {
-        stopTimers()
-        checkInTimerJob?.cancel()
-        pregameTimerJob?.cancel()
         _state.value = null
         killFeedList.clear()
     }
@@ -295,23 +267,10 @@ class GameEngine @Inject constructor() {
             currentTarget = target,
             hunterPlayerNumber = msg.hunterPlayerNumber,
             lastHeartbeatAt = msg.lastHeartbeatAt ?: 0L,
-            phase = phase
+            phase = phase,
+            checkinEndsAt = msg.checkinEndsAt ?: current.checkinEndsAt,
+            pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt
         )
-
-        // If we reconnected to an active game, restart the tick timer
-        if (phase == GamePhase.ACTIVE) {
-            startTickTimer()
-        }
-        // If we reconnected to check-in phase, start countdown
-        if (phase == GamePhase.CHECK_IN) {
-            startCheckInCountdown()
-        }
-        // If we reconnected to pregame, start countdown
-        if (phase == GamePhase.PREGAME && msg.pregameEndsAt != null) {
-            val remainingSeconds = ((msg.pregameEndsAt - System.currentTimeMillis() / 1000)).toInt().coerceAtLeast(0)
-            _state.value = _state.value?.copy(pregameTimeRemainingSeconds = remainingSeconds)
-            startPregameCountdown()
-        }
     }
 
     private fun handleTargetAssigned(msg: ServerMessage.TargetAssigned) {
@@ -339,7 +298,6 @@ class GameEngine @Inject constructor() {
         if (msg.playerNumber == current.currentPlayer.number) {
             // We were eliminated
             _state.value = current.copy(phase = GamePhase.ELIMINATED)
-            stopTimers()
             when (msg.reason) {
                 "zone_violation" -> _events.tryEmit(GameEvent.OutOfZoneEliminated)
                 "heartbeat_timeout" -> _events.tryEmit(GameEvent.HeartbeatEliminated)
@@ -382,7 +340,8 @@ class GameEngine @Inject constructor() {
     private fun handleZoneShrink(msg: ServerMessage.ZoneShrink) {
         val current = _state.value ?: return
         _state.value = current.copy(
-            currentZoneRadius = msg.zone.currentRadiusMeters
+            currentZoneRadius = msg.zone.currentRadiusMeters,
+            nextShrinkAt = msg.zone.nextShrinkAt
         )
         _events.tryEmit(GameEvent.ZoneShrink(msg.zone.currentRadiusMeters))
     }
@@ -416,7 +375,6 @@ class GameEngine @Inject constructor() {
     private fun handleGameStarted(msg: ServerMessage.GameStarted) {
         val current = _state.value ?: return
         val now = System.currentTimeMillis()
-        val nowSeconds = now / 1000
 
         val targetPlayer = Player(
             id = "player_${msg.target.playerNumber}",
@@ -432,10 +390,10 @@ class GameEngine @Inject constructor() {
             heartbeatIntervalSeconds = msg.heartbeatIntervalSeconds,
             heartbeatDisabled = false,
             currentZoneRadius = msg.zone?.currentRadiusMeters ?: current.currentZoneRadius,
-            pregameTimeRemainingSeconds = 0
+            nextShrinkAt = msg.zone?.nextShrinkAt,
+            gameStartTime = System.currentTimeMillis() / 1000
         )
 
-        startTickTimer()
         _events.tryEmit(GameEvent.GameStarted)
     }
 
@@ -443,12 +401,11 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return
         _state.value = current.copy(
             phase = GamePhase.PREGAME,
-            pregameTimeRemainingSeconds = msg.pregameDurationSeconds,
+            pregameEndsAt = msg.pregameEndsAt,
             checkedInCount = msg.checkedInCount,
             playersRemaining = msg.playerCount
         )
         _events.tryEmit(GameEvent.PregameStarted)
-        startPregameCountdown()
     }
 
     private fun handleGameStartedBroadcast(msg: ServerMessage.GameStartedBroadcast) {
@@ -478,26 +435,23 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return
         _state.value = current.copy(phase = GamePhase.ENDED)
         _events.tryEmit(GameEvent.GameEnded)
-        stopTimers()
     }
 
     private fun handleGameCancelled(msg: ServerMessage.GameCancelled) {
         val current = _state.value ?: return
         _state.value = current.copy(phase = GamePhase.CANCELLED)
         _events.tryEmit(GameEvent.GameCancelled)
-        stopTimers()
     }
 
     private fun handleCheckinStarted(msg: ServerMessage.CheckinStarted) {
         val current = _state.value ?: return
         _state.value = current.copy(
             phase = GamePhase.CHECK_IN,
-            checkInTimeRemainingSeconds = msg.checkinDurationSeconds,
+            checkinEndsAt = msg.checkinEndsAt,
             checkedInCount = 0,
             checkedInPlayerNumbers = emptySet()
         )
         _events.tryEmit(GameEvent.CheckInStarted)
-        startCheckInCountdown()
     }
 
     private fun handlePlayerRegistered(msg: ServerMessage.PlayerRegistered) {
@@ -514,87 +468,6 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(isInZone = msg.inZone)
     }
 
-    // --- Timers ---
-
-    private fun startTickTimer() {
-        timerJob?.cancel()
-        timerJob = scope.launch {
-            while (isActive) {
-                delay(1000)
-                tick()
-            }
-        }
-    }
-
-    private fun startCheckInCountdown() {
-        checkInTimerJob?.cancel()
-        checkInTimerJob = scope.launch {
-            while (isActive) {
-                delay(1000)
-                val current = _state.value ?: break
-                if (current.phase != GamePhase.CHECK_IN) break
-                val remaining = current.checkInTimeRemainingSeconds - 1
-                if (remaining <= 0) break // server handles phase transition
-                _state.value = current.copy(checkInTimeRemainingSeconds = remaining)
-            }
-        }
-    }
-
-    private fun startPregameCountdown() {
-        pregameTimerJob?.cancel()
-        pregameTimerJob = scope.launch {
-            while (isActive) {
-                delay(1000)
-                val current = _state.value ?: break
-                if (current.phase != GamePhase.PREGAME) break
-                val remaining = current.pregameTimeRemainingSeconds - 1
-                if (remaining <= 0) break // server handles phase transition
-                _state.value = current.copy(pregameTimeRemainingSeconds = remaining)
-            }
-        }
-    }
-
-    private fun stopTimers() {
-        timerJob?.cancel()
-        checkInTimerJob?.cancel()
-        pregameTimerJob?.cancel()
-    }
-
-    private fun tick() {
-        val current = _state.value ?: return
-        if (current.phase != GamePhase.ACTIVE) return
-
-        val elapsed = current.gameTimeElapsedSeconds + 1
-
-        // Out-of-zone deadline (60 seconds to return)
-        val newOutOfZoneSeconds = if (!current.isInZone && !current.spectatorMode) {
-            current.outOfZoneSeconds + 1
-        } else {
-            0
-        }
-        if (newOutOfZoneSeconds >= 60 && !current.spectatorMode) {
-            _state.value = current.copy(phase = GamePhase.ELIMINATED)
-            _events.tryEmit(GameEvent.OutOfZoneEliminated)
-            stopTimers()
-            return
-        }
-
-        // Auto-disable heartbeat when ≤4 players remain
-        val heartbeatDisabled = current.playersRemaining <= 4
-
-        _state.value = current.copy(
-            gameTimeElapsedSeconds = elapsed,
-            outOfZoneSeconds = newOutOfZoneSeconds,
-            heartbeatDisabled = heartbeatDisabled
-        )
-    }
-
-    private fun endGame() {
-        val current = _state.value ?: return
-        _state.value = current.copy(phase = GamePhase.ENDED)
-        _events.tryEmit(GameEvent.GameEnded)
-        stopTimers()
-    }
 }
 
 sealed class KillResult {

@@ -17,7 +17,7 @@ export function SpectatorLeaderboard({ state }: { state: SpectatorState }) {
       <div className="spectator__lb-list">
         {entries.map((entry, i) => (
           <div
-            key={entry.address}
+            key={entry.playerNumber}
             className={`spectator__lb-row ${!entry.isAlive ? 'spectator__lb-row--dead' : ''}`}
           >
             <span className={`spectator__lb-rank ${rankClass(i + 1)}`}>{i + 1}</span>

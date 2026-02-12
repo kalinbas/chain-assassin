@@ -1,8 +1,11 @@
 package com.cryptohunt.app.domain.server
 
+import com.cryptohunt.app.BuildConfig
+
 object ServerConfig {
-    const val SERVER_URL = "https://chain-assassin.fly.dev"
-    const val SERVER_WS_URL = "wss://chain-assassin.fly.dev/ws"
+    // Emulator uses 10.0.2.2 to reach host machine's localhost
+    val SERVER_URL: String = if (BuildConfig.DEBUG) "http://10.0.2.2:3000" else "https://chain-assassin.fly.dev"
+    val SERVER_WS_URL: String = if (BuildConfig.DEBUG) "ws://10.0.2.2:3000/ws" else "wss://chain-assassin.fly.dev/ws"
 
     // Auth message prefix (must match server's crypto.ts validateAuthMessage)
     const val AUTH_PREFIX = "chain-assassin"

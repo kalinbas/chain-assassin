@@ -14,9 +14,9 @@ function simpleHash(s: string): number {
 }
 
 // Return a fuzzy position with ±30-70m offset, changing every 3s
-function fuzzyPosition(lat: number, lng: number, address: string, tick: number): [number, number] {
+function fuzzyPosition(lat: number, lng: number, playerNumber: number, tick: number): [number, number] {
   const bucket = Math.floor(tick / 3000);
-  const seed = simpleHash(address + bucket);
+  const seed = simpleHash(`p${playerNumber}_${bucket}`);
   const angle = (seed % 360) * (Math.PI / 180);
   const jitterMeters = 30 + (seed % 40); // 30-70m jitter
   const dlat = (jitterMeters * Math.cos(angle)) / 111320;
@@ -132,18 +132,19 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
         )}
 
         {/* Player trails (dashed green polylines) */}
-        {Object.entries(state.trails).map(([address, trail]) => {
+        {Object.entries(state.trails).map(([key, trail]) => {
           if (trail.length < 2) return null;
-          const player = state.players.find((p) => p.address === address);
+          const playerNum = Number(key);
+          const player = state.players.find((p) => p.playerNumber === playerNum);
           if (!player?.isAlive) return null;
 
           const positions = trail.map((t) =>
-            fuzzyPosition(t.lat, t.lng, address, t.timestamp)
+            fuzzyPosition(t.lat, t.lng, playerNum, t.timestamp)
           );
 
           return (
             <Polyline
-              key={`trail-${address}`}
+              key={`trail-${key}`}
               positions={positions}
               pathOptions={{ color: '#00FF88', weight: 2, opacity: 0.2, dashArray: '4 4' }}
             />
@@ -152,12 +153,12 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
 
         {/* Hunt lines (subtle red dashed lines from hunter to target) */}
         {showHuntLines && state.huntLinks.map((link) => {
-          const hunter = visiblePlayers.find((p) => p.address === link.hunter);
-          const target = visiblePlayers.find((p) => p.address === link.target);
+          const hunter = visiblePlayers.find((p) => p.playerNumber === link.hunter);
+          const target = visiblePlayers.find((p) => p.playerNumber === link.target);
           if (!hunter?.lat || !target?.lat) return null;
 
-          const hPos = fuzzyPosition(hunter.lat, hunter.lng!, hunter.address, tick);
-          const tPos = fuzzyPosition(target.lat, target.lng!, target.address, tick);
+          const hPos = fuzzyPosition(hunter.lat, hunter.lng!, hunter.playerNumber, tick);
+          const tPos = fuzzyPosition(target.lat, target.lng!, target.playerNumber, tick);
 
           return (
             <Polyline
@@ -170,10 +171,10 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
 
         {/* Anonymous player dots — glow circle behind each */}
         {visiblePlayers.map((player) => {
-          const pos = fuzzyPosition(player.lat!, player.lng!, player.address, tick);
+          const pos = fuzzyPosition(player.lat!, player.lng!, player.playerNumber, tick);
           return (
             <CircleMarker
-              key={`glow-${player.address}`}
+              key={`glow-${player.playerNumber}`}
               center={pos}
               radius={14}
               pathOptions={{
@@ -188,10 +189,10 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
 
         {/* Anonymous player dots — main dot */}
         {visiblePlayers.map((player) => {
-          const pos = fuzzyPosition(player.lat!, player.lng!, player.address, tick);
+          const pos = fuzzyPosition(player.lat!, player.lng!, player.playerNumber, tick);
           return (
             <CircleMarker
-              key={player.address}
+              key={`player-${player.playerNumber}`}
               center={pos}
               radius={7}
               pathOptions={{

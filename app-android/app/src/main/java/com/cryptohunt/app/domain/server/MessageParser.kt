@@ -24,6 +24,7 @@ fun parseServerMessage(json: String): ServerMessage? {
                 hunterPlayerNumber = obj.optIntOrNull("hunterPlayerNumber"),
                 lastHeartbeatAt = obj.optLongOrNull("lastHeartbeatAt"),
                 subPhase = obj.optStringOrNull("subPhase"),
+                checkinEndsAt = obj.optLongOrNull("checkinEndsAt"),
                 pregameEndsAt = obj.optLongOrNull("pregameEndsAt")
             )
 
@@ -75,6 +76,7 @@ fun parseServerMessage(json: String): ServerMessage? {
 
             "game:pregame_started" -> ServerMessage.GamePregameStarted(
                 pregameDurationSeconds = obj.optInt("pregameDurationSeconds", 180),
+                pregameEndsAt = obj.optLong("pregameEndsAt", 0),
                 checkedInCount = obj.optInt("checkedInCount", 0),
                 playerCount = obj.optInt("playerCount", 0)
             )
@@ -109,7 +111,8 @@ fun parseServerMessage(json: String): ServerMessage? {
             )
 
             "game:checkin_started" -> ServerMessage.CheckinStarted(
-                checkinDurationSeconds = obj.optInt("checkinDurationSeconds", 300)
+                checkinDurationSeconds = obj.optInt("checkinDurationSeconds", 300),
+                checkinEndsAt = obj.optLong("checkinEndsAt", 0)
             )
 
             "player:registered" -> ServerMessage.PlayerRegistered(

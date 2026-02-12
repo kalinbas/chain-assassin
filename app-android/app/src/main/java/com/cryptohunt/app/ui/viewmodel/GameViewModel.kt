@@ -40,14 +40,10 @@ class GameViewModel @Inject constructor(
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
 
     init {
-        // Sync location zone status with game engine
+        // Sync location zone status with game engine (display only — server enforces zone violations)
         viewModelScope.launch {
             locationTracker.state.collect { locState ->
                 gameEngine.updateZoneStatus(locState.isInsideZone)
-                // GPS lost for 60+ seconds → disqualify
-                if (locState.gpsLostSeconds >= 60) {
-                    gameEngine.eliminateForGpsLoss()
-                }
             }
         }
 

@@ -33,6 +33,7 @@ import {
   insertHeartbeatScan,
   getTargetAssignment,
   findHunterOf,
+  getZoneShrinks,
 } from "../db/queries.js";
 import { initializeTargetChain, processKill, removeFromChain, getChainSize, getChainMap } from "./targetChain.js";
 import { ZoneTracker } from "./zoneTracker.js";
@@ -60,6 +61,9 @@ const checkinTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // Per-game pregame timers — fires when pregame countdown ends
 const pregameTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+// Per-game spectator position broadcast during checkin/pregame (before gameTick takes over)
+const preGameSpectatorIntervals = new Map<number, ReturnType<typeof setInterval>>();
 
 // Simulated game IDs — skip on-chain operator calls for these
 const simulatedGames = new Set<number>();
@@ -179,6 +183,7 @@ export function onGameStarted(gameId: number): void {
   broadcast(gameId, {
     type: "game:checkin_started",
     checkinDurationSeconds: config.checkinDurationSeconds,
+    checkinEndsAt: now + config.checkinDurationSeconds,
   });
 
   // Auto-seed: randomly check in 5% of players (min 1) so the QR chain can start
@@ -199,6 +204,9 @@ export function onGameStarted(gameId: number): void {
     });
     log.info({ gameId, address: seed.address }, "Auto-seeded check-in");
   }
+
+  // Start spectator position broadcast during pre-game phases
+  startPreGameSpectatorBroadcast(gameId);
 
   // Schedule checkin end timer
   const timer = setTimeout(() => {
@@ -247,9 +255,11 @@ function completeCheckin(gameId: number): void {
 
   const checkedInCount = getCheckedInCount(gameId);
 
+  const pregameNow = Math.floor(Date.now() / 1000);
   broadcast(gameId, {
     type: "game:pregame_started",
     pregameDurationSeconds: config.pregameDurationSeconds,
+    pregameEndsAt: pregameNow + config.pregameDurationSeconds,
     checkedInCount,
     playerCount: aliveCount,
   });
@@ -276,6 +286,9 @@ export function completePregame(gameId: number): void {
   }
 
   const now = Math.floor(Date.now() / 1000);
+
+  // Stop pre-game spectator broadcast (gameTick will take over)
+  stopPreGameSpectatorBroadcast(gameId);
 
   // Update sub_phase to 'game'
   updateSubPhase(gameId, "game");
@@ -464,10 +477,22 @@ export function handleLocationUpdate(
   lat: number,
   lng: number
 ): void {
-  const active = activeGames.get(gameId);
-  if (!active) return;
-
   const now = Math.floor(Date.now() / 1000);
+  const active = activeGames.get(gameId);
+
+  if (!active) {
+    // During checkin/pregame, still store the location (no zone tracking yet)
+    insertLocationPing({
+      gameId,
+      address,
+      lat,
+      lng,
+      timestamp: now,
+      isInZone: true,
+    });
+    return;
+  }
+
   const { inZone, secondsRemaining } = active.zoneTracker.processLocation(
     address,
     lat,
@@ -571,6 +596,58 @@ export function handleCheckin(
   });
 
   return { success: true };
+}
+
+// ============ Pre-Game Spectator Broadcast ============
+
+/**
+ * Broadcast player positions to spectators during checkin/pregame phases.
+ * Stops when gameTick takes over in the 'game' sub-phase.
+ */
+function startPreGameSpectatorBroadcast(gameId: number): void {
+  stopPreGameSpectatorBroadcast(gameId);
+
+  // Pre-compute zone info (no ZoneTracker yet, use DB data)
+  const game = getGame(gameId);
+  const shrinks = getZoneShrinks(gameId);
+  const initialRadius = shrinks[0]?.radiusMeters ?? 500;
+  const zone = game?.centerLat && game?.centerLng
+    ? { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null }
+    : null;
+
+  const interval = setInterval(() => {
+    if (!spectatorBroadcastFn) return;
+
+    const alivePlayers = getAlivePlayers(gameId);
+    const positions = alivePlayers.map((p) => {
+      const ping = getLatestLocationPing(gameId, p.address);
+      return {
+        playerNumber: p.playerNumber,
+        lat: ping?.lat ?? null,
+        lng: ping?.lng ?? null,
+        isAlive: true,
+        kills: p.kills,
+      };
+    });
+
+    spectatorBroadcastFn(gameId, {
+      type: "spectator:positions",
+      players: positions,
+      zone,
+      aliveCount: alivePlayers.length,
+      huntLinks: [],
+    });
+  }, 2000);
+
+  preGameSpectatorIntervals.set(gameId, interval);
+}
+
+function stopPreGameSpectatorBroadcast(gameId: number): void {
+  const existing = preGameSpectatorIntervals.get(gameId);
+  if (existing) {
+    clearInterval(existing);
+    preGameSpectatorIntervals.delete(gameId);
+  }
 }
 
 // ============ Game Tick ============
@@ -1145,6 +1222,7 @@ export function recoverGames(): void {
         completeCheckin(game.gameId);
       } else {
         log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering checkin timer");
+        startPreGameSpectatorBroadcast(game.gameId);
         const timer = setTimeout(() => {
           checkinTimers.delete(game.gameId);
           completeCheckin(game.gameId);
@@ -1162,6 +1240,7 @@ export function recoverGames(): void {
         completePregame(game.gameId);
       } else {
         log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering pregame timer");
+        startPreGameSpectatorBroadcast(game.gameId);
         const timer = setTimeout(() => {
           pregameTimers.delete(game.gameId);
           completePregame(game.gameId);
@@ -1202,6 +1281,7 @@ function cleanupActiveGame(gameId: number): void {
     clearInterval(active.tickInterval);
     activeGames.delete(gameId);
   }
+  stopPreGameSpectatorBroadcast(gameId);
   const checkinTimer = checkinTimers.get(gameId);
   if (checkinTimer) {
     clearTimeout(checkinTimer);
@@ -1244,6 +1324,11 @@ export function cleanupAll(): void {
     clearTimeout(timer);
   }
   pregameTimers.clear();
+
+  for (const [gameId, interval] of preGameSpectatorIntervals) {
+    clearInterval(interval);
+  }
+  preGameSpectatorIntervals.clear();
 }
 
 // ============ Query Helpers ============
@@ -1258,7 +1343,12 @@ export function getGameStatus(gameId: number) {
   const players = getPlayers(gameId);
   const leaderboard = getLeaderboard(gameId);
   const active = activeGames.get(gameId);
-  const zone = active?.zoneTracker.getZoneState() ?? null;
+  let zone = active?.zoneTracker.getZoneState() ?? null;
+  if (!zone && game.phase === GamePhase.ACTIVE && game.centerLat && game.centerLng) {
+    const shrinks = getZoneShrinks(gameId);
+    const initialRadius = shrinks[0]?.radiusMeters ?? 500;
+    zone = { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null };
+  }
 
   return {
     gameId,
@@ -1272,6 +1362,7 @@ export function getGameStatus(gameId: number) {
       : null,
     playerCount: players.length,
     aliveCount: players.filter((p) => p.isAlive).length,
+    checkedInCount: players.filter((p) => p.checkedIn).length,
     leaderboard,
     zone,
     winner1: game.winner1,

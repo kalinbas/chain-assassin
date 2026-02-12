@@ -29,14 +29,33 @@ function startListening(): void {
   if (started) return;
   started = true;
 
-  // Use a separate provider instance with polling enabled for event subscriptions.
-  // ethers v6 JsonRpcProvider polls automatically (default 4s).
-  const provider = new JsonRpcProvider(RPC_URL, undefined, { polling: true, pollingInterval: 5000 });
+  const provider = new JsonRpcProvider(RPC_URL);
   const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+  let lastBlock = 0;
 
-  contract.on('GameCreated', () => notify());
-  contract.on('PlayerRegistered', () => notify());
-  contract.on('GameStarted', () => notify());
-  contract.on('GameEnded', () => notify());
-  contract.on('GameCancelled', () => notify());
+  const poll = async () => {
+    try {
+      const current = await provider.getBlockNumber();
+      if (lastBlock === 0) {
+        lastBlock = current;
+        return;
+      }
+      if (current <= lastBlock) return;
+
+      // Query only the new blocks (max 10 block range for free tier)
+      const from = lastBlock + 1;
+      const to = current;
+      lastBlock = current;
+
+      const events = await contract.queryFilter('*', from, to);
+      if (events.length > 0) {
+        notify();
+      }
+    } catch {
+      // ignore RPC errors silently
+    }
+  };
+
+  setInterval(poll, 10000);
+  poll();
 }

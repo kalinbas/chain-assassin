@@ -103,7 +103,7 @@ fun ResultsScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         StatColumn("KILLS", "${state?.currentPlayer?.killCount ?: 0}", Primary)
-                        StatColumn("SURVIVED", TimeUtils.formatDuration(state?.gameTimeElapsedSeconds ?: 0), TextPrimary)
+                        StatColumn("SURVIVED", TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L), TextPrimary)
                         StatColumn("RANK", if (isWinner) "#1" else "#${(state?.playersRemaining ?: 0) + 1}", if (isWinner) Warning else TextPrimary)
                     }
                 }

@@ -2,7 +2,6 @@ import { useEffect, useReducer, useRef, useCallback } from 'react';
 import { SERVER_WS_URL } from '../config/server';
 
 export interface SpectatorPlayer {
-  address: string;
   playerNumber: number;
   lat: number | null;
   lng: number | null;
@@ -35,6 +34,7 @@ export interface SpectatorState {
   connected: boolean;
   phase: string | null;
   subPhase: string | null;
+  checkinEndsAt: number | null;
   pregameEndsAt: number | null;
   zone: {
     centerLat: number;
@@ -44,16 +44,16 @@ export interface SpectatorState {
     nextRadiusMeters?: number | null;
   } | null;
   players: SpectatorPlayer[];
-  leaderboard: { address: string; playerNumber: number; kills: number; isAlive: boolean }[];
+  leaderboard: { playerNumber: number; kills: number; isAlive: boolean }[];
   events: SpectatorEvent[];
   aliveCount: number;
   playerCount: number;
+  checkedInCount: number;
   winners: { winner1: string; winner2: string; winner3: string; topKiller: string } | null;
   killFlashes: KillFlash[];
-  trails: Record<string, { lat: number; lng: number; timestamp: number }[]>;
-  huntLinks: { hunter: string; target: string }[];
+  trails: Record<number, { lat: number; lng: number; timestamp: number }[]>;
+  huntLinks: { hunter: number; target: number }[];
   pingCircles: PingCircle[];
-  playerMap: Record<string, number>; // lowercase address → playerNumber
   totalKills: number;
   gameStartedAt: number | null;
 }
@@ -62,6 +62,7 @@ const initialState: SpectatorState = {
   connected: false,
   phase: null,
   subPhase: null,
+  checkinEndsAt: null,
   pregameEndsAt: null,
   zone: null,
   players: [],
@@ -69,12 +70,12 @@ const initialState: SpectatorState = {
   events: [],
   aliveCount: 0,
   playerCount: 0,
+  checkedInCount: 0,
   winners: null,
   killFlashes: [],
   trails: {},
   huntLinks: [],
   pingCircles: [],
-  playerMap: {},
   totalKills: 0,
   gameStartedAt: null,
 };
@@ -91,17 +92,16 @@ type Action =
   | { type: 'pregame_started'; payload: Record<string, unknown> }
   | { type: 'game_started'; payload: Record<string, unknown> }
   | { type: 'game_ended'; payload: Record<string, unknown> }
-  | { type: 'item_used'; payload: Record<string, unknown> };
+  | { type: 'item_used'; payload: Record<string, unknown> }
+  | { type: 'checkin_update'; payload: Record<string, unknown> };
 
 function addEvent(events: SpectatorEvent[], text: string, type: string, meta?: SpectatorEvent['meta']): SpectatorEvent[] {
   const updated = [{ type, text, timestamp: Date.now(), meta }, ...events];
   return updated.slice(0, 50);
 }
 
-/** Resolve address → "Player #N" using the player list, with truncated address fallback */
-function playerLabel(address: string, playerMap: Record<string, number>): string {
-  const num = playerMap[address.toLowerCase()];
-  return num != null ? `Player #${num}` : address.slice(0, 6) + '…' + address.slice(-4);
+function playerLabel(playerNumber: number): string {
+  return `Player #${playerNumber}`;
 }
 
 function reducer(state: SpectatorState, action: Action): SpectatorState {
@@ -115,22 +115,19 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
     case 'init': {
       const p = action.payload;
       const players = p.players as SpectatorPlayer[];
-      const pMap: Record<string, number> = { ...state.playerMap };
-      for (const pl of players) {
-        pMap[pl.address.toLowerCase()] = pl.playerNumber;
-      }
       return {
         ...state,
         connected: true,
         phase: p.phase as string,
         subPhase: (p.subPhase as string | null) ?? null,
+        checkinEndsAt: (p.checkinEndsAt as number | null) ?? null,
         pregameEndsAt: (p.pregameEndsAt as number | null) ?? null,
         playerCount: p.playerCount as number,
         aliveCount: p.aliveCount as number,
+        checkedInCount: (p.checkedInCount as number) ?? 0,
         leaderboard: p.leaderboard as SpectatorState['leaderboard'],
         zone: p.zone as SpectatorState['zone'],
         players,
-        playerMap: pMap,
         winners: (p.winner1 && p.winner1 !== '0x0000000000000000000000000000000000000000')
           ? { winner1: p.winner1 as string, winner2: p.winner2 as string, winner3: p.winner3 as string, topKiller: p.topKiller as string }
           : null,
@@ -143,19 +140,14 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       const newPlayers = p.players as SpectatorPlayer[];
       const now = Date.now();
 
-      // Keep playerMap up to date
-      const pMap: Record<string, number> = { ...state.playerMap };
-      for (const pl of newPlayers) {
-        pMap[pl.address.toLowerCase()] = pl.playerNumber;
-      }
-
       // Build trails from position history
       const newTrails = { ...state.trails };
       for (const player of newPlayers) {
         if (player.lat != null && player.lng != null && player.isAlive) {
-          const existing = newTrails[player.address] || [];
+          const key = player.playerNumber;
+          const existing = newTrails[key] || [];
           const updated = [...existing, { lat: player.lat, lng: player.lng, timestamp: now }];
-          newTrails[player.address] = updated.slice(-8);
+          newTrails[key] = updated.slice(-8);
         }
       }
 
@@ -174,18 +166,16 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         trails: newTrails,
         killFlashes,
         pingCircles,
-        playerMap: pMap,
       };
     }
 
     case 'kill': {
       const p = action.payload;
-      const hunter = playerLabel(p.hunter as string, state.playerMap);
-      const target = playerLabel(p.target as string, state.playerMap);
-      const targetAddr = p.target as string;
+      const hunterNum = p.hunterNumber as number;
+      const targetNum = p.targetNumber as number;
 
       // Find target's last position for kill flash
-      const targetPlayer = state.players.find((pl) => pl.address === targetAddr);
+      const targetPlayer = state.players.find((pl) => pl.playerNumber === targetNum);
       const newFlashes = [...state.killFlashes];
       if (targetPlayer?.lat != null && targetPlayer?.lng != null) {
         newFlashes.push({ lat: targetPlayer.lat, lng: targetPlayer.lng, timestamp: Date.now() });
@@ -193,7 +183,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
       return {
         ...state,
-        events: addEvent(state.events, `${hunter} eliminated ${target}`, 'kill'),
+        events: addEvent(state.events, `${playerLabel(hunterNum)} eliminated ${playerLabel(targetNum)}`, 'kill'),
         killFlashes: newFlashes,
         totalKills: state.totalKills + 1,
       };
@@ -201,18 +191,18 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'eliminated': {
       const p = action.payload;
-      const player = playerLabel(p.player as string, state.playerMap);
+      const num = p.playerNumber as number;
       const reason = p.reason as string;
       if (reason === 'zone_violation') {
         return {
           ...state,
-          events: addEvent(state.events, `${player} eliminated by zone`, 'zone_elim'),
+          events: addEvent(state.events, `${playerLabel(num)} eliminated by zone`, 'zone_elim'),
         };
       }
       if (reason === 'heartbeat_timeout') {
         return {
           ...state,
-          events: addEvent(state.events, `${player} eliminated (missed heartbeat)`, 'heartbeat_elim'),
+          events: addEvent(state.events, `${playerLabel(num)} eliminated (missed heartbeat)`, 'heartbeat_elim'),
         };
       }
       return state;
@@ -241,6 +231,14 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       };
     }
 
+    case 'checkin_update': {
+      const p = action.payload;
+      return {
+        ...state,
+        checkedInCount: (p.checkedInCount as number) ?? state.checkedInCount,
+      };
+    }
+
     case 'pregame_started': {
       const p = action.payload;
       const duration = (p.pregameDurationSeconds as number) || 180;
@@ -248,7 +246,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         ...state,
         phase: 'active',
         subPhase: 'pregame',
-        pregameEndsAt: Math.floor(Date.now() / 1000) + duration,
+        pregameEndsAt: (p.pregameEndsAt as number) ?? Math.floor(Date.now() / 1000) + duration,
         aliveCount: (p.playerCount as number) ?? state.aliveCount,
         events: addEvent(state.events, 'Pregame started — players dispersing!', 'pregame'),
       };
@@ -278,13 +276,13 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
           winner3: p.winner3 as string,
           topKiller: p.topKiller as string,
         },
-        events: addEvent(state.events, `Game ended! Winner: ${playerLabel(p.winner1 as string, state.playerMap)}`, 'end'),
+        events: addEvent(state.events, 'Game ended!', 'end'),
       };
     }
 
     case 'item_used': {
       const p = action.payload;
-      const player = playerLabel(p.playerAddress as string, state.playerMap);
+      const num = p.playerNumber as number;
       const itemName = p.itemName as string;
       const itemId = p.itemId as string;
 
@@ -307,7 +305,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
       return {
         ...state,
-        events: addEvent(state.events, `${player} used ${itemName}`, 'item', { itemId }),
+        events: addEvent(state.events, `${playerLabel(num)} used ${itemName}`, 'item', { itemId }),
         pingCircles,
       };
     }
@@ -356,6 +354,9 @@ export function useSpectatorSocket(gameId: number): SpectatorState {
             break;
           case 'leaderboard:update':
             dispatch({ type: 'leaderboard', payload: msg });
+            break;
+          case 'checkin:update':
+            dispatch({ type: 'checkin_update', payload: msg });
             break;
           case 'game:pregame_started':
             dispatch({ type: 'pregame_started', payload: msg });

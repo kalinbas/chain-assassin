@@ -42,9 +42,17 @@ fun CheckInScreen(
 
     val config = state.config
     val isVerified = state.checkInVerified
-    val timeRemaining = state.checkInTimeRemainingSeconds
     val checkedInCount = state.checkedInCount
     val totalPlayers = state.playersRemaining
+
+    // Compute countdown from server timestamp (Unix seconds)
+    var timeRemaining by remember { mutableIntStateOf(0) }
+    LaunchedEffect(state.checkinEndsAt) {
+        while (true) {
+            timeRemaining = ((state.checkinEndsAt - System.currentTimeMillis() / 1000).toInt()).coerceAtLeast(0)
+            kotlinx.coroutines.delay(1000)
+        }
+    }
 
     // Ensure server connection
     LaunchedEffect(Unit) {

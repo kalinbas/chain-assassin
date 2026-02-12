@@ -219,8 +219,8 @@ export async function loadGameEvents(gameId: number): Promise<GameEvent[]> {
     }
 
     activity.sort((a, b) => b.timestamp - a.timestamp);
-  } catch (err) {
-    console.warn('Failed to load game events:', err);
+  } catch {
+    // eth_getLogs may fail on free-tier RPC (block range limit)
   }
 
   return activity;
