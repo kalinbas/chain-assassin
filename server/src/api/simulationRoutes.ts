@@ -41,8 +41,8 @@ simulationRouter.post("/api/simulation/deploy", (req: Request, res: Response) =>
 
     const cfg: DeploySimulationConfig = {
       playerCount: Math.min(5, Math.max(3, body.playerCount ?? 5)),
-      centerLat: body.centerLat ?? 37.7749,
-      centerLng: body.centerLng ?? -122.4194,
+      centerLat: body.centerLat ?? 19.41780918876707,
+      centerLng: body.centerLng ?? -99.1626323322667,
       initialRadiusMeters: body.initialRadiusMeters ?? 500,
       speedMultiplier: Math.min(50, Math.max(1, body.speedMultiplier ?? 1)),
       title: body.title ?? "Simulation Game",

@@ -49,8 +49,11 @@ const activeGames = new Map<number, {
   tickInterval: ReturnType<typeof setInterval>;
 }>();
 
-// Per-game deadline timers (replaces 10s polling interval)
+// Per-game deadline timers — fires at registrationDeadline to cancel if not enough players
 const deadlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
+
+// Per-game gameDate timers — fires at gameDate to start the game
+const gameDateTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
 // Per-game checkin timers — fires when checkin period ends, transitions to pregame
 const checkinTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -136,7 +139,7 @@ function sendToPlayer(gameId: number, address: string, message: Record<string, u
 export function onGameCreated(gameConfig: GameConfig, shrinks: ZoneShrink[]): void {
   insertGame(gameConfig);
   insertZoneShrinks(gameConfig.gameId, shrinks);
-  scheduleDeadlineCheck(gameConfig);
+  scheduleTimers(gameConfig);
   log.info({ gameId: gameConfig.gameId, title: gameConfig.title }, "Game tracked");
 }
 
@@ -160,7 +163,7 @@ export function onPlayerRegistered(gameId: number, playerAddress: string, player
  * Players must check in during this period or they'll be eliminated.
  */
 export function onGameStarted(gameId: number): void {
-  cancelDeadlineTimer(gameId);
+  cancelTimers(gameId);
 
   const game = getGame(gameId);
   if (!game) {
@@ -178,6 +181,26 @@ export function onGameStarted(gameId: number): void {
     checkinDurationSeconds: config.checkinDurationSeconds,
   });
 
+  // Auto-seed: randomly check in 5% of players (min 1) so the QR chain can start
+  const players = getPlayers(gameId).filter((p) => p.isAlive);
+  const seedCount = Math.max(1, Math.ceil(players.length * 0.05));
+  const shuffled = [...players].sort(() => Math.random() - 0.5);
+  const seeds = shuffled.slice(0, seedCount);
+
+  for (const seed of seeds) {
+    setPlayerCheckedIn(gameId, seed.address);
+    const checkedIn = getCheckedInCount(gameId);
+    const total = getPlayerCount(gameId);
+    broadcast(gameId, {
+      type: "checkin:update",
+      checkedInCount: checkedIn,
+      totalPlayers: total,
+      player: seed.address,
+      bluetoothId: null,
+    });
+    log.info({ gameId, address: seed.address }, "Auto-seeded check-in");
+  }
+
   // Schedule checkin end timer
   const timer = setTimeout(() => {
     checkinTimers.delete(gameId);
@@ -185,7 +208,7 @@ export function onGameStarted(gameId: number): void {
   }, config.checkinDurationSeconds * 1000);
   checkinTimers.set(gameId, timer);
 
-  log.info({ gameId, checkinDurationSeconds: config.checkinDurationSeconds }, "Check-in phase started");
+  log.info({ gameId, seedCount, checkinDurationSeconds: config.checkinDurationSeconds }, "Check-in phase started");
 }
 
 /**
@@ -513,33 +536,28 @@ export function handleCheckin(
     return { success: false, error: "Too far from meeting point" };
   }
 
-  // Viral check-in: first 5% of players (min 1) are GPS-only, rest need QR
-  const alreadyCheckedIn = getCheckedInCount(gameId);
-  const totalPlayers = getPlayerCount(gameId);
-  const gpsOnlySlots = Math.max(1, Math.ceil(totalPlayers * 0.05));
-  if (alreadyCheckedIn >= gpsOnlySlots) {
-    if (!qrPayload) {
-      return { success: false, error: "Scan a checked-in player's QR code" };
-    }
+  // Viral check-in: scan a checked-in player's QR code (seed players are auto-checked-in by server)
+  if (!qrPayload) {
+    return { success: false, error: "Scan a checked-in player's QR code" };
+  }
 
-    const qr = parseKillQrPayload(qrPayload);
-    if (!qr) {
-      return { success: false, error: "Invalid QR code" };
-    }
-    if (qr.gameId !== gameId) {
-      return { success: false, error: "QR code is for a different game" };
-    }
+  const qr = parseKillQrPayload(qrPayload);
+  if (!qr) {
+    return { success: false, error: "Invalid QR code" };
+  }
+  if (qr.gameId !== gameId) {
+    return { success: false, error: "QR code is for a different game" };
+  }
 
-    const scannedPlayer = getPlayerByNumber(gameId, qr.playerNumber);
-    if (!scannedPlayer) {
-      return { success: false, error: "Unknown player in QR code" };
-    }
-    if (!scannedPlayer.checkedIn) {
-      return { success: false, error: "Scanned player has not checked in yet" };
-    }
-    if (scannedPlayer.address === address) {
-      return { success: false, error: "Cannot scan your own QR code" };
-    }
+  const scannedPlayer = getPlayerByNumber(gameId, qr.playerNumber);
+  if (!scannedPlayer) {
+    return { success: false, error: "Unknown player in QR code" };
+  }
+  if (!scannedPlayer.checkedIn) {
+    return { success: false, error: "Scanned player has not checked in yet" };
+  }
+  if (scannedPlayer.address === address) {
+    return { success: false, error: "Cannot scan your own QR code" };
   }
 
   setPlayerCheckedIn(gameId, address, bluetoothId);
@@ -954,7 +972,7 @@ async function endGameWithWinners(gameId: number): Promise<void> {
  * Handle a game cancelled event.
  */
 export function onGameCancelled(gameId: number): void {
-  cancelDeadlineTimer(gameId);
+  cancelTimers(gameId);
   updateGamePhase(gameId, GamePhase.CANCELLED);
   broadcast(gameId, { type: "game:cancelled", gameId });
   cleanupActiveGame(gameId);
@@ -983,86 +1001,120 @@ export function onGameEnded(
   log.info({ gameId, winner1, winner2, winner3, topKiller }, "Game ended (chain confirmed)");
 }
 
-// ============ Deadline Scheduling ============
+// ============ Scheduling ============
 
 /**
- * Schedule a one-shot timer for the game's gameDate.
- * When the timer fires, checkAutoStart() runs and decides whether to start or skip.
- * The contract only allows startGame() after gameDate is reached.
+ * Schedule both timers for a registration-phase game:
+ * 1. Deadline check — fires at registrationDeadline: cancel if not enough players
+ * 2. Game date check — fires at gameDate: start if enough players
  */
-export function scheduleDeadlineCheck(config: GameConfig): void {
-  // Cancel any existing timer for this game
-  cancelDeadlineTimer(config.gameId);
+export function scheduleTimers(config: GameConfig): void {
+  cancelTimers(config.gameId);
 
   const nowSec = Math.floor(Date.now() / 1000);
-  // Schedule at gameDate (when contract allows startGame)
-  const delaySec = Math.max(0, config.gameDate - nowSec + 2);
-  const delayMs = delaySec * 1000;
 
-  const timer = setTimeout(async () => {
+  // Timer 1: fires at registrationDeadline — cancel game if < minPlayers
+  const deadlineDelay = Math.max(0, config.registrationDeadline - nowSec + 2);
+  const deadlineTimer = setTimeout(async () => {
     deadlineTimers.delete(config.gameId);
     try {
-      await checkAutoStart();
+      await checkDeadline(config.gameId);
     } catch (err) {
-      log.error({ gameId: config.gameId, error: (err as Error).message }, "Scheduled auto-start check failed");
+      log.error({ gameId: config.gameId, error: (err as Error).message }, "Deadline check failed");
     }
-  }, delayMs);
+  }, deadlineDelay * 1000);
+  deadlineTimers.set(config.gameId, deadlineTimer);
+  log.info({ gameId: config.gameId, delaySec: deadlineDelay }, "Deadline check scheduled");
 
-  deadlineTimers.set(config.gameId, timer);
-  log.info({ gameId: config.gameId, delaySec }, "Deadline check scheduled");
+  // Timer 2: fires at gameDate — start game if >= minPlayers
+  const gameDateDelay = Math.max(0, config.gameDate - nowSec + 2);
+  const gameDateTimer = setTimeout(async () => {
+    gameDateTimers.delete(config.gameId);
+    try {
+      await checkGameDate(config.gameId);
+    } catch (err) {
+      log.error({ gameId: config.gameId, error: (err as Error).message }, "Game date check failed");
+    }
+  }, gameDateDelay * 1000);
+  gameDateTimers.set(config.gameId, gameDateTimer);
+  log.info({ gameId: config.gameId, delaySec: gameDateDelay }, "Game date check scheduled");
 }
 
 /**
- * Cancel a pending deadline timer for a game.
+ * Cancel all pending timers for a game.
  */
-export function cancelDeadlineTimer(gameId: number): void {
-  const timer = deadlineTimers.get(gameId);
-  if (timer) {
-    clearTimeout(timer);
-    deadlineTimers.delete(gameId);
+export function cancelTimers(gameId: number): void {
+  const dt = deadlineTimers.get(gameId);
+  if (dt) { clearTimeout(dt); deadlineTimers.delete(gameId); }
+  const gt = gameDateTimers.get(gameId);
+  if (gt) { clearTimeout(gt); gameDateTimers.delete(gameId); }
+}
+
+// ============ Deadline Check (registrationDeadline) ============
+
+/**
+ * Fires at registrationDeadline. If not enough players registered,
+ * cancel the game on-chain immediately.
+ */
+async function checkDeadline(gameId: number): Promise<void> {
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.REGISTRATION) return;
+
+  const playerCount = getPlayerCount(gameId);
+  if (playerCount >= game.minPlayers) {
+    log.info({ gameId, playerCount, minPlayers: game.minPlayers }, "Enough players at deadline, waiting for game date");
+    return;
+  }
+
+  log.info({ gameId, playerCount, minPlayers: game.minPlayers }, "Not enough players at deadline, cancelling game");
+  try {
+    await operator.triggerCancellation(gameId);
+    // onGameCancelled will be called from the event listener when tx confirms
+  } catch (err) {
+    log.error({ gameId, error: (err as Error).message }, "Failed to cancel game (not enough players)");
   }
 }
 
-// ============ Auto-Start Check ============
+// ============ Game Date Check (gameDate) ============
 
 /**
- * Check registration-phase games that should be started.
- * Called by deadline timer or admin endpoint.
+ * Fires at gameDate. If the game is still in REGISTRATION (wasn't cancelled
+ * at deadline) and has enough players, start it on-chain.
  */
-export async function checkAutoStart(): Promise<void> {
-  // Use on-chain block timestamp — critical for Anvil time-warp testing
-  // and ensures we're in sync with the chain's view of time
-  const block = await getHttpProvider().getBlock("latest");
-  const chainTime = block?.timestamp ?? Math.floor(Date.now() / 1000);
-  const regGames = getGamesInPhase(GamePhase.REGISTRATION);
+async function checkGameDate(gameId: number): Promise<void> {
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.REGISTRATION) return;
 
-  for (const game of regGames) {
-    // Only start at or after registration deadline
-    if (chainTime < game.registrationDeadline) continue;
-
-    const playerCount = getPlayerCount(game.gameId);
-    if (playerCount < game.minPlayers) {
-      log.info(
-        { gameId: game.gameId, playerCount, minPlayers: game.minPlayers },
-        "Not enough players at deadline, skipping start"
-      );
-      continue;
-    }
-
-    log.info(
-      { gameId: game.gameId, playerCount },
-      "Auto-starting game (deadline reached)"
-    );
-
+  const playerCount = getPlayerCount(gameId);
+  if (playerCount < game.minPlayers) {
+    log.info({ gameId, playerCount, minPlayers: game.minPlayers }, "Not enough players at game date, cancelling");
     try {
-      await operator.startGame(game.gameId);
-      // onGameStarted will be called from the event listener when tx confirms
+      await operator.triggerCancellation(gameId);
     } catch (err) {
-      log.error(
-        { gameId: game.gameId, error: (err as Error).message },
-        "Failed to auto-start game"
-      );
+      log.error({ gameId, error: (err as Error).message }, "Failed to cancel game at game date");
     }
+    return;
+  }
+
+  log.info({ gameId, playerCount }, "Auto-starting game (game date reached)");
+  try {
+    await operator.startGame(gameId);
+    // onGameStarted will be called from the event listener when tx confirms
+  } catch (err) {
+    log.error({ gameId, error: (err as Error).message }, "Failed to auto-start game");
+  }
+}
+
+// ============ Admin: force check all registration games ============
+
+/**
+ * Admin endpoint: run deadline + game date checks on all registration games.
+ */
+export async function checkAllRegistrationGames(): Promise<void> {
+  const regGames = getGamesInPhase(GamePhase.REGISTRATION);
+  for (const game of regGames) {
+    await checkDeadline(game.gameId);
+    await checkGameDate(game.gameId);
   }
 }
 
@@ -1129,7 +1181,7 @@ export function recoverGames(): void {
   // Schedule deadline timers for registration-phase games
   const regGames = getGamesInPhase(GamePhase.REGISTRATION);
   for (const game of regGames) {
-    scheduleDeadlineCheck(game);
+    scheduleTimers(game);
   }
 
   log.info(
@@ -1173,6 +1225,11 @@ export function cleanupAll(): void {
     clearTimeout(timer);
   }
   deadlineTimers.clear();
+
+  for (const [gameId, timer] of gameDateTimers) {
+    clearTimeout(timer);
+  }
+  gameDateTimers.clear();
 
   for (const [gameId, timer] of checkinTimers) {
     clearTimeout(timer);

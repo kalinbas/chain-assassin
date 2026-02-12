@@ -104,6 +104,7 @@ class GameEngine @Inject constructor() {
         return CheckInResult.Verified
     }
 
+
     fun claimRefund(): Boolean {
         val current = _state.value ?: return false
         if (current.phase != GamePhase.REGISTERED) return false
@@ -456,10 +457,15 @@ class GameEngine @Inject constructor() {
 
     private fun handleCheckinUpdate(msg: ServerMessage.CheckinUpdate) {
         val current = _state.value ?: return
+        val isMe = msg.player.equals(current.currentPlayer.walletAddress, ignoreCase = true)
         _state.value = current.copy(
             checkedInCount = msg.checkedInCount,
-            playersRemaining = msg.totalPlayers
+            playersRemaining = msg.totalPlayers,
+            checkInVerified = current.checkInVerified || isMe
         )
+        if (isMe && !current.checkInVerified) {
+            _events.tryEmit(GameEvent.CheckInVerified)
+        }
     }
 
     private fun handleGameEnded(msg: ServerMessage.GameEnded) {

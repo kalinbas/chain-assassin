@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { extname } from "path";
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "./middleware.js";
-import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAutoStart } from "../game/manager.js";
+import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAllRegistrationGames } from "../game/manager.js";
 import { getOperatorWallet } from "../blockchain/client.js";
 import { getPlayer, insertPhoto, getGamePhotos } from "../db/queries.js";
 import { config } from "../config.js";
@@ -180,7 +180,7 @@ export async function triggerAutoStart(req: Request, res: Response): Promise<voi
   }
 
   try {
-    await checkAutoStart();
+    await checkAllRegistrationGames();
     res.json({ success: true });
   } catch (err) {
     log.error({ error: (err as Error).message }, "Admin auto-start check failed");

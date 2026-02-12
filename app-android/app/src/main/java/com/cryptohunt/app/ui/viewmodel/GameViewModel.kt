@@ -143,6 +143,7 @@ class GameViewModel @Inject constructor(
         return result
     }
 
+
     fun processHeartbeatScan(qrPayload: String): HeartbeatResult {
         val result = gameEngine.processHeartbeatScan(qrPayload)
         if (result is HeartbeatResult.Success) {

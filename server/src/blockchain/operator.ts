@@ -247,6 +247,17 @@ export async function fundWallet(
 }
 
 /**
+ * Cancel a game on-chain that failed to reach minPlayers by the registration deadline.
+ * Calls the permissionless triggerCancellation() on the contract.
+ */
+export async function triggerCancellation(gameId: number): Promise<TxResult> {
+  return enqueueTx(gameId, "triggerCancellation", { gameId }, async (nonce) => {
+    const contract = getWriteContract();
+    return contract.triggerCancellation(gameId, { nonce });
+  });
+}
+
+/**
  * End a game on-chain with winners and top killer.
  */
 export async function endGame(

@@ -151,7 +151,7 @@ fun CheckInScreen(
                     }
                 }
             } else {
-                // Need to scan buddy
+                // Need to scan a checked-in player
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = CardBackground),
@@ -346,7 +346,8 @@ fun CheckInScreen(
             // Info text
             Text(
                 "The game will automatically start when the check-in period ends. " +
-                        "Scan any player who\u2019s already checked in to verify your presence. " +
+                        "Some players are randomly pre-verified as seeds. " +
+                        "Scan any checked-in player\u2019s QR code to verify your presence. " +
                         "Once you\u2019re verified, other players can scan you too!",
                 style = MaterialTheme.typography.bodySmall,
                 color = TextDim,

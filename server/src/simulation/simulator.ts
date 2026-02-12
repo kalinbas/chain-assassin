@@ -44,9 +44,6 @@ const SIM_WALLET_KEYS = [
 // Singleton — only one simulation at a time
 let currentSimulation: GameSimulator | null = null;
 
-const SIM_GAME_ID_START = 90001;
-let nextSimGameId = SIM_GAME_ID_START;
-
 const KILL_PROBABILITY_PER_TICK = 0.03;
 const BASE_SPEED_MPS = 1.5; // meters per second walking speed
 
@@ -104,7 +101,7 @@ export class GameSimulator {
 
   constructor(cfg: SimulationConfig) {
     this.config = cfg;
-    this.gameId = nextSimGameId++;
+    this.gameId = 0; // set after on-chain createGame
     // Build zone shrinks with speed multiplier
     const baseShrinks = DEFAULT_ZONE_SHRINKS.map((s) => ({
       ...s,
@@ -125,9 +122,10 @@ export class GameSimulator {
   /**
    * Deploy a new game on-chain, register simulated players on-chain,
    * then wait for the server's normal lifecycle to handle everything:
-   *   listener catches GameCreated → schedules deadline timer
+   *   listener catches GameCreated → schedules deadline + gameDate timers
    *   listener catches PlayerRegistered → inserts players into DB
-   *   deadline timer fires → checkAutoStart() → operator.startGame()
+   *   deadline timer fires → checkDeadline() (cancel if < minPlayers)
+   *   gameDate timer fires → checkGameDate() → operator.startGame()
    *   listener catches GameStarted → onGameStarted() (check-in, pregame, game)
    *   simulator auto-checks-in and simulates movement/kills once active
    */
@@ -281,17 +279,28 @@ export class GameSimulator {
       return `SIM:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
     });
 
-    const gpsOnlySlots = Math.max(1, Math.ceil(this.players.length * 0.05));
+    // Server auto-seeds some players at checkin start. Find who's already checked in.
+    const dbPlayersNow = getPlayers(this.gameId);
+    const checkedInAddresses = new Set(
+      dbPlayersNow.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
+    );
+
     for (let i = 0; i < this.players.length; i++) {
       const p = this.players[i];
       const bleId = simBluetoothIds[i];
-      if (i < gpsOnlySlots) {
-        handleCheckin(this.gameId, p.address, p.lat, p.lng, undefined, bleId);
-      } else {
-        const checkedInPlayer = this.players[Math.floor(Math.random() * gpsOnlySlots)];
-        const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
-        handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId);
+      if (checkedInAddresses.has(p.address.toLowerCase())) {
+        // Already auto-seeded by server, skip
+        log.info({ address: p.address.slice(0, 10) }, "Already auto-seeded, skipping checkin");
+        continue;
       }
+      // Find a checked-in player to scan (could be auto-seeded or previously checked in)
+      const checkedInPlayer = dbPlayersNow.find((db) => db.checkedIn);
+      if (!checkedInPlayer) {
+        log.warn({ address: p.address.slice(0, 10) }, "No checked-in player to scan, skipping");
+        continue;
+      }
+      const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
+      handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId);
     }
     log.info({ count: this.players.length }, "Simulated players checked in");
 
