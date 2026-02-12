@@ -132,10 +132,21 @@ class GameViewModel @Inject constructor(
     }
 
     fun processCheckInScan(qrPayload: String): CheckInResult {
+        // Proximity check — must be within 500m of meeting point
+        val state = gameState.value ?: return CheckInResult.NoGame
+        val loc = locationTracker.state.value
+        val meetLat = state.config.meetingLat
+        val meetLng = state.config.meetingLng
+        if (meetLat != 0.0 || meetLng != 0.0) {
+            val distance = com.cryptohunt.app.util.GeoUtils.haversineDistance(
+                loc.lat, loc.lng, meetLat, meetLng
+            )
+            if (distance > 500.0) return CheckInResult.TooFar
+        }
+
         val result = gameEngine.processCheckInScan(qrPayload, bleScanner.getLocalBluetoothId())
         if (result is CheckInResult.Verified) {
-            val loc = locationTracker.state.value
-            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
+            val gameId = state.config.id.toIntOrNull() ?: return result
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 serverClient.submitCheckin(gameId, loc.lat, loc.lng, qrPayload, bleScanner.getLocalBluetoothId())
             }

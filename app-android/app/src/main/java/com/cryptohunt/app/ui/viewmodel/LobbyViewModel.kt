@@ -127,7 +127,8 @@ class LobbyViewModel @Inject constructor(
                     val shrinks = contractService.getZoneShrinks(gameId)
                     val appConfig = ChainMapper.toGameConfig(gameId, config, shrinks)
 
-                    if (state.phase == OnChainPhase.REGISTRATION) {
+                    val nowMs = System.currentTimeMillis()
+                    if (state.phase == OnChainPhase.REGISTRATION && appConfig.registrationDeadline > nowMs) {
                         // Show REGISTRATION games in the upcoming list
                         val playerInfo = if (address.isNotEmpty()) {
                             try { contractService.getPlayerInfo(gameId, address) } catch (_: Exception) { null }
@@ -162,6 +163,7 @@ class LobbyViewModel @Inject constructor(
                                 // Connect to server — auth:success will set the correct phase
                                 serverClient.connect(gameId)
                             }
+                            break // Player can only be in one active game at a time
                         }
                     }
                 } catch (_: Exception) {
@@ -337,7 +339,9 @@ class LobbyViewModel @Inject constructor(
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        val game = _games.value.find { it.config.id == gameId } ?: return
+        val game = _games.value.find { it.config.id == gameId }
+            ?: _selectedGame.value?.takeIf { it.config.id == gameId }
+            ?: return
         val credentials = walletManager.getCredentials()
         if (credentials == null) {
             onError("Wallet not connected")

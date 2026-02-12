@@ -28,14 +28,14 @@ fun parseServerMessage(json: String): ServerMessage? {
             )
 
             "kill:recorded" -> ServerMessage.KillRecorded(
-                hunter = obj.optString("hunter", ""),
-                target = obj.optString("target", ""),
+                hunterNumber = obj.optInt("hunterNumber", 0),
+                targetNumber = obj.optInt("targetNumber", 0),
                 hunterKills = obj.optInt("hunterKills", 0)
             )
 
             "player:eliminated" -> ServerMessage.PlayerEliminated(
-                player = obj.optString("player", ""),
-                eliminator = obj.optString("eliminator", ""),
+                playerNumber = obj.optInt("playerNumber", 0),
+                eliminatorNumber = obj.optInt("eliminatorNumber", 0),
                 reason = obj.optString("reason", "")
             )
 
@@ -92,10 +92,10 @@ fun parseServerMessage(json: String): ServerMessage? {
             )
 
             "game:ended" -> ServerMessage.GameEnded(
-                winner1 = obj.optString("winner1", ""),
-                winner2 = obj.optString("winner2", ""),
-                winner3 = obj.optString("winner3", ""),
-                topKiller = obj.optString("topKiller", "")
+                winner1 = obj.optInt("winner1", 0),
+                winner2 = obj.optInt("winner2", 0),
+                winner3 = obj.optInt("winner3", 0),
+                topKiller = obj.optInt("topKiller", 0)
             )
 
             "game:cancelled" -> ServerMessage.GameCancelled(
@@ -105,7 +105,7 @@ fun parseServerMessage(json: String): ServerMessage? {
             "checkin:update" -> ServerMessage.CheckinUpdate(
                 checkedInCount = obj.optInt("checkedInCount", 0),
                 totalPlayers = obj.optInt("totalPlayers", 0),
-                player = obj.optString("player", "")
+                playerNumber = obj.optInt("playerNumber", 0)
             )
 
             "game:checkin_started" -> ServerMessage.CheckinStarted(
@@ -113,7 +113,7 @@ fun parseServerMessage(json: String): ServerMessage? {
             )
 
             "player:registered" -> ServerMessage.PlayerRegistered(
-                address = obj.optString("address", ""),
+                playerNumber = obj.optInt("playerNumber", 0),
                 playerCount = obj.optInt("playerCount", 0)
             )
 
@@ -136,7 +136,6 @@ fun parseServerMessage(json: String): ServerMessage? {
 
 private fun parseTargetInfo(obj: JSONObject): TargetInfo {
     return TargetInfo(
-        address = obj.optString("address", ""),
         playerNumber = obj.optInt("playerNumber", 0)
     )
 }
@@ -156,7 +155,6 @@ private fun parseLeaderboard(obj: JSONObject): List<ServerLeaderboardEntry> {
     return (0 until arr.length()).map { i ->
         val entry = arr.getJSONObject(i)
         ServerLeaderboardEntry(
-            address = entry.optString("address", ""),
             playerNumber = entry.optInt("playerNumber", 0),
             kills = entry.optInt("kills", 0),
             isAlive = entry.optBoolean("isAlive", true),

@@ -1,8 +1,8 @@
 package com.cryptohunt.app.domain.server
 
 object ServerConfig {
-    const val SERVER_URL = "http://10.10.16.224:3000"
-    const val SERVER_WS_URL = "ws://10.10.16.224:3000/ws"
+    const val SERVER_URL = "https://chain-assassin.fly.dev"
+    const val SERVER_WS_URL = "wss://chain-assassin.fly.dev/ws"
 
     // Auth message prefix (must match server's crypto.ts validateAuthMessage)
     const val AUTH_PREFIX = "chain-assassin"

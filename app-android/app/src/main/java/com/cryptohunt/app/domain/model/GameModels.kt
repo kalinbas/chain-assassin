@@ -100,6 +100,7 @@ sealed class CheckInResult {
     data object ScanYourself : CheckInResult()
     data object UnknownPlayer : CheckInResult()
     data object WrongPhase : CheckInResult()
+    data object TooFar : CheckInResult()
     data object NoGame : CheckInResult()
 }
 

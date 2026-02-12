@@ -15,7 +15,6 @@ enum class ConnectionState {
  * Target info received from server.
  */
 data class TargetInfo(
-    val address: String,
     val playerNumber: Int
 )
 
@@ -34,7 +33,6 @@ data class ZoneState(
  * Leaderboard entry from server.
  */
 data class ServerLeaderboardEntry(
-    val address: String,
     val playerNumber: Int,
     val kills: Int,
     val isAlive: Boolean,
@@ -62,15 +60,15 @@ sealed class ServerMessage {
 
     /** A kill was recorded. */
     data class KillRecorded(
-        val hunter: String,
-        val target: String,
+        val hunterNumber: Int,
+        val targetNumber: Int,
         val hunterKills: Int
     ) : ServerMessage()
 
     /** A player was eliminated (killed, zone violation, or heartbeat timeout). */
     data class PlayerEliminated(
-        val player: String,
-        val eliminator: String,
+        val playerNumber: Int,
+        val eliminatorNumber: Int,
         val reason: String
     ) : ServerMessage()
 
@@ -139,10 +137,10 @@ sealed class ServerMessage {
 
     /** Game ended. */
     data class GameEnded(
-        val winner1: String,
-        val winner2: String,
-        val winner3: String,
-        val topKiller: String
+        val winner1: Int,
+        val winner2: Int,
+        val winner3: Int,
+        val topKiller: Int
     ) : ServerMessage()
 
     /** Game cancelled. */
@@ -154,7 +152,7 @@ sealed class ServerMessage {
     data class CheckinUpdate(
         val checkedInCount: Int,
         val totalPlayers: Int,
-        val player: String
+        val playerNumber: Int
     ) : ServerMessage()
 
     /** Check-in phase started. */
@@ -164,7 +162,7 @@ sealed class ServerMessage {
 
     /** A player registered for the game. */
     data class PlayerRegistered(
-        val address: String,
+        val playerNumber: Int,
         val playerCount: Int
     ) : ServerMessage()
 

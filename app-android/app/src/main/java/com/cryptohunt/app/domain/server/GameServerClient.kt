@@ -55,12 +55,22 @@ class GameServerClient @Inject constructor(
      * Connect to the game server WebSocket and authenticate.
      */
     fun connect(gameId: Int) {
-        if (_connectionState.value == ConnectionState.CONNECTED ||
-            _connectionState.value == ConnectionState.CONNECTING ||
-            _connectionState.value == ConnectionState.AUTHENTICATING
+        // Same game already connected → no-op
+        if (currentGameId == gameId &&
+            (_connectionState.value == ConnectionState.CONNECTED ||
+             _connectionState.value == ConnectionState.CONNECTING ||
+             _connectionState.value == ConnectionState.AUTHENTICATING)
         ) {
-            Log.d(TAG, "Already connected or connecting, ignoring connect($gameId)")
+            Log.d(TAG, "Already connected to game $gameId, ignoring")
             return
+        }
+
+        // Different game connected → disconnect old first
+        if (currentGameId != null && currentGameId != gameId &&
+            _connectionState.value != ConnectionState.DISCONNECTED
+        ) {
+            Log.d(TAG, "Disconnecting from game $currentGameId before connecting to game $gameId")
+            disconnect()
         }
 
         currentGameId = gameId

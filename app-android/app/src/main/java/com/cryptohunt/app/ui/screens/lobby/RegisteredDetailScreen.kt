@@ -24,9 +24,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
-import com.cryptohunt.app.util.GeoUtils
 import com.cryptohunt.app.util.QrPdfGenerator
 import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
@@ -71,60 +71,22 @@ fun RegisteredDetailScreen(
         ?: selectedGame?.startTime
         ?: 0L
 
-    val locationState by viewModel.locationState.collectAsState()
-
-    // Stop GPS on dispose if it was started
-    DisposableEffect(Unit) {
-        onDispose { viewModel.stopLocationTracking() }
-    }
-
-    // Countdown timer + proximity-based auto check-in
+    // Countdown timer
     var timeRemainingMs by remember { mutableStateOf(gameStartTime - System.currentTimeMillis()) }
-    var countdownReached by remember { mutableStateOf(false) }
-    var tooFarAway by remember { mutableStateOf(false) }
-    var gpsStarted by remember { mutableStateOf(false) }
-
-    val checkInLeadMs = config.checkInDurationMinutes * 60_000L
 
     LaunchedEffect(gameStartTime) {
         while (true) {
             timeRemainingMs = gameStartTime - System.currentTimeMillis()
-            // Start GPS when within check-in window
-            if (!gpsStarted && timeRemainingMs <= checkInLeadMs) {
-                viewModel.startLocationTracking()
-                gpsStarted = true
-            }
-            if (timeRemainingMs <= 0) {
-                countdownReached = true
-                break
-            }
+            if (timeRemainingMs <= 0) break
             delay(1000)
         }
     }
 
-    // When countdown reaches zero, check location proximity
-    LaunchedEffect(countdownReached, locationState.lat, locationState.lng) {
-        if (!countdownReached) return@LaunchedEffect
-        val meetingLat = config.meetingLat
-        val meetingLng = config.meetingLng
-        if (meetingLat == 0.0 && meetingLng == 0.0) {
-            // No meeting point configured — go straight to check-in
-            viewModel.beginCheckIn()
+    // Navigate to check-in when server changes phase (via WebSocket message)
+    val currentPhase = gameState?.phase
+    LaunchedEffect(currentPhase) {
+        if (currentPhase == GamePhase.CHECK_IN) {
             onCheckInStart(config.id)
-            return@LaunchedEffect
-        }
-        if (locationState.lat == 0.0 && locationState.lng == 0.0) {
-            // No location fix yet — wait for one
-            return@LaunchedEffect
-        }
-        val distance = GeoUtils.haversineDistance(
-            locationState.lat, locationState.lng, meetingLat, meetingLng
-        )
-        if (distance <= 500.0) {
-            viewModel.beginCheckIn()
-            onCheckInStart(config.id)
-        } else {
-            tooFarAway = true
         }
     }
 
@@ -206,49 +168,6 @@ fun RegisteredDetailScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = TextDim
             )
-
-            // Too far away warning (shown when countdown reached but not near meeting point)
-            if (tooFarAway) {
-                Spacer(Modifier.height(16.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.15f)),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            "You\u2019re too far from the meeting point",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = Danger,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Move closer to start check-in automatically, or proceed manually.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = TextSecondary,
-                            textAlign = TextAlign.Center
-                        )
-                        Spacer(Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                viewModel.beginCheckIn()
-                                onCheckInStart(config.id)
-                            },
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Warning,
-                                contentColor = Background
-                            )
-                        ) {
-                            Text("Proceed to Check-in", fontWeight = FontWeight.Bold)
-                        }
-                    }
-                }
-            }
 
             Spacer(Modifier.height(24.dp))
 

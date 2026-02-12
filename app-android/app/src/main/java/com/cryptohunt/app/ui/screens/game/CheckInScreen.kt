@@ -306,13 +306,10 @@ fun CheckInScreen(
                                 val isCheckedIn = number in checkedInNumbers
 
                                 val bgColor = when {
-                                    isMe && isCheckedIn -> Primary
-                                    isMe -> Warning
-                                    isCheckedIn -> Primary.copy(alpha = 0.6f)
+                                    isCheckedIn -> Primary.copy(alpha = if (isMe) 1f else 0.6f)
                                     else -> SurfaceVariant.copy(alpha = 0.4f)
                                 }
                                 val textColor = when {
-                                    isMe -> Background
                                     isCheckedIn -> Background
                                     else -> TextDim
                                 }

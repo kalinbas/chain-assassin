@@ -46,6 +46,9 @@ class GameEngine @Inject constructor() {
     }
 
     fun registerForGame(config: GameConfig, walletAddress: String, startTime: Long, assignedPlayerNumber: Int = 0) {
+        // Cancel any timers from a previous game before overwriting state
+        stopTimers()
+
         val playerNumber = if (assignedPlayerNumber > 0) assignedPlayerNumber else 0
 
         val currentPlayer = Player(
@@ -272,7 +275,7 @@ class GameEngine @Inject constructor() {
 
         val target = msg.target?.let {
             Target(
-                player = Player(id = "player_${it.playerNumber}", number = it.playerNumber, walletAddress = it.address),
+                player = Player(id = "player_${it.playerNumber}", number = it.playerNumber, walletAddress = ""),
                 assignedAt = System.currentTimeMillis()
             )
         }
@@ -316,7 +319,7 @@ class GameEngine @Inject constructor() {
         val targetPlayer = Player(
             id = "player_${msg.target.playerNumber}",
             number = msg.target.playerNumber,
-            walletAddress = msg.target.address
+            walletAddress = ""
         )
         _state.value = current.copy(
             currentTarget = Target(targetPlayer, System.currentTimeMillis()),
@@ -332,9 +335,8 @@ class GameEngine @Inject constructor() {
 
     private fun handlePlayerEliminated(msg: ServerMessage.PlayerEliminated) {
         val current = _state.value ?: return
-        val myAddress = current.currentPlayer.walletAddress.lowercase()
 
-        if (msg.player.lowercase() == myAddress) {
+        if (msg.playerNumber == current.currentPlayer.number) {
             // We were eliminated
             _state.value = current.copy(phase = GamePhase.ELIMINATED)
             stopTimers()
@@ -342,8 +344,8 @@ class GameEngine @Inject constructor() {
                 "zone_violation" -> _events.tryEmit(GameEvent.OutOfZoneEliminated)
                 "heartbeat_timeout" -> _events.tryEmit(GameEvent.HeartbeatEliminated)
                 "no_checkin" -> _events.tryEmit(GameEvent.NoCheckInEliminated)
-                "killed" -> _events.tryEmit(GameEvent.Eliminated(0))
-                else -> _events.tryEmit(GameEvent.Eliminated(0))
+                "killed" -> _events.tryEmit(GameEvent.Eliminated(msg.eliminatorNumber))
+                else -> _events.tryEmit(GameEvent.Eliminated(msg.eliminatorNumber))
             }
         } else {
             // Another player eliminated — decrement count
@@ -355,18 +357,17 @@ class GameEngine @Inject constructor() {
 
     private fun handleKillRecorded(msg: ServerMessage.KillRecorded) {
         val current = _state.value ?: return
-        val myAddress = current.currentPlayer.walletAddress.lowercase()
 
         val killEvent = KillEvent(
             id = UUID.randomUUID().toString(),
-            hunterNumber = 0, // server sends addresses, not numbers — map if needed
-            targetNumber = 0,
+            hunterNumber = msg.hunterNumber,
+            targetNumber = msg.targetNumber,
             timestamp = System.currentTimeMillis(),
             zone = ""
         )
 
         // Only add to kill feed if this wasn't our own optimistic kill
-        if (msg.hunter.lowercase() != myAddress) {
+        if (msg.hunterNumber != current.currentPlayer.number) {
             killFeedList.add(0, killEvent)
             _state.value = current.copy(killFeed = killFeedList.take(50))
             _events.tryEmit(GameEvent.KillFeedUpdate(killEvent))
@@ -394,7 +395,7 @@ class GameEngine @Inject constructor() {
                 playerNumber = entry.playerNumber,
                 kills = entry.kills,
                 isAlive = entry.isAlive,
-                isCurrentPlayer = entry.address.lowercase() == current.currentPlayer.walletAddress.lowercase()
+                isCurrentPlayer = entry.playerNumber == current.currentPlayer.number
             )
         }
         _state.value = current.copy(
@@ -420,7 +421,7 @@ class GameEngine @Inject constructor() {
         val targetPlayer = Player(
             id = "player_${msg.target.playerNumber}",
             number = msg.target.playerNumber,
-            walletAddress = msg.target.address
+            walletAddress = ""
         )
 
         _state.value = current.copy(
@@ -457,10 +458,15 @@ class GameEngine @Inject constructor() {
 
     private fun handleCheckinUpdate(msg: ServerMessage.CheckinUpdate) {
         val current = _state.value ?: return
-        val isMe = msg.player.equals(current.currentPlayer.walletAddress, ignoreCase = true)
+        val isMe = msg.playerNumber == current.currentPlayer.number
+        val updatedNumbers = if (msg.playerNumber > 0)
+            current.checkedInPlayerNumbers + msg.playerNumber
+        else
+            current.checkedInPlayerNumbers
         _state.value = current.copy(
             checkedInCount = msg.checkedInCount,
             playersRemaining = msg.totalPlayers,
+            checkedInPlayerNumbers = updatedNumbers,
             checkInVerified = current.checkInVerified || isMe
         )
         if (isMe && !current.checkInVerified) {
@@ -499,7 +505,7 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(
             playersRemaining = msg.playerCount
         )
-        Log.i(TAG, "Player registered: ${msg.address.take(10)}..., total: ${msg.playerCount}")
+        Log.i(TAG, "Player registered: #${msg.playerNumber}, total: ${msg.playerCount}")
     }
 
     private fun handleZoneWarning(msg: ServerMessage.ZoneWarning) {

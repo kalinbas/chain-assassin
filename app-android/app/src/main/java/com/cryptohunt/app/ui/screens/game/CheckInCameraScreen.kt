@@ -125,6 +125,10 @@ fun CheckInCameraScreen(
                                                         errorMessage = "Unknown player"
                                                         haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                                                     }
+                                                    is CheckInResult.TooFar -> {
+                                                        errorMessage = "Too far from meeting point"
+                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                    }
                                                     else -> {}
                                                 }
                                             }

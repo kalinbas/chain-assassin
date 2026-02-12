@@ -59,20 +59,13 @@ fun DebugStatusOverlay() {
         lm?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true
     }
 
-    val serverColor = when (connectionState) {
-        ConnectionState.CONNECTED -> Primary
-        ConnectionState.CONNECTING, ConnectionState.AUTHENTICATING, ConnectionState.RECONNECTING -> Warning
-        ConnectionState.DISCONNECTED -> Danger
-    }
+    val off = TextDim.copy(alpha = 0.3f)
 
-    val gpsColor = when {
-        locationState.isTracking && locationState.gpsLostSeconds == 0 -> Primary
-        locationState.isTracking -> Warning
-        gpsEnabled -> TextDim
-        else -> Danger
-    }
+    val serverColor = if (connectionState == ConnectionState.CONNECTED) Primary else off
 
-    val bleColor = if (btEnabled) TextDim else Danger
+    val gpsColor = if (locationState.isTracking && locationState.gpsLostSeconds == 0) Primary else off
+
+    val bleColor = if (btEnabled) Primary else off
 
     Row(
         modifier = Modifier

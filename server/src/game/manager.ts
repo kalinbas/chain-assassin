@@ -152,7 +152,7 @@ export function onPlayerRegistered(gameId: number, playerAddress: string, player
 
   broadcast(gameId, {
     type: "player:registered",
-    address: playerAddress,
+    playerNumber: playerCount, // playerCount == new player's number (sequential)
     playerCount,
   });
 }
@@ -195,8 +195,7 @@ export function onGameStarted(gameId: number): void {
       type: "checkin:update",
       checkedInCount: checkedIn,
       totalPlayers: total,
-      player: seed.address,
-      bluetoothId: null,
+      playerNumber: seed.playerNumber,
     });
     log.info({ gameId, address: seed.address }, "Auto-seeded check-in");
   }
@@ -228,8 +227,8 @@ function completeCheckin(gameId: number): void {
       log.info({ gameId, address: player.address }, "Eliminated for no check-in");
       broadcast(gameId, {
         type: "player:eliminated",
-        player: player.address,
-        eliminator: "no_checkin",
+        playerNumber: player.playerNumber,
+        eliminatorNumber: 0,
         reason: "no_checkin",
       });
     }
@@ -307,7 +306,6 @@ export function completePregame(gameId: number): void {
     sendToPlayer(gameId, hunter, {
       type: "game:started",
       target: {
-        address: target,
         playerNumber: targetPlayer?.playerNumber ?? 0,
       },
       hunterPlayerNumber: hunterOfHunterPlayer?.playerNumber ?? 0,
@@ -398,22 +396,23 @@ export async function handleKillSubmission(
       });
   }
 
-  // Get updated hunter stats
+  // Get updated hunter & target stats
   const hunter = getPlayer(gameId, hunterAddress);
+  const target = getPlayer(gameId, targetAddress);
 
   // Broadcast kill event
   broadcast(gameId, {
     type: "kill:recorded",
-    hunter: hunterAddress,
-    target: targetAddress,
+    hunterNumber: hunter?.playerNumber ?? 0,
+    targetNumber: target?.playerNumber ?? 0,
     hunterKills: hunter?.kills ?? 0,
   });
 
   // Broadcast elimination
   broadcast(gameId, {
     type: "player:eliminated",
-    player: targetAddress,
-    eliminator: hunterAddress,
+    playerNumber: target?.playerNumber ?? 0,
+    eliminatorNumber: hunter?.playerNumber ?? 0,
     reason: "killed",
   });
 
@@ -425,7 +424,6 @@ export async function handleKillSubmission(
     sendToPlayer(gameId, hunterAddress, {
       type: "target:assigned",
       target: {
-        address: newTarget,
         playerNumber: newTargetPlayer?.playerNumber ?? 0,
       },
       hunterPlayerNumber: hunterOfKillerPlayer?.playerNumber ?? 0,
@@ -563,13 +561,13 @@ export function handleCheckin(
   setPlayerCheckedIn(gameId, address, bluetoothId);
   const checkedIn = getCheckedInCount(gameId);
   const total = getPlayerCount(gameId);
+  const checkedInPlayer = getPlayer(gameId, address);
 
   broadcast(gameId, {
     type: "checkin:update",
     checkedInCount: checkedIn,
     totalPlayers: total,
-    player: address,
-    bluetoothId: bluetoothId ?? null,
+    playerNumber: checkedInPlayer?.playerNumber ?? 0,
   });
 
   return { success: true };
@@ -617,7 +615,6 @@ async function gameTick(gameId: number): Promise<void> {
     const positions = alivePlayers.map((p) => {
       const ping = getLatestLocationPing(gameId, p.address);
       return {
-        address: p.address,
         playerNumber: p.playerNumber,
         lat: ping?.lat ?? null,
         lng: ping?.lng ?? null,
@@ -626,11 +623,13 @@ async function gameTick(gameId: number): Promise<void> {
       };
     });
 
-    // Build hunt links from target chain
+    // Build hunt links from target chain (using player numbers)
     const chainMap = getChainMap(gameId);
-    const huntLinks: { hunter: string; target: string }[] = [];
-    for (const [hunter, target] of chainMap) {
-      huntLinks.push({ hunter, target });
+    const huntLinks: { hunter: number; target: number }[] = [];
+    for (const [hunterAddr, targetAddr] of chainMap) {
+      const h = getPlayer(gameId, hunterAddr);
+      const t = getPlayer(gameId, targetAddr);
+      if (h && t) huntLinks.push({ hunter: h.playerNumber, target: t.playerNumber });
     }
 
     spectatorBroadcastFn(gameId, {
@@ -684,8 +683,8 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
   // Broadcast elimination
   broadcast(gameId, {
     type: "player:eliminated",
-    player: address,
-    eliminator: "zone",
+    playerNumber: player?.playerNumber ?? 0,
+    eliminatorNumber: 0,
     reason: "zone_violation",
   });
 
@@ -759,8 +758,8 @@ async function handleHeartbeatElimination(gameId: number, address: string): Prom
   // Broadcast elimination
   broadcast(gameId, {
     type: "player:eliminated",
-    player: address,
-    eliminator: "heartbeat",
+    playerNumber: player?.playerNumber ?? 0,
+    eliminatorNumber: 0,
     reason: "heartbeat_timeout",
   });
 
@@ -954,12 +953,17 @@ async function endGameWithWinners(gameId: number): Promise<void> {
       topKiller,
     });
 
+    const w1Player = winner1 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner1) : null;
+    const w2Player = winner2 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner2) : null;
+    const w3Player = winner3 !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, winner3) : null;
+    const tkPlayer = topKiller !== "0x0000000000000000000000000000000000000000" ? getPlayer(gameId, topKiller) : null;
+
     broadcast(gameId, {
       type: "game:ended",
-      winner1,
-      winner2,
-      winner3,
-      topKiller,
+      winner1: w1Player?.playerNumber ?? 0,
+      winner2: w2Player?.playerNumber ?? 0,
+      winner3: w3Player?.playerNumber ?? 0,
+      topKiller: tkPlayer?.playerNumber ?? 0,
     });
   } catch (err) {
     log.error({ gameId, error: (err as Error).message }, "Failed to end game on-chain");
