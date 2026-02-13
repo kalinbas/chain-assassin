@@ -9,6 +9,7 @@ import { getPlayer, insertPhoto, getGamePhotos, getAllGames, getGame, getZoneShr
 import { getLeaderboard } from "../game/leaderboard.js";
 import { config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
+import { contractCoordToDegrees } from "../utils/geo.js";
 
 const log = createLogger("api");
 
@@ -97,7 +98,12 @@ export function submitLocation(req: Request, res: Response): void {
     return;
   }
 
-  handleLocationUpdate(gameId, authReq.playerAddress, lat, lng);
+  const result = handleLocationUpdate(gameId, authReq.playerAddress, lat, lng);
+  if (!result.success) {
+    res.status(400).json({ error: result.error });
+    return;
+  }
+
   res.json({ success: true });
 }
 
@@ -105,8 +111,8 @@ export function submitLocation(req: Request, res: Response): void {
  * POST /api/games/:gameId/checkin
  * Body: { lat, lng, qrPayload? }
  *
- * First player checks in via GPS only. All subsequent players must also
- * provide the QR code of an already-checked-in player (viral check-in).
+ * Players check in by scanning a checked-in player's QR code.
+ * Initial seed players are checked in automatically by the server.
  */
 export function submitCheckin(req: Request, res: Response): void {
   const authReq = req as AuthenticatedRequest;
@@ -335,19 +341,21 @@ export function gameDetail(req: Request, res: Response): void {
   const aliveCount = players.filter((p) => p.isAlive).length;
   const checkedInCount = players.filter((p) => p.checkedIn).length;
 
-  const checkinEndsAt = game.subPhase === "checkin" && game.startedAt
-    ? game.startedAt + config.checkinDurationSeconds
-    : null;
-  const pregameEndsAt = game.subPhase === "pregame" && game.startedAt
-    ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
-    : null;
+  const checkinEndsAt = game.subPhase === "checkin" ? game.expiryDeadline : null;
+  const pregameEndsAt = null;
 
   // Zone state: use initial radius from shrinks if game is active
   let zone = null;
   if (game.phase === 1 && game.centerLat && game.centerLng) {
     const shrinks = getZoneShrinks(gameId);
     const initialRadius = shrinks[0]?.radiusMeters ?? 500;
-    zone = { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null };
+    zone = {
+      centerLat: contractCoordToDegrees(game.centerLat),
+      centerLng: contractCoordToDegrees(game.centerLng),
+      currentRadiusMeters: initialRadius,
+      nextShrinkAt: null,
+      nextRadiusMeters: null,
+    };
   }
 
   // Try to get live zone from getGameStatus (has in-memory active game data)

@@ -2,7 +2,6 @@ import { WebSocket } from "ws";
 import { verifySignature, validateAuthMessage } from "../utils/crypto.js";
 import { getPlayer, getGame, getTargetAssignment, findHunterOf, getAlivePlayers, getAlivePlayerCount, getLatestLocationPing } from "../db/queries.js";
 import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../game/manager.js";
-import { config } from "../config.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
@@ -94,12 +93,10 @@ function handleAuth(
       hunterPlayerNumber: hunterPlayer?.playerNumber ?? null,
       lastHeartbeatAt: player.lastHeartbeatAt,
       subPhase: game?.subPhase ?? null,
-      checkinEndsAt: game?.subPhase === "checkin" && game?.startedAt
-        ? game.startedAt + config.checkinDurationSeconds
+      checkinEndsAt: game?.subPhase === "checkin"
+        ? game.expiryDeadline
         : null,
-      pregameEndsAt: game?.subPhase === "pregame" && game?.startedAt
-        ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
-        : null,
+      pregameEndsAt: null,
     })
   );
 
@@ -119,7 +116,10 @@ function handleLocation(
     return;
   }
 
-  handleLocationUpdate(conn.gameId, conn.address, msg.lat, msg.lng);
+  const result = handleLocationUpdate(conn.gameId, conn.address, msg.lat, msg.lng);
+  if (!result.success) {
+    sendError(ws, result.error ?? "Location update failed");
+  }
 }
 
 /**

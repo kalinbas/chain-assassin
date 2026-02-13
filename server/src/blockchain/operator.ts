@@ -14,10 +14,12 @@ let pendingNonce: number | null = null;
 
 async function getNextNonce(): Promise<number> {
   const wallet = getWriteContract().runner as ethers.Wallet;
+  const chainPendingNonce = await wallet.getNonce("pending");
   if (pendingNonce === null) {
-    pendingNonce = await wallet.getNonce("pending");
+    pendingNonce = chainPendingNonce;
   } else {
-    pendingNonce++;
+    // Keep local queue nonce monotonic but never behind chain pending nonce.
+    pendingNonce = Math.max(pendingNonce + 1, chainPendingNonce);
   }
   return pendingNonce;
 }
@@ -254,6 +256,17 @@ export async function triggerCancellation(gameId: number): Promise<TxResult> {
   return enqueueTx(gameId, "triggerCancellation", { gameId }, async (nonce) => {
     const contract = getWriteContract();
     return contract.triggerCancellation(gameId, { nonce });
+  });
+}
+
+/**
+ * Cancel an expired game on-chain (gameDate + maxDuration reached).
+ * Calls the permissionless triggerExpiry() on the contract.
+ */
+export async function triggerExpiry(gameId: number): Promise<TxResult> {
+  return enqueueTx(gameId, "triggerExpiry", { gameId }, async (nonce) => {
+    const contract = getWriteContract();
+    return contract.triggerExpiry(gameId, { nonce });
   });
 }
 

@@ -38,7 +38,7 @@ export function verifyKill(
   hunterLng: number,
   bleNearbyAddresses: string[]
 ): KillVerificationResult {
-  // 1. Parse QR code (format: "ca:{gameId}:{playerNumber}")
+  // 1. Parse obfuscated numeric QR payload (server/client shared codec)
   const qr = parseKillQrPayload(qrPayload);
   if (!qr) {
     return { valid: false, error: "Invalid QR code format" };

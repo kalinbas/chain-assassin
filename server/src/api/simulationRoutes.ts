@@ -1,12 +1,25 @@
 import { Router } from "express";
-import type { Request, Response } from "express";
+import type { Request, Response, NextFunction } from "express";
 import { stopSimulation, getSimulation, deploySimulation } from "../simulation/simulator.js";
 import { createLogger } from "../utils/logger.js";
 import type { DeploySimulationConfig } from "../simulation/types.js";
+import { walletAuth } from "./middleware.js";
+import type { AuthenticatedRequest } from "./middleware.js";
+import { getOperatorWallet } from "../blockchain/client.js";
 
 const log = createLogger("simulationApi");
 
 const simulationRouter = Router();
+
+function requireOperator(req: Request, res: Response, next: NextFunction): void {
+  const authReq = req as AuthenticatedRequest;
+  const operatorAddress = getOperatorWallet().address.toLowerCase();
+  if (authReq.playerAddress !== operatorAddress) {
+    res.status(403).json({ error: "Operator only" });
+    return;
+  }
+  next();
+}
 
 /**
  * GET /api/simulation/status — get current simulation status.
@@ -23,7 +36,7 @@ simulationRouter.get("/api/simulation/status", (_req: Request, res: Response) =>
 /**
  * POST /api/simulation/stop — stop the current simulation.
  */
-simulationRouter.post("/api/simulation/stop", (_req: Request, res: Response) => {
+simulationRouter.post("/api/simulation/stop", walletAuth, requireOperator, (_req: Request, res: Response) => {
   const stopped = stopSimulation();
   res.json({ stopped });
 });
@@ -35,7 +48,7 @@ simulationRouter.post("/api/simulation/stop", (_req: Request, res: Response) => 
  * Body: { playerCount?, centerLat?, centerLng?, initialRadiusMeters?,
  *         speedMultiplier?, title?, entryFeeWei?, registrationDelaySeconds? }
  */
-simulationRouter.post("/api/simulation/deploy", (req: Request, res: Response) => {
+simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (req: Request, res: Response) => {
   try {
     const body = req.body as Partial<DeploySimulationConfig>;
 

@@ -3,7 +3,7 @@ import { createLogger } from "../utils/logger.js";
 import { contractCoordToDegrees, haversineDistance } from "../utils/geo.js";
 import { parseKillQrPayload } from "../utils/crypto.js";
 import { GamePhase } from "../utils/types.js";
-import type { GameConfig, ZoneShrink, ActiveGame, Player, ActiveSubPhase } from "../utils/types.js";
+import type { GameConfig, ZoneShrink, Player } from "../utils/types.js";
 import {
   insertGame,
   insertZoneShrinks,
@@ -38,7 +38,7 @@ import {
   findHunterOf,
   getZoneShrinks,
 } from "../db/queries.js";
-import { initializeTargetChain, processKill, removeFromChain, getChainSize, getChainMap } from "./targetChain.js";
+import { initializeTargetChain, processKill, removeFromChain, getChainMap } from "./targetChain.js";
 import { ZoneTracker } from "./zoneTracker.js";
 import { verifyKill } from "./killVerifier.js";
 import { getLeaderboard, determineWinners } from "./leaderboard.js";
@@ -70,8 +70,8 @@ const deadlineTimers = new Map<number, ReturnType<typeof setTimeout>>();
 // Per-game gameDate timers — fires at gameDate to start the game
 const gameDateTimers = new Map<number, ReturnType<typeof setTimeout>>();
 
-// Per-game checkin timers — fires when checkin period ends, transitions to pregame
-const checkinTimers = new Map<number, ReturnType<typeof setTimeout>>();
+// Per-game checkin monitors — periodically checks readiness / expiry while in checkin
+const checkinTimers = new Map<number, ReturnType<typeof setInterval>>();
 
 // Per-game pregame timers — fires when pregame countdown ends
 const pregameTimers = new Map<number, ReturnType<typeof setTimeout>>();
@@ -88,6 +88,15 @@ const simulatedGames = new Set<number>();
 // Hybrid simulated games — registered on-chain, simulated off-chain.
 // endGame still goes on-chain for these (players paid real entry fees).
 const hybridSimulatedGames = new Set<number>();
+
+// Prevent duplicate expiry tx submissions while waiting for chain event processing.
+const expiryTriggerInFlight = new Set<number>();
+
+// Prevent duplicate cancellation tx submissions while waiting for chain event processing.
+const cancellationTriggerInFlight = new Set<number>();
+
+// Prevent concurrent endGame attempts for the same game.
+const endingGames = new Set<number>();
 
 export function addSimulatedGame(gameId: number): void {
   simulatedGames.add(gameId);
@@ -150,6 +159,84 @@ export function broadcastToGame(gameId: number, message: Record<string, unknown>
 
 function sendToPlayer(gameId: number, address: string, message: Record<string, unknown>): void {
   if (sendToPlayerFn) sendToPlayerFn(gameId, address, message);
+}
+
+function getRequiredCheckedInPlayers(game: Pick<GameConfig, "bps2nd" | "bps3rd">): number {
+  let required = 1;
+  if (game.bps2nd > 0) required += 1;
+  if (game.bps3rd > 0) required += 1;
+  return required;
+}
+
+function startAutoSeedLoop(gameId: number): void {
+  clearMapTimer(autoSeedTimers, gameId, clearInterval);
+  const alivePlayers = getPlayers(gameId).filter((p) => p.isAlive);
+  const seedCount = Math.max(1, Math.ceil(alivePlayers.length * 0.05));
+
+  tryAutoSeed(gameId, seedCount);
+  const autoSeedInterval = setInterval(() => {
+    tryAutoSeed(gameId, seedCount);
+  }, 60_000);
+  autoSeedTimers.set(gameId, autoSeedInterval);
+
+  log.info({ gameId, seedCount }, "Auto-seed loop started");
+}
+
+function startCheckinMonitor(gameId: number): void {
+  clearMapTimer(checkinTimers, gameId, clearInterval);
+  const interval = setInterval(() => {
+    void evaluateCheckinState(gameId);
+  }, 10_000);
+  checkinTimers.set(gameId, interval);
+}
+
+async function evaluateCheckinState(gameId: number): Promise<void> {
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") {
+    clearMapTimer(checkinTimers, gameId, clearInterval);
+    return;
+  }
+
+  const checkedInCount = getCheckedInCount(gameId);
+  const requiredCheckedIn = getRequiredCheckedInPlayers(game);
+
+  if (checkedInCount >= requiredCheckedIn) {
+    clearMapTimer(checkinTimers, gameId, clearInterval);
+    completeCheckin(gameId);
+    return;
+  }
+
+  let now = Math.floor(Date.now() / 1000);
+  try {
+    const latest = await getHttpProvider().getBlock("latest");
+    if (latest) now = latest.timestamp;
+  } catch (err) {
+    log.warn({ gameId, error: (err as Error).message }, "Falling back to wall-clock time for checkin expiry");
+  }
+  if (now <= game.expiryDeadline) return;
+
+  clearMapTimer(autoSeedTimers, gameId, clearInterval);
+
+  if (isSimulatedGame(gameId) && !isHybridSimulatedGame(gameId)) {
+    log.info({ gameId }, "Pure simulated game expired during checkin; cancelling off-chain");
+    onGameCancelled(gameId);
+    return;
+  }
+
+  if (expiryTriggerInFlight.has(gameId)) return;
+  expiryTriggerInFlight.add(gameId);
+
+  try {
+    log.info(
+      { gameId, checkedInCount, requiredCheckedIn, expiryDeadline: game.expiryDeadline },
+      "Checkin requirements not met by expiry; triggering on-chain expiry cancellation"
+    );
+    await operator.triggerExpiry(gameId);
+  } catch (err) {
+    log.error({ gameId, error: (err as Error).message }, "Failed to trigger expiry cancellation");
+  } finally {
+    expiryTriggerInFlight.delete(gameId);
+  }
 }
 
 // ============ Game Lifecycle ============
@@ -252,7 +339,8 @@ function tryAutoSeed(gameId: number, seedCount: number): void {
 /**
  * Start a game — called after operator.startGame() tx confirms.
  * Transitions to ACTIVE phase with sub_phase='checkin'.
- * Players must check in during this period or they'll be eliminated.
+ * Check-in remains open until enough players are checked in for prize slots,
+ * or until game expiry is reached.
  */
 export function onGameStarted(gameId: number): void {
   cancelTimers(gameId);
@@ -268,34 +356,30 @@ export function onGameStarted(gameId: number): void {
   // Set phase to ACTIVE with sub_phase='checkin'
   updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now, subPhase: "checkin" });
 
+  const requiredCheckedIn = getRequiredCheckedInPlayers(game);
+
   broadcast(gameId, {
     type: "game:checkin_started",
-    checkinDurationSeconds: config.checkinDurationSeconds,
-    checkinEndsAt: now + config.checkinDurationSeconds,
+    checkinDurationSeconds: Math.max(0, game.expiryDeadline - now),
+    checkinEndsAt: game.expiryDeadline,
+    requiredCheckedIn,
   });
 
   // Auto-seed: check in players near the meeting point (5% of total, min 1)
   // Retries every 60s until enough nearby players are seeded or normal check-ins fill the gap
-  const players = getPlayers(gameId).filter((p) => p.isAlive);
-  const seedCount = Math.max(1, Math.ceil(players.length * 0.05));
-
-  tryAutoSeed(gameId, seedCount);
-  const autoSeedInterval = setInterval(() => {
-    tryAutoSeed(gameId, seedCount);
-  }, 60_000);
-  autoSeedTimers.set(gameId, autoSeedInterval);
+  startAutoSeedLoop(gameId);
 
   // Start spectator position broadcast during pre-game phases
   startPreGameSpectatorBroadcast(gameId);
 
-  // Schedule checkin end timer
-  const timer = setTimeout(() => {
-    checkinTimers.delete(gameId);
-    completeCheckin(gameId);
-  }, config.checkinDurationSeconds * 1000);
-  checkinTimers.set(gameId, timer);
+  // Keep checking whether checkin requirements are met (or expiry reached)
+  startCheckinMonitor(gameId);
+  void evaluateCheckinState(gameId);
 
-  log.info({ gameId, seedCount, checkinDurationSeconds: config.checkinDurationSeconds }, "Check-in phase started");
+  log.info(
+    { gameId, requiredCheckedIn, checkinEndsAt: game.expiryDeadline },
+    "Check-in phase started"
+  );
 }
 
 /**
@@ -304,6 +388,7 @@ export function onGameStarted(gameId: number): void {
 function completeCheckin(gameId: number): void {
   // Stop auto-seed retries
   clearMapTimer(autoSeedTimers, gameId, clearInterval);
+  clearMapTimer(checkinTimers, gameId, clearInterval);
 
   const game = getGame(gameId);
   if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") return;
@@ -328,8 +413,13 @@ function completeCheckin(gameId: number): void {
   // Check if any players remain after elimination
   const aliveCount = getAlivePlayerCount(gameId);
   if (aliveCount === 0) {
-    log.info({ gameId }, "No checked-in players, cancelling game");
-    onGameCancelled(gameId);
+    log.warn({ gameId }, "No players remained alive after checkin completion");
+    return;
+  }
+
+  // Single-player game can end immediately (no possible kill flow).
+  if (aliveCount === 1) {
+    void endGameWithWinners(gameId);
     return;
   }
 
@@ -379,6 +469,11 @@ export function completePregame(gameId: number): void {
   // Get alive (checked-in) players only
   const alivePlayers = getAlivePlayers(gameId);
   const addresses = alivePlayers.map((p) => p.address);
+
+  if (addresses.length <= 1) {
+    void endGameWithWinners(gameId);
+    return;
+  }
 
   // Initialize target chain
   const chain = initializeTargetChain(gameId, addresses);
@@ -563,7 +658,14 @@ export function handleLocationUpdate(
   address: string,
   lat: number,
   lng: number
-): void {
+): { success: boolean; error?: string } {
+  const game = getGame(gameId);
+  if (!game) return { success: false, error: "Game not found" };
+
+  const player = getPlayer(gameId, address);
+  if (!player) return { success: false, error: "Not registered" };
+  if (!player.isAlive) return { success: false, error: "Player is eliminated" };
+
   const now = Math.floor(Date.now() / 1000);
   const active = activeGames.get(gameId);
 
@@ -577,7 +679,7 @@ export function handleLocationUpdate(
       timestamp: now,
       isInZone: true,
     });
-    return;
+    return { success: true };
   }
 
   const { inZone, secondsRemaining } = active.zoneTracker.processLocation(
@@ -603,6 +705,8 @@ export function handleLocationUpdate(
       inZone: false,
     });
   }
+
+  return { success: true };
 }
 
 /**
@@ -626,6 +730,11 @@ export function handleCheckin(
   // Only allow check-ins during ACTIVE/checkin sub-phase
   if (game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") {
     return { success: false, error: "Check-in period has ended" };
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  if (now > game.expiryDeadline) {
+    return { success: false, error: "Game has expired" };
   }
 
   const player = getPlayer(gameId, address);
@@ -699,7 +808,13 @@ function startPreGameSpectatorBroadcast(gameId: number): void {
   const shrinks = getZoneShrinks(gameId);
   const initialRadius = shrinks[0]?.radiusMeters ?? 500;
   const zone = game?.centerLat && game?.centerLng
-    ? { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null }
+    ? {
+        centerLat: contractCoordToDegrees(game.centerLat),
+        centerLng: contractCoordToDegrees(game.centerLng),
+        currentRadiusMeters: initialRadius,
+        nextShrinkAt: null,
+        nextRadiusMeters: null,
+      }
     : null;
 
   const interval = setInterval(() => {
@@ -771,6 +886,12 @@ async function gameTick(gameId: number): Promise<void> {
     for (const player of heartbeatExpired) {
       await handleHeartbeatElimination(gameId, player.address);
     }
+  }
+
+  const aliveAfterChecks = getAlivePlayerCount(gameId);
+  if (aliveAfterChecks <= 1) {
+    await endGameWithWinners(gameId);
+    return;
   }
 
   // Broadcast player positions to spectators every 2 seconds
@@ -1036,36 +1157,41 @@ export function handleHeartbeatScan(
  * End a game by determining winners and calling on-chain endGame.
  */
 async function endGameWithWinners(gameId: number): Promise<void> {
+  if (endingGames.has(gameId)) return;
+
   const game = getGame(gameId);
   if (!game) return;
+  if (game.phase !== GamePhase.ACTIVE) return;
 
-  const { winner1, winner2, winner3, topKiller } = determineWinners(
-    gameId,
-    game.bps2nd,
-    game.bps3rd,
-    game.bpsKills
-  );
-
-  const now = Math.floor(Date.now() / 1000);
-
-  log.info(
-    { gameId, winner1, winner2, winner3, topKiller },
-    "Ending game with winners"
-  );
-
-  // Resolve addresses to playerNumbers for on-chain call
-  const ZERO = "0x0000000000000000000000000000000000000000";
-  const w1Player = winner1 !== ZERO ? getPlayer(gameId, winner1) : null;
-  const w2Player = winner2 !== ZERO ? getPlayer(gameId, winner2) : null;
-  const w3Player = winner3 !== ZERO ? getPlayer(gameId, winner3) : null;
-  const tkPlayer = topKiller !== ZERO ? getPlayer(gameId, topKiller) : null;
-
-  const w1Num = w1Player?.playerNumber ?? 0;
-  const w2Num = w2Player?.playerNumber ?? 0;
-  const w3Num = w3Player?.playerNumber ?? 0;
-  const tkNum = tkPlayer?.playerNumber ?? 0;
+  endingGames.add(gameId);
 
   try {
+    const { winner1, winner2, winner3, topKiller } = determineWinners(
+      gameId,
+      game.bps2nd,
+      game.bps3rd,
+      game.bpsKills
+    );
+
+    const now = Math.floor(Date.now() / 1000);
+
+    log.info(
+      { gameId, winner1, winner2, winner3, topKiller },
+      "Ending game with winners"
+    );
+
+    // Resolve addresses to playerNumbers for on-chain call
+    const ZERO = "0x0000000000000000000000000000000000000000";
+    const w1Player = winner1 !== ZERO ? getPlayer(gameId, winner1) : null;
+    const w2Player = winner2 !== ZERO ? getPlayer(gameId, winner2) : null;
+    const w3Player = winner3 !== ZERO ? getPlayer(gameId, winner3) : null;
+    const tkPlayer = topKiller !== ZERO ? getPlayer(gameId, topKiller) : null;
+
+    const w1Num = w1Player?.playerNumber ?? 0;
+    const w2Num = w2Player?.playerNumber ?? 0;
+    const w3Num = w3Player?.playerNumber ?? 0;
+    const tkNum = tkPlayer?.playerNumber ?? 0;
+
     if (!isSimulatedGame(gameId) || isHybridSimulatedGame(gameId)) {
       await operator.endGame(gameId, w1Num, w2Num, w3Num, tkNum);
     }
@@ -1084,11 +1210,13 @@ async function endGameWithWinners(gameId: number): Promise<void> {
       winner3: w3Num,
       topKiller: tkNum,
     });
+
+    cleanupActiveGame(gameId);
   } catch (err) {
     log.error({ gameId, error: (err as Error).message }, "Failed to end game on-chain");
+  } finally {
+    endingGames.delete(gameId);
   }
-
-  cleanupActiveGame(gameId);
 }
 
 /**
@@ -1096,7 +1224,7 @@ async function endGameWithWinners(gameId: number): Promise<void> {
  */
 export function onGameCancelled(gameId: number): void {
   cancelTimers(gameId);
-  updateGamePhase(gameId, GamePhase.CANCELLED);
+  updateGamePhase(gameId, GamePhase.CANCELLED, { endedAt: Math.floor(Date.now() / 1000) });
   broadcast(gameId, { type: "game:cancelled", gameId });
   cleanupActiveGame(gameId);
   log.info({ gameId }, "Game cancelled");
@@ -1204,6 +1332,37 @@ export function cancelTimers(gameId: number): void {
 
 // ============ Deadline Check (registrationDeadline) ============
 
+async function triggerCancellationIfNeeded(gameId: number, reason: "deadline" | "gameDate"): Promise<void> {
+  if (cancellationTriggerInFlight.has(gameId)) {
+    log.info({ gameId, reason }, "Skipping duplicate cancellation trigger (already in-flight)");
+    return;
+  }
+
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.REGISTRATION) return;
+
+  // Pure simulated games have no on-chain phase to cancel.
+  if (isSimulatedGame(gameId) && !isHybridSimulatedGame(gameId)) {
+    log.info({ gameId, reason }, "Cancelling simulated registration game off-chain");
+    onGameCancelled(gameId);
+    return;
+  }
+
+  cancellationTriggerInFlight.add(gameId);
+  try {
+    // Guard against async races: if another actor already cancelled/started on-chain,
+    // do not enqueue a stale operator cancellation tx.
+    const state = await fetchGameState(gameId);
+    if (state.phase !== GamePhase.REGISTRATION) {
+      log.info({ gameId, reason, onChainPhase: state.phase }, "Skipping cancellation: on-chain phase is no longer registration");
+      return;
+    }
+    await operator.triggerCancellation(gameId);
+  } finally {
+    cancellationTriggerInFlight.delete(gameId);
+  }
+}
+
 /**
  * Fires at registrationDeadline. If not enough players registered,
  * cancel the game on-chain immediately.
@@ -1220,7 +1379,7 @@ async function checkDeadline(gameId: number): Promise<void> {
 
   log.info({ gameId, playerCount, minPlayers: game.minPlayers }, "Not enough players at deadline, cancelling game");
   try {
-    await operator.triggerCancellation(gameId);
+    await triggerCancellationIfNeeded(gameId, "deadline");
     // onGameCancelled will be called from the event listener when tx confirms
   } catch (err) {
     log.error({ gameId, error: (err as Error).message }, "Failed to cancel game (not enough players)");
@@ -1241,7 +1400,7 @@ async function checkGameDate(gameId: number): Promise<void> {
   if (playerCount < game.minPlayers) {
     log.info({ gameId, playerCount, minPlayers: game.minPlayers }, "Not enough players at game date, cancelling");
     try {
-      await operator.triggerCancellation(gameId);
+      await triggerCancellationIfNeeded(gameId, "gameDate");
     } catch (err) {
       log.error({ gameId, error: (err as Error).message }, "Failed to cancel game at game date");
     }
@@ -1264,9 +1423,25 @@ async function checkGameDate(gameId: number): Promise<void> {
  */
 export async function checkAllRegistrationGames(): Promise<void> {
   const regGames = getGamesInPhase(GamePhase.REGISTRATION);
+  let nowSec = Math.floor(Date.now() / 1000);
+  try {
+    const latest = await getHttpProvider().getBlock("latest");
+    if (latest) nowSec = latest.timestamp;
+  } catch (err) {
+    log.warn({ error: (err as Error).message }, "Falling back to wall-clock time for admin registration checks");
+  }
+
   for (const game of regGames) {
-    await checkDeadline(game.gameId);
-    await checkGameDate(game.gameId);
+    // Avoid duplicate cancellation submissions: if deadline is passed and the game
+    // is still below min players, only run deadline cancellation logic.
+    if (nowSec >= game.registrationDeadline && getPlayerCount(game.gameId) < game.minPlayers) {
+      await checkDeadline(game.gameId);
+      continue;
+    }
+
+    if (nowSec >= game.gameDate) {
+      await checkGameDate(game.gameId);
+    }
   }
 }
 
@@ -1285,39 +1460,21 @@ export function recoverGames(): void {
     if (!fullGame || !fullGame.startedAt) continue;
 
     if (fullGame.subPhase === "checkin") {
-      // Recover checkin timer — calculate remaining time
-      const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
-      const remaining = Math.max(0, config.checkinDurationSeconds - elapsed);
-      if (remaining <= 0) {
-        log.info({ gameId: game.gameId }, "Completing expired checkin on recovery");
-        completeCheckin(game.gameId);
-      } else {
-        log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering checkin timer");
-        startPreGameSpectatorBroadcast(game.gameId);
-        const timer = setTimeout(() => {
-          checkinTimers.delete(game.gameId);
-          completeCheckin(game.gameId);
-        }, remaining * 1000);
-        checkinTimers.set(game.gameId, timer);
-      }
+      log.info({ gameId: game.gameId }, "Recovering checkin monitor");
+      startPreGameSpectatorBroadcast(game.gameId);
+      startAutoSeedLoop(game.gameId);
+      startCheckinMonitor(game.gameId);
+      void evaluateCheckinState(game.gameId);
     } else if (fullGame.subPhase === "pregame") {
-      // Recover pregame timer — calculate remaining time
-      const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
-      const checkinDuration = config.checkinDurationSeconds;
-      const pregameElapsed = elapsed - checkinDuration;
-      const remaining = Math.max(0, config.pregameDurationSeconds - pregameElapsed);
-      if (remaining <= 0) {
-        log.info({ gameId: game.gameId }, "Completing expired pregame on recovery");
+      // Sub-phase start timestamp is not persisted yet, so recover with a fresh pregame
+      // timer window instead of deriving from startedAt.
+      log.info({ gameId: game.gameId }, "Recovering pregame timer");
+      startPreGameSpectatorBroadcast(game.gameId);
+      const timer = setTimeout(() => {
+        pregameTimers.delete(game.gameId);
         completePregame(game.gameId);
-      } else {
-        log.info({ gameId: game.gameId, remainingSeconds: remaining }, "Recovering pregame timer");
-        startPreGameSpectatorBroadcast(game.gameId);
-        const timer = setTimeout(() => {
-          pregameTimers.delete(game.gameId);
-          completePregame(game.gameId);
-        }, remaining * 1000);
-        pregameTimers.set(game.gameId, timer);
-      }
+      }, config.pregameDurationSeconds * 1000);
+      pregameTimers.set(game.gameId, timer);
     } else if (fullGame.subPhase === "game") {
       // Recover active game with zone tracker and tick
       log.info({ gameId: game.gameId }, "Recovering active game");
@@ -1353,7 +1510,7 @@ function cleanupActiveGame(gameId: number): void {
     activeGames.delete(gameId);
   }
   stopPreGameSpectatorBroadcast(gameId);
-  clearMapTimer(checkinTimers, gameId);
+  clearMapTimer(checkinTimers, gameId, clearInterval);
   clearMapTimer(pregameTimers, gameId);
   log.info({ gameId }, "Active game cleaned up");
 }
@@ -1379,7 +1536,7 @@ export function cleanupAll(): void {
   gameDateTimers.clear();
 
   for (const [gameId, timer] of checkinTimers) {
-    clearTimeout(timer);
+    clearInterval(timer);
   }
   checkinTimers.clear();
 
@@ -1415,19 +1572,23 @@ export function getGameStatus(gameId: number) {
   if (!zone && game.phase === GamePhase.ACTIVE && game.centerLat && game.centerLng) {
     const shrinks = getZoneShrinks(gameId);
     const initialRadius = shrinks[0]?.radiusMeters ?? 500;
-    zone = { centerLat: game.centerLat, centerLng: game.centerLng, currentRadiusMeters: initialRadius, nextShrinkAt: null, nextRadiusMeters: null };
+    zone = {
+      centerLat: contractCoordToDegrees(game.centerLat),
+      centerLng: contractCoordToDegrees(game.centerLng),
+      currentRadiusMeters: initialRadius,
+      nextShrinkAt: null,
+      nextRadiusMeters: null,
+    };
   }
 
   return {
     gameId,
     phase: game.phase,
     subPhase: game.subPhase,
-    checkinEndsAt: game.subPhase === "checkin" && game.startedAt
-      ? game.startedAt + config.checkinDurationSeconds
+    checkinEndsAt: game.subPhase === "checkin"
+      ? game.expiryDeadline
       : null,
-    pregameEndsAt: game.subPhase === "pregame" && game.startedAt
-      ? game.startedAt + config.checkinDurationSeconds + config.pregameDurationSeconds
-      : null,
+    pregameEndsAt: null,
     playerCount: players.length,
     aliveCount: players.filter((p) => p.isAlive).length,
     checkedInCount: players.filter((p) => p.checkedIn).length,

@@ -48,6 +48,7 @@ export const config = {
   // Server
   port: envInt("PORT", 3000),
   host: optionalEnv("HOST", "0.0.0.0"),
+  enableSimulationApi: envBool("ENABLE_SIMULATION_API", false),
 
   // Database
   dbPath: optionalEnv("DB_PATH", "./data/chain-assassin.db"),

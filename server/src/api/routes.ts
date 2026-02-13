@@ -12,8 +12,10 @@ const upload = multer({
 
 const router = Router();
 
-// Simulation (no auth)
-router.use(simulationRouter);
+// Simulation routes are opt-in and disabled by default.
+if (config.enableSimulationApi) {
+  router.use(simulationRouter);
+}
 
 // Public
 router.get("/health", healthCheck);

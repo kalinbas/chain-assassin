@@ -40,6 +40,10 @@
  *      1. Verify fees accrued from game A
  *      2. Withdraw fees (success + double-withdraw revert)
  *
+ *   D) Check-in minimum + expiry cancellation
+ *      1. Keep check-in open past fixed duration when required checked-ins are missing
+ *      2. Auto-cancel ACTIVE/checkin game via triggerExpiry at expiry
+ *
  * Usage: tsx test/e2e.ts <contractAddress>
  */
 
@@ -89,6 +93,7 @@ const playerWallets: ethers.Wallet[] = [];
 for (let i = 1; i <= NUM_PLAYERS; i++) {
   playerWallets.push(new ethers.Wallet(ANVIL_KEYS[i], provider));
 }
+const outsiderWallet = new ethers.Wallet(ANVIL_KEYS[7], provider);
 
 const abiPath = resolve(__dirname, "../abi/ChainAssassin.json");
 const artifact = JSON.parse(readFileSync(abiPath, "utf-8"));
@@ -488,16 +493,23 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const dupeData = await dupeRes.json();
   assert(!dupeRes.ok || !dupeData.success, "Double check-in rejected");
 
-  // 8. Check in remaining players (4, 5, 6) so all 6 are checked in for gameplay
-  for (let i = 3; i < NUM_PLAYERS; i++) {
-    const coords = playerCoords(i);
-    const res = await apiCall(
-      "POST",
-      `/api/games/${gameId}/checkin`,
-      playerWallets[i],
-      { lat: coords.lat, lng: coords.lng, qrPayload: p1Qr }
-    );
-    const data = await res.json();
+  // 8. Check in remaining players (4, 5, 6) quickly so they are included
+  // before the periodic checkin monitor closes the phase.
+  const remainingResults = await Promise.all(
+    Array.from({ length: NUM_PLAYERS - 3 }, async (_, offset) => {
+      const i = offset + 3;
+      const coords = playerCoords(i);
+      const res = await apiCall(
+        "POST",
+        `/api/games/${gameId}/checkin`,
+        playerWallets[i],
+        { lat: coords.lat, lng: coords.lng, qrPayload: p1Qr }
+      );
+      const data = await res.json();
+      return { i, res, data };
+    })
+  );
+  for (const { i, res, data } of remainingResults) {
     assert(res.ok && data.success, `Player${i + 1} checked in via Player1's QR`);
   }
 
@@ -633,6 +645,19 @@ async function scenarioA_sendLocationPings(gameId: number): Promise<void> {
     );
     assert(res.ok, `Player${i + 1} location ping accepted`);
   }
+
+  // Non-registered players must be rejected.
+  const outsiderRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/location`,
+    outsiderWallet,
+    { lat: 19.4352, lng: -99.1281, timestamp: Math.floor(Date.now() / 1000) }
+  );
+  const outsiderData = await outsiderRes.json();
+  assert(
+    !outsiderRes.ok || !outsiderData.success,
+    "Unregistered player location update rejected"
+  );
 }
 
 async function scenarioA_waitForGamePhase(
@@ -1236,6 +1261,10 @@ async function scenarioA_verifySpectatorWsMessages(
   const samplePos = posMsgs[0] as any;
   assert(Array.isArray(samplePos.players), "spectator:positions has players array");
   assert(typeof samplePos.zone === "object" && samplePos.zone !== null, "spectator:positions has zone object");
+  assert(
+    Math.abs(samplePos.zone.centerLat) <= 90 && Math.abs(samplePos.zone.centerLng) <= 180,
+    "spectator:positions zone center is in degree units"
+  );
   assert(typeof samplePos.aliveCount === "number", "spectator:positions has aliveCount");
 
   // ── Broadcast messages that spectators also receive ────────
@@ -1828,6 +1857,12 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
         gameRow.title === "Cancellation Test Game",
         "DB: Game B title correct"
       );
+      assert(gameRow.ended_at !== null, "DB: Game B ended_at is set");
+
+      const cancelTxs = db
+        .prepare("SELECT * FROM operator_txs WHERE game_id = ? AND action = 'triggerCancellation'")
+        .all(gameId) as Record<string, unknown>[];
+      assert(cancelTxs.length <= 1, `DB: At most 1 triggerCancellation operator tx (got ${cancelTxs.length})`);
     } else {
       log(
         "B6",
@@ -1836,6 +1871,159 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
     }
   } finally {
     db.close();
+  }
+}
+
+// ============ Scenario D: Check-in Minimum + Expiry Cancellation ============
+
+async function scenarioD_checkinMinimumAndExpiry(): Promise<void> {
+  section("Scenario D: Check-in Minimum + Expiry");
+
+  // 1. Create game where 3 distinct winner slots are configured.
+  log("D1", "Creating game with 3 winner slots and short maxDuration...");
+  const now = (await provider.getBlock("latest"))!.timestamp;
+  const regDeadline = now + 60;
+  const gameDate = now + 120;
+  const maxDuration = 180;
+
+  const params = {
+    title: "Checkin Expiry Test Game",
+    entryFee: ethers.parseEther("0.01"),
+    minPlayers: 3,
+    maxPlayers: 6,
+    registrationDeadline: regDeadline,
+    gameDate: gameDate,
+    maxDuration: maxDuration,
+    centerLat: 19435244,
+    centerLng: -99128056,
+    meetingLat: 19435244,
+    meetingLng: -99128056,
+    bps1st: 4000,
+    bps2nd: 2000,
+    bps3rd: 1000,
+    bpsKills: 1000,
+    bpsCreator: 1000,
+  };
+
+  const shrinks = [
+    { atSecond: 0, radiusMeters: 2000 },
+    { atSecond: 300, radiusMeters: 1000 },
+  ];
+
+  const tx = await operatorContract.createGame(params, shrinks);
+  const receipt = await tx.wait();
+  const iface = new ethers.Interface(abi);
+  const createdLog = receipt.logs.find((l: ethers.Log) => {
+    try {
+      return iface.parseLog({ topics: l.topics as string[], data: l.data })?.name === "GameCreated";
+    } catch {
+      return false;
+    }
+  });
+  const parsed = iface.parseLog({
+    topics: createdLog!.topics as string[],
+    data: createdLog!.data,
+  });
+  const gameId = Number(parsed!.args[0]);
+  success(`Game D created with ID: ${gameId}`);
+
+  // 2. Register exactly 3 players.
+  for (let i = 0; i < 3; i++) {
+    const regTx = await playerContracts[i].register(gameId, { value: ethers.parseEther("0.01") });
+    await regTx.wait();
+  }
+  success("3 players registered for game D");
+
+  // 3. Wait for server sync.
+  for (let i = 0; i < 20; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.playerCount === 3) {
+        success("Server synced game D registrations");
+        break;
+      }
+    }
+    if (i === 19) fail("Server did not sync game D registrations");
+  }
+
+  // 4. Seed only one player location so checkin requirements are NOT met.
+  const p1Loc = playerCoords(0);
+  const seedRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/location`,
+    playerWallets[0],
+    { lat: p1Loc.lat, lng: p1Loc.lng, timestamp: Math.floor(Date.now() / 1000) }
+  );
+  assert(seedRes.ok, "Seed player location accepted");
+
+  // 5. Warp to gameDate and trigger auto-start.
+  await anvilWarpTime(130);
+  const triggerRes = await apiCall("POST", "/api/admin/check-auto-start", operatorWallet);
+  assert(triggerRes.ok, "Admin check-auto-start for game D returned 200");
+
+  // 6. Wait until server marks ACTIVE/checkin.
+  for (let i = 0; i < 20; i++) {
+    await sleep(1000);
+    await provider.send("evm_mine", []);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.phase === 1 && statusData.subPhase === "checkin") {
+        success("Game D entered ACTIVE/checkin");
+        break;
+      }
+    }
+    if (i === 19) fail("Game D did not enter checkin");
+  }
+
+  // 7. Wait longer than CHECKIN_DURATION_SECONDS (30s in test env): should still be in checkin
+  // because required checked-in players (winner slots) were not met.
+  for (let i = 0; i < 7; i++) {
+    await sleep(5000);
+    await provider.send("evm_mine", []);
+  }
+  const longCheckinStatusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+  const longCheckinStatus = await longCheckinStatusRes.json();
+  assert(
+    longCheckinStatus.phase === 1 && longCheckinStatus.subPhase === "checkin",
+    "Checkin remains open past fixed duration when required checkins are not met"
+  );
+  assert(longCheckinStatus.checkedInCount < 3, "Required checked-in threshold still not met");
+
+  // 8. Warp past expiry and wait for automatic cancellation via triggerExpiry.
+  const cfg = await operatorContract.getGameConfig(gameId);
+  const expiry = Number(cfg.gameDate) + Number(cfg.maxDuration);
+  const latest = (await provider.getBlock("latest"))!.timestamp;
+  if (latest <= expiry) {
+    await anvilWarpTime(expiry - latest + 2);
+  } else {
+    await provider.send("evm_mine", []);
+  }
+
+  for (let i = 0; i < 25; i++) {
+    await sleep(1000);
+    await provider.send("evm_mine", []);
+    const state = await operatorContract.getGameState(gameId);
+    if (Number(state.phase) === 3) {
+      success("Game D cancelled on-chain after expiry");
+      break;
+    }
+    if (i === 24) fail("Game D was not cancelled by expiry");
+  }
+
+  for (let i = 0; i < 25; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.phase === 3) {
+        success("Server shows game D as CANCELLED");
+        break;
+      }
+    }
+    if (i === 24) fail("Server did not mark game D as CANCELLED");
   }
 }
 
@@ -1903,6 +2091,10 @@ async function main() {
     fail("Cannot connect to server at " + SERVER_URL);
   }
 
+  // Simulation API should be disabled in this production-like test run.
+  const simStatusRes = await fetch(`${SERVER_URL}/api/simulation/status`);
+  assert(simStatusRes.status === 404, "Simulation API disabled by default");
+
   // ======== Scenario A: Full 6-Player Game ========
   section("Scenario A: Full 6-Player Game");
 
@@ -1947,6 +2139,9 @@ async function main() {
 
   // ======== Scenario B: Cancellation + Refund ========
   await scenarioB_cancellationAndRefund();
+
+  // ======== Scenario D: Check-in Minimum + Expiry ========
+  await scenarioD_checkinMinimumAndExpiry();
 
   // ======== Scenario C: Platform Fees ========
   await scenarioC_platformFees();

@@ -166,7 +166,7 @@ export interface WsServerMessage {
 // ============ API Types ============
 
 export interface KillSubmission {
-  qrPayload: string; // "ca:{gameId}:{playerNumber}"
+  qrPayload: string; // obfuscated numeric payload (see utils/crypto.ts)
   hunterLat: number;
   hunterLng: number;
   bleNearbyAddresses: string[];

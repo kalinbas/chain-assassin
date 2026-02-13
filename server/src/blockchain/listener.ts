@@ -452,7 +452,11 @@ async function findGameCreatedBlock(gameId: number): Promise<number | null> {
 }
 
 function saveBlock(blockNumber: number): void {
-  setSyncState(SYNC_KEY_LAST_BLOCK, blockNumber.toString());
+  const currentRaw = getSyncState(SYNC_KEY_LAST_BLOCK);
+  const current = currentRaw ? parseInt(currentRaw, 10) : 0;
+  if (!Number.isFinite(current) || blockNumber > current) {
+    setSyncState(SYNC_KEY_LAST_BLOCK, blockNumber.toString());
+  }
 }
 
 /**
