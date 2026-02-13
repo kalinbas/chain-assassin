@@ -24,8 +24,10 @@ Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prize
 ```
 chain-assassin/
 ├── app-android/     Android app (Kotlin + Jetpack Compose)
-├── website/         Marketing website (HTML/CSS/JS)
-└── server/          Game server (planned)
+├── contracts/       Smart contracts (Solidity + Foundry)
+├── server/          Game server (Node.js + TypeScript)
+├── website/         Web app (React + TypeScript + Vite)
+└── scripts/         Dev and setup scripts
 ```
 
 ### `app-android/`
@@ -49,32 +51,39 @@ Requirements: Android SDK 34, Min SDK 29, Gradle 8.5
 
 ### `website/`
 
-Static marketing website with:
-- Dark cyberpunk theme matching the app
-- Screenshot carousel with phone mockup frames
-- Interactive prize calculator
-- Demo video
-- Responsive design (mobile/tablet/desktop)
+Web app built with:
+- React 19 + TypeScript + Vite
+- React Router for routes
+- Leaflet + React Leaflet for maps
+- API-first integration with the game server (no direct blockchain calls)
 
-Open `website/index.html` in a browser or visit the live site.
-
-### `server/` (planned)
+### `server/`
 
 Game coordination server with:
 - WebSocket connections for real-time game state
 - REST API for game management
-- Smart contract integration on Base
+- SQLite persistence and startup recovery
+- Smart contract event indexing + operator transactions on Base
+
+### `contracts/`
+
+Smart contracts built with:
+- Solidity 0.8.24
+- Foundry (forge/anvil/cast)
+- OpenZeppelin security primitives (Ownable, ReentrancyGuard)
 
 ## Tech Stack
 
 | Component | Technology |
 |-----------|-----------|
-| Mobile App | Kotlin, Jetpack Compose, Material 3, Hilt |
-| Blockchain | Base (Ethereum L2), Web3j |
-| QR Scanning | CameraX, ML Kit |
-| Maps | osmdroid (OpenStreetMap) |
-| Website | HTML, CSS, vanilla JS |
-| Server | TBD |
+| Smart Contracts | Solidity 0.8.24, Foundry, OpenZeppelin |
+| Blockchain Network | Base (Ethereum L2): Base Sepolia + Base Mainnet |
+| Backend Server | Node.js 22, TypeScript, Express, ws, ethers v6, better-sqlite3 |
+| Backend Testing | Vitest (unit/integration), E2E flows on Anvil |
+| Web App | React 19, TypeScript, Vite, React Router, Leaflet/React Leaflet |
+| Web Testing | Playwright |
+| Android App | Kotlin, Jetpack Compose, Material 3, Hilt, Web3j, CameraX, ML Kit, osmdroid |
+| CI/Tooling | npm, Gradle, Foundry, TypeScript |
 
 ## Links
 
