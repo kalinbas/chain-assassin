@@ -168,6 +168,18 @@ function getRequiredCheckedInPlayers(game: Pick<GameConfig, "bps2nd" | "bps3rd">
   return required;
 }
 
+export function getPregameEndsAt(subPhaseStartedAt: number | null): number | null {
+  if (subPhaseStartedAt == null) return null;
+  return subPhaseStartedAt + config.pregameDurationSeconds;
+}
+
+export function getPregameRemainingSeconds(subPhaseStartedAt: number | null, nowSec: number): number {
+  if (subPhaseStartedAt == null) return config.pregameDurationSeconds;
+  const endsAt = getPregameEndsAt(subPhaseStartedAt);
+  if (endsAt == null) return config.pregameDurationSeconds;
+  return Math.max(0, endsAt - nowSec);
+}
+
 function startAutoSeedLoop(gameId: number): void {
   clearMapTimer(autoSeedTimers, gameId, clearInterval);
   const alivePlayers = getPlayers(gameId).filter((p) => p.isAlive);
@@ -354,7 +366,11 @@ export function onGameStarted(gameId: number): void {
   const now = Math.floor(Date.now() / 1000);
 
   // Set phase to ACTIVE with sub_phase='checkin'
-  updateGamePhase(gameId, GamePhase.ACTIVE, { startedAt: now, subPhase: "checkin" });
+  updateGamePhase(gameId, GamePhase.ACTIVE, {
+    startedAt: now,
+    subPhase: "checkin",
+    subPhaseStartedAt: now,
+  });
 
   const requiredCheckedIn = getRequiredCheckedInPlayers(game);
 
@@ -423,16 +439,18 @@ function completeCheckin(gameId: number): void {
     return;
   }
 
-  // Transition to pregame
-  updateSubPhase(gameId, "pregame");
+  const pregameNow = Math.floor(Date.now() / 1000);
+  const pregameEndsAt = getPregameEndsAt(pregameNow);
+
+  // Transition to pregame and persist when this sub-phase started.
+  updateSubPhase(gameId, "pregame", pregameNow);
 
   const checkedInCount = getCheckedInCount(gameId);
 
-  const pregameNow = Math.floor(Date.now() / 1000);
   broadcast(gameId, {
     type: "game:pregame_started",
     pregameDurationSeconds: config.pregameDurationSeconds,
-    pregameEndsAt: pregameNow + config.pregameDurationSeconds,
+    pregameEndsAt,
     checkedInCount,
     playerCount: aliveCount,
   });
@@ -463,9 +481,6 @@ export function completePregame(gameId: number): void {
   // Stop pre-game spectator broadcast (gameTick will take over)
   stopPreGameSpectatorBroadcast(gameId);
 
-  // Update sub_phase to 'game'
-  updateSubPhase(gameId, "game");
-
   // Get alive (checked-in) players only
   const alivePlayers = getAlivePlayers(gameId);
   const addresses = alivePlayers.map((p) => p.address);
@@ -488,6 +503,9 @@ export function completePregame(gameId: number): void {
 
   // Initialize heartbeats for alive players
   initPlayersHeartbeat(gameId, now);
+
+  // Persist transition to in-game sub-phase only after setup succeeds.
+  updateSubPhase(gameId, "game", now);
 
   // Notify all players of their targets + hunter number
   for (const [hunter, target] of chain) {
@@ -1466,14 +1484,20 @@ export function recoverGames(): void {
       startCheckinMonitor(game.gameId);
       void evaluateCheckinState(game.gameId);
     } else if (fullGame.subPhase === "pregame") {
-      // Sub-phase start timestamp is not persisted yet, so recover with a fresh pregame
-      // timer window instead of deriving from startedAt.
-      log.info({ gameId: game.gameId }, "Recovering pregame timer");
+      const nowSec = Math.floor(Date.now() / 1000);
+      const remainingSeconds = getPregameRemainingSeconds(fullGame.subPhaseStartedAt, nowSec);
+      log.info({ gameId: game.gameId, remainingSeconds }, "Recovering pregame timer");
       startPreGameSpectatorBroadcast(game.gameId);
+
+      if (remainingSeconds <= 0) {
+        completePregame(game.gameId);
+        continue;
+      }
+
       const timer = setTimeout(() => {
         pregameTimers.delete(game.gameId);
         completePregame(game.gameId);
-      }, config.pregameDurationSeconds * 1000);
+      }, remainingSeconds * 1000);
       pregameTimers.set(game.gameId, timer);
     } else if (fullGame.subPhase === "game") {
       // Recover active game with zone tracker and tick
@@ -1484,8 +1508,19 @@ export function recoverGames(): void {
         game.centerLng,
         fullGame.startedAt
       );
+
+      // Rehydrate in-memory out-of-zone state from latest persisted pings so
+      // grace countdowns continue correctly after a crash/restart.
+      const alivePlayers = getAlivePlayers(game.gameId);
+      for (const player of alivePlayers) {
+        const ping = getLatestLocationPing(game.gameId, player.address);
+        if (!ping) continue;
+        zoneTracker.processLocation(player.address, ping.lat, ping.lng, ping.timestamp);
+      }
+
       const tickInterval = setInterval(() => gameTick(game.gameId), 1000);
       activeGames.set(game.gameId, { zoneTracker, tickInterval });
+      void gameTick(game.gameId);
     }
   }
 
@@ -1588,7 +1623,9 @@ export function getGameStatus(gameId: number) {
     checkinEndsAt: game.subPhase === "checkin"
       ? game.expiryDeadline
       : null,
-    pregameEndsAt: null,
+    pregameEndsAt: game.subPhase === "pregame"
+      ? getPregameEndsAt(game.subPhaseStartedAt)
+      : null,
     playerCount: players.length,
     aliveCount: players.filter((p) => p.isAlive).length,
     checkedInCount: players.filter((p) => p.checkedIn).length,

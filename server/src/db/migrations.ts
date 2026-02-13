@@ -118,4 +118,10 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(9);
     log.info("Migrated to v9: added total_collected, player_count, max_duration, has_claimed; renamed bps_platform to bps_creator");
   }
+
+  if (currentVersion < 10 && currentVersion > 0) {
+    db.exec(`ALTER TABLE games ADD COLUMN sub_phase_started_at INTEGER`);
+    db.prepare("UPDATE schema_version SET version = ?").run(10);
+    log.info("Migrated to v10: added sub_phase_started_at column to games");
+  }
 }

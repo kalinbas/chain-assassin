@@ -102,6 +102,7 @@ export function insertGame(game: GameConfig & { phase?: number; totalCollected?:
 export function getGame(gameId: number): (GameConfig & {
   phase: GamePhase;
   subPhase: ActiveSubPhase | null;
+  subPhaseStartedAt: number | null;
   startedAt: number | null;
   endedAt: number | null;
   winner1: string | null;
@@ -141,6 +142,7 @@ export function getGame(gameId: number): (GameConfig & {
     playerCount: (row.player_count as number) ?? 0,
     phase: row.phase as GamePhase,
     subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
+    subPhaseStartedAt: row.sub_phase_started_at as number | null,
     startedAt: row.started_at as number | null,
     endedAt: row.ended_at as number | null,
     winner1: row.winner1 as string | null,
@@ -153,7 +155,16 @@ export function getGame(gameId: number): (GameConfig & {
 export function updateGamePhase(
   gameId: number,
   phase: GamePhase,
-  extra?: { startedAt?: number; endedAt?: number; subPhase?: ActiveSubPhase | null; winner1?: string; winner2?: string; winner3?: string; topKiller?: string }
+  extra?: {
+    startedAt?: number;
+    endedAt?: number;
+    subPhase?: ActiveSubPhase | null;
+    subPhaseStartedAt?: number | null;
+    winner1?: string;
+    winner2?: string;
+    winner3?: string;
+    topKiller?: string;
+  }
 ): void {
   let sql = "UPDATE games SET phase = ?";
   const params: unknown[] = [phase];
@@ -169,6 +180,10 @@ export function updateGamePhase(
   if (extra?.subPhase !== undefined) {
     sql += ", sub_phase = ?";
     params.push(extra.subPhase);
+  }
+  if (extra?.subPhaseStartedAt !== undefined) {
+    sql += ", sub_phase_started_at = ?";
+    params.push(extra.subPhaseStartedAt);
   }
   if (extra?.winner1 !== undefined) {
     sql += ", winner1 = ?";
@@ -193,10 +208,21 @@ export function updateGamePhase(
   getDb().prepare(sql).run(...params);
 }
 
-export function updateSubPhase(gameId: number, subPhase: ActiveSubPhase | null): void {
+export function updateSubPhase(
+  gameId: number,
+  subPhase: ActiveSubPhase | null,
+  subPhaseStartedAt?: number | null
+): void {
+  if (subPhaseStartedAt === undefined) {
+    getDb()
+      .prepare("UPDATE games SET sub_phase = ? WHERE game_id = ?")
+      .run(subPhase, gameId);
+    return;
+  }
+
   getDb()
-    .prepare("UPDATE games SET sub_phase = ? WHERE game_id = ?")
-    .run(subPhase, gameId);
+    .prepare("UPDATE games SET sub_phase = ?, sub_phase_started_at = ? WHERE game_id = ?")
+    .run(subPhase, subPhaseStartedAt, gameId);
 }
 
 export function getGamesInPhase(phase: GamePhase): GameConfig[] {
@@ -231,6 +257,7 @@ export function getGamesInPhase(phase: GamePhase): GameConfig[] {
 export function getAllGames(): Array<GameConfig & {
   phase: GamePhase;
   subPhase: ActiveSubPhase | null;
+  subPhaseStartedAt: number | null;
   startedAt: number | null;
   endedAt: number | null;
   winner1: string | null;
@@ -269,6 +296,7 @@ export function getAllGames(): Array<GameConfig & {
     playerCount: (row.player_count as number) ?? 0,
     phase: row.phase as GamePhase,
     subPhase: (row.sub_phase as ActiveSubPhase | null) ?? null,
+    subPhaseStartedAt: row.sub_phase_started_at as number | null,
     startedAt: row.started_at as number | null,
     endedAt: row.ended_at as number | null,
     winner1: row.winner1 as string | null,

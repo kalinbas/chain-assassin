@@ -342,7 +342,9 @@ export function gameDetail(req: Request, res: Response): void {
   const checkedInCount = players.filter((p) => p.checkedIn).length;
 
   const checkinEndsAt = game.subPhase === "checkin" ? game.expiryDeadline : null;
-  const pregameEndsAt = null;
+  const pregameEndsAt = game.subPhase === "pregame" && game.subPhaseStartedAt != null
+    ? game.subPhaseStartedAt + config.pregameDurationSeconds
+    : null;
 
   // Zone state: use initial radius from shrinks if game is active
   let zone = null;

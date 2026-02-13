@@ -75,7 +75,7 @@ forge script script/Deploy.s.sol \
 
 | Network | Address | Explorer |
 |---------|---------|----------|
-| Base Sepolia | `0xe9cFc825a66780651A7844f470E70DfdbabC9636` | [BaseScan](https://sepolia.basescan.org/address/0xe9cFc825a66780651A7844f470E70DfdbabC9636) |
+| Base Sepolia | `0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69` | [BaseScan](https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69) |
 
 ## Dependencies
 

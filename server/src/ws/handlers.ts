@@ -5,6 +5,7 @@ import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../gam
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
+import { config } from "../config.js";
 
 const log = createLogger("wsHandlers");
 
@@ -74,6 +75,9 @@ function handleAuth(
   const hunterAddress = findHunterOf(gameId, address.toLowerCase());
   const hunterPlayer = hunterAddress ? getPlayer(gameId, hunterAddress) : null;
   const game = getGame(gameId);
+  const pregameEndsAt = game?.subPhase === "pregame" && game.subPhaseStartedAt != null
+    ? game.subPhaseStartedAt + config.pregameDurationSeconds
+    : null;
 
   ws.send(
     JSON.stringify({
@@ -96,7 +100,7 @@ function handleAuth(
       checkinEndsAt: game?.subPhase === "checkin"
         ? game.expiryDeadline
         : null,
-      pregameEndsAt: null,
+      pregameEndsAt,
     })
   );
 

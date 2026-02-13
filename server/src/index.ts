@@ -46,15 +46,16 @@ async function main(): Promise<void> {
     }
   }
 
-  // 6. Recover games from DB (active + registration-phase)
-  recoverGames();
-
-  // 7. Backfill missed blockchain events (since last processed block)
+  // 6. Backfill missed blockchain events (since last processed block)
   try {
     await backfillEvents();
   } catch (err) {
     log.error({ error: (err as Error).message }, "Event backfill failed (continuing anyway)");
   }
+
+  // 7. Recover games from DB (active + registration-phase) after backfill,
+  // so in-memory timers/loops start from the freshest on-chain-synced state.
+  recoverGames();
 
   // 8. Start live event listener
   try {
