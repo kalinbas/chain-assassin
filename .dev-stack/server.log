@@ -1,0 +1,336 @@
+[21:48:17] [32mINFO[39m: [36mChain Assassin Game Server starting...[39m
+    component: "main"
+[21:48:17] [32mINFO[39m: [36mRunning database migrations[39m
+    component: "migrations"
+    currentVersion: 0
+    targetVersion: 9
+[21:48:17] [32mINFO[39m: [36mDatabase schema created[39m
+    component: "migrations"
+    version: 9
+[21:48:17] [32mINFO[39m: [36mDatabase initialized[39m
+    component: "db"
+    path: "/Users/kalinbas/Code/cryptohunt/server/data/dev-stack.db"
+[21:48:17] [32mINFO[39m: [36mWebSocket server initialized on /ws[39m
+    component: "ws"
+[21:48:17] [32mINFO[39m: [36mGames recovered[39m
+    component: "gameManager"
+    recoveredActive: 0
+    recoveredRegistration: 0
+[21:48:17] [32mINFO[39m: [36mHTTP provider initialized[39m
+    component: "blockchain"
+    rpcUrl: "http://127.0.0.1:8545"
+    chainId: 31337
+[21:48:17] [32mINFO[39m: [36mRead contract initialized[39m
+    component: "contract"
+    address: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+[21:48:17] [32mINFO[39m: [36mNo GameCreated event found for startGameId, saving current block[39m
+    component: "listener"
+    startGameId: 1
+[21:48:17] [32mINFO[39m: [36mWebSocket provider initialized[39m
+    component: "blockchain"
+    rpcWsUrl: "ws://127.0.0.1:8545"
+[21:48:17] [32mINFO[39m: [36mWebSocket contract initialized for events[39m
+    component: "contract"
+[21:48:17] [32mINFO[39m: [36mContract event listeners started[39m
+    component: "listener"
+[21:48:17] [32mINFO[39m: [36mServer listening on http://0.0.0.0:3000[39m
+    component: "main"
+    host: "0.0.0.0"
+    port: 3000
+[21:48:17] [32mINFO[39m: [36mWebSocket available at ws://0.0.0.0:3000/ws[39m
+    component: "main"
+[21:48:17] [32mINFO[39m: [36mHealth check: http://0.0.0.0:3000/health[39m
+    component: "main"
+[21:48:18] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 1
+    title: "Harbor Showdown (Archive)"
+[21:48:18] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 1
+    delaySec: 302
+[21:48:18] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 1
+    delaySec: 422
+[21:48:18] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 1
+    title: "Harbor Showdown (Archive)"
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 1
+    playerNumber: 1
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 1
+    player: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    playerCount: 1
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 1
+    playerNumber: 2
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 1
+    player: "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
+    playerCount: 2
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 1
+    playerNumber: 3
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 1
+    player: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+    playerCount: 3
+[21:48:18] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 2
+    title: "Parkline Clash (Archive)"
+[21:48:18] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 2
+    delaySec: 332
+[21:48:18] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 2
+    delaySec: 482
+[21:48:18] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 2
+    title: "Parkline Clash (Archive)"
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 2
+    playerNumber: 1
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 2
+    player: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+    playerCount: 1
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 2
+    playerNumber: 2
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 2
+    player: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
+    playerCount: 2
+[21:48:18] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 2
+    playerNumber: 3
+[21:48:18] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 2
+    player: "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"
+    playerCount: 3
+[21:48:19] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 3
+    title: "Bridge Blitz (Archive)"
+[21:48:19] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 3
+    delaySec: 361
+[21:48:19] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 3
+    delaySec: 541
+[21:48:19] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 3
+    title: "Bridge Blitz (Archive)"
+[21:48:19] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 3
+    playerNumber: 1
+[21:48:19] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 3
+    player: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    playerCount: 1
+[21:48:19] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 3
+    playerNumber: 2
+[21:48:19] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 3
+    player: "0x976ea74026e726554db657fa54763abd0c3a0aa9"
+    playerCount: 2
+[21:48:19] [32mINFO[39m: [36mGameStarted event[39m
+    component: "listener"
+    gameId: 1
+    playerCount: 3
+[21:48:19] [32mINFO[39m: [36mAuto-seed: no nearby players found, will retry in 60s[39m
+    component: "gameManager"
+    gameId: 1
+    remaining: 1
+[21:48:19] [32mINFO[39m: [36mAuto-seed loop started[39m
+    component: "gameManager"
+    gameId: 1
+    seedCount: 1
+[21:48:19] [32mINFO[39m: [36mCheck-in phase started[39m
+    component: "gameManager"
+    gameId: 1
+    requiredCheckedIn: 3
+    checkinEndsAt: 1770956718
+[21:48:19] [32mINFO[39m: [36mGameEnded event[39m
+    component: "listener"
+    gameId: 1
+    winner1: 1
+[21:48:19] [32mINFO[39m: [36mActive game cleaned up[39m
+    component: "gameManager"
+    gameId: 1
+[21:48:19] [32mINFO[39m: [36mGame ended (chain confirmed)[39m
+    component: "gameManager"
+    gameId: 1
+    winner1: 1
+    winner2: 2
+    winner3: 3
+    topKiller: 1
+[21:48:19] [32mINFO[39m: [36mGameStarted event[39m
+    component: "listener"
+    gameId: 2
+    playerCount: 3
+[21:48:19] [32mINFO[39m: [36mAuto-seed: no nearby players found, will retry in 60s[39m
+    component: "gameManager"
+    gameId: 2
+    remaining: 1
+[21:48:19] [32mINFO[39m: [36mAuto-seed loop started[39m
+    component: "gameManager"
+    gameId: 2
+    seedCount: 1
+[21:48:19] [32mINFO[39m: [36mCheck-in phase started[39m
+    component: "gameManager"
+    gameId: 2
+    requiredCheckedIn: 3
+    checkinEndsAt: 1770957378
+[21:48:20] [32mINFO[39m: [36mGameEnded event[39m
+    component: "listener"
+    gameId: 2
+    winner1: 1
+[21:48:20] [32mINFO[39m: [36mActive game cleaned up[39m
+    component: "gameManager"
+    gameId: 2
+[21:48:20] [32mINFO[39m: [36mGame ended (chain confirmed)[39m
+    component: "gameManager"
+    gameId: 2
+    winner1: 1
+    winner2: 2
+    winner3: 3
+    topKiller: 1
+[21:48:20] [32mINFO[39m: [36mGameCancelled event[39m
+    component: "listener"
+    gameId: 3
+[21:48:20] [32mINFO[39m: [36mActive game cleaned up[39m
+    component: "gameManager"
+    gameId: 3
+[21:48:20] [32mINFO[39m: [36mGame cancelled[39m
+    component: "gameManager"
+    gameId: 3
+[21:48:20] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 4
+    title: "Downtown Warmup"
+[21:48:20] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 4
+    delaySec: 2371
+[21:48:20] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 4
+    delaySec: 4171
+[21:48:20] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 4
+    title: "Downtown Warmup"
+[21:48:20] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 4
+    playerNumber: 1
+[21:48:20] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 4
+    player: "0x70997970c51812dc3a010c7d01b50e0d17dc79c8"
+    playerCount: 1
+[21:48:20] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 4
+    playerNumber: 2
+[21:48:20] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 4
+    player: "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc"
+    playerCount: 2
+[21:48:20] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 4
+    playerNumber: 3
+[21:48:20] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 4
+    player: "0x90f79bf6eb2c4f870365e785982e1f101e93b906"
+    playerCount: 3
+[21:48:20] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 5
+    title: "Riverside Rush"
+[21:48:20] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 5
+    delaySec: 3271
+[21:48:20] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 5
+    delaySec: 5071
+[21:48:20] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 5
+    title: "Riverside Rush"
+[21:48:21] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 5
+    playerNumber: 1
+[21:48:21] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 5
+    player: "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65"
+    playerCount: 1
+[21:48:21] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 5
+    playerNumber: 2
+[21:48:21] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 5
+    player: "0x9965507d1a55bcc2695c58ba16fb37d819b0a4dc"
+    playerCount: 2
+[21:48:21] [32mINFO[39m: [36mGameCreated event[39m
+    component: "listener"
+    gameId: 6
+    title: "Night Ops"
+[21:48:21] [32mINFO[39m: [36mDeadline check scheduled[39m
+    component: "gameManager"
+    gameId: 6
+    delaySec: 4170
+[21:48:21] [32mINFO[39m: [36mGame date check scheduled[39m
+    component: "gameManager"
+    gameId: 6
+    delaySec: 5970
+[21:48:21] [32mINFO[39m: [36mGame tracked[39m
+    component: "gameManager"
+    gameId: 6
+    title: "Night Ops"
+[21:48:21] [32mINFO[39m: [36mPlayerRegistered event[39m
+    component: "listener"
+    gameId: 6
+    playerNumber: 1
+[21:48:21] [32mINFO[39m: [36mPlayer registered[39m
+    component: "gameManager"
+    gameId: 6
+    player: "0x976ea74026e726554db657fa54763abd0c3a0aa9"
+    playerCount: 1

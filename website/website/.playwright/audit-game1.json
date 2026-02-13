@@ -1,0 +1,127 @@
+{
+  "targetUrl": "http://127.0.0.1:5173/game/1",
+  "startedAt": "2026-02-13T03:33:53.623Z",
+  "finalUrl": "http://127.0.0.1:5173/game/1",
+  "title": "Downtown Warmup — Chain Assassin",
+  "navigation": {
+    "ok": true,
+    "status": 200,
+    "statusText": "OK",
+    "error": null
+  },
+  "console": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://127.0.0.1:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=28cbe039",
+        "lineNumber": 20102,
+        "columnNumber": 53
+      }
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://127.0.0.1:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    },
+    {
+      "type": "warning",
+      "text": "The resource http://127.0.0.1:5173/media/banner.png was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.",
+      "location": {
+        "url": "http://127.0.0.1:5173/game/1",
+        "lineNumber": 0,
+        "columnNumber": 0
+      }
+    }
+  ],
+  "pageErrors": [],
+  "requestFailures": [
+    {
+      "method": "GET",
+      "url": "https://a.basemaps.cartocdn.com/dark_all/14/2620/6332.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://d.basemaps.cartocdn.com/dark_all/14/2620/6331.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://d.basemaps.cartocdn.com/dark_all/14/2619/6332.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://b.basemaps.cartocdn.com/dark_all/14/2621/6332.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://b.basemaps.cartocdn.com/dark_all/14/2620/6333.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://c.basemaps.cartocdn.com/dark_all/14/2619/6331.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://a.basemaps.cartocdn.com/dark_all/14/2621/6331.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://a.basemaps.cartocdn.com/dark_all/14/2619/6333.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    },
+    {
+      "method": "GET",
+      "url": "https://c.basemaps.cartocdn.com/dark_all/14/2621/6333.png",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "image"
+    }
+  ],
+  "httpErrors": [],
+  "finishedAt": "2026-02-13T03:34:01.085Z"
+}

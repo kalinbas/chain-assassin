@@ -30,14 +30,50 @@ const abiPath = resolve(__dirname, "../abi/ChainAssassin.json");
 const abi = JSON.parse(readFileSync(abiPath, "utf-8")).abi;
 
 const provider = new ethers.JsonRpcProvider(rpcUrl);
-const operator = new ethers.NonceManager(new ethers.Wallet(operatorKey, provider));
+const operator = new ethers.Wallet(operatorKey, provider);
 const contract = new ethers.Contract(contractAddress, abi, operator);
-const playerContracts = ANVIL_KEYS.slice(1).map((k) =>
-  new ethers.Contract(contractAddress, abi, new ethers.Wallet(k, provider))
-);
+const playerWallets = ANVIL_KEYS.slice(1).map((k) => new ethers.Wallet(k, provider));
+const playerContracts = playerWallets.map((wallet) => new ethers.Contract(contractAddress, abi, wallet));
 
 function contractCoord(deg) {
   return Math.round(deg * 1_000_000);
+}
+
+async function advanceToTimestamp(targetTs) {
+  const latest = await provider.getBlock("latest");
+  const currentTs = latest?.timestamp ?? Math.floor(Date.now() / 1000);
+  if (targetTs <= currentTs) {
+    return currentTs;
+  }
+
+  await provider.send("evm_increaseTime", [targetTs - currentTs]);
+  await provider.send("evm_mine", []);
+  return targetTs;
+}
+
+function isNonceRace(err) {
+  const message = String(err?.message || "");
+  return err?.code === "NONCE_EXPIRED" || message.includes("nonce too low");
+}
+
+async function sendWalletTx(wallet, send) {
+  for (let attempt = 0; attempt < 4; attempt++) {
+    const nonce = await provider.getTransactionCount(wallet.address, "pending");
+    try {
+      return await send(nonce);
+    } catch (err) {
+      if (isNonceRace(err) && attempt < 3) {
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error("Unable to send wallet transaction after nonce retries");
+}
+
+async function sendOperatorTx(send) {
+  return sendWalletTx(operator, send);
 }
 
 async function createGame(sample, now) {
@@ -66,7 +102,7 @@ async function createGame(sample, now) {
     { atSecond: 1200, radiusMeters: 300 },
   ];
 
-  const tx = await contract.createGame(params, shrinks);
+  const tx = await sendOperatorTx((nonce) => contract.createGame(params, shrinks, { nonce }));
   const receipt = await tx.wait();
   const iface = new ethers.Interface(abi);
 
@@ -93,16 +129,99 @@ async function createGame(sample, now) {
 async function registerPlayers(gameId, entryFee, playerIndexes) {
   for (const idx of playerIndexes) {
     const p = playerContracts[idx];
-    const tx = await p.register(gameId, { value: entryFee });
+    const wallet = playerWallets[idx];
+    const tx = await sendWalletTx(wallet, (nonce) => p.register(gameId, { value: entryFee, nonce }));
     await tx.wait();
+  }
+}
+
+async function createGames(samples, now) {
+  const created = [];
+  for (const sample of samples) {
+    const { gameId, params } = await createGame(sample, now);
+    await registerPlayers(gameId, params.entryFee, sample.players);
+    created.push({
+      gameId,
+      title: sample.title,
+      expectedPhase: sample.outcome ?? "registration",
+      minPlayers: sample.minPlayers,
+      registeredPlayers: sample.players.length,
+      registrationDeadline: params.registrationDeadline,
+      gameDate: params.gameDate,
+    });
+  }
+  return created;
+}
+
+async function finalizeHistoricalGames(games) {
+  if (games.length === 0) return;
+
+  const targetTs = Math.max(...games.map((g) => g.gameDate)) + 30;
+  await advanceToTimestamp(targetTs);
+
+  for (const game of games) {
+    if (game.expectedPhase === "cancelled") {
+      const tx = await sendOperatorTx((nonce) => contract.triggerCancellation(game.gameId, { nonce }));
+      await tx.wait();
+      continue;
+    }
+
+    const startTx = await sendOperatorTx((nonce) => contract.startGame(game.gameId, { nonce }));
+    await startTx.wait();
+
+    // Winners are based on registration order for deterministic local fixtures.
+    const endTx = await sendOperatorTx((nonce) => contract.endGame(game.gameId, 1, 2, 3, 1, { nonce }));
+    await endTx.wait();
   }
 }
 
 async function main() {
   const latest = await provider.getBlock("latest");
-  const now = latest?.timestamp ?? Math.floor(Date.now() / 1000);
+  const now = Math.max(latest?.timestamp ?? 0, Math.floor(Date.now() / 1000));
 
-  const samples = [
+  const historicalSamples = [
+    {
+      title: "Harbor Showdown (Archive)",
+      centerLat: 40.7060,
+      centerLng: -74.0086,
+      entryFee: ethers.parseEther("0.01"),
+      minPlayers: 3,
+      maxPlayers: 8,
+      registrationDelaySec: 300,
+      gameDateDelaySec: 420,
+      maxDurationSec: 1800,
+      players: [0, 1, 2],
+      outcome: "ended",
+    },
+    {
+      title: "Parkline Clash (Archive)",
+      centerLat: 34.0096,
+      centerLng: -118.4976,
+      entryFee: ethers.parseEther("0.015"),
+      minPlayers: 3,
+      maxPlayers: 10,
+      registrationDelaySec: 330,
+      gameDateDelaySec: 480,
+      maxDurationSec: 2400,
+      players: [2, 3, 4],
+      outcome: "ended",
+    },
+    {
+      title: "Bridge Blitz (Archive)",
+      centerLat: 51.5074,
+      centerLng: -0.1278,
+      entryFee: ethers.parseEther("0.02"),
+      minPlayers: 4,
+      maxPlayers: 12,
+      registrationDelaySec: 360,
+      gameDateDelaySec: 540,
+      maxDurationSec: 2400,
+      players: [0, 5],
+      outcome: "cancelled",
+    },
+  ];
+
+  const upcomingSamples = [
     {
       title: "Downtown Warmup",
       centerLat: 37.7749,
@@ -141,21 +260,14 @@ async function main() {
     },
   ];
 
-  const created = [];
-  for (const sample of samples) {
-    const { gameId, params } = await createGame(sample, now);
-    await registerPlayers(gameId, params.entryFee, sample.players);
-    created.push({
-      gameId,
-      title: sample.title,
-      minPlayers: sample.minPlayers,
-      registeredPlayers: sample.players.length,
-      registrationDeadline: params.registrationDeadline,
-      gameDate: params.gameDate,
-    });
-  }
+  const historicalGames = await createGames(historicalSamples, now);
+  await finalizeHistoricalGames(historicalGames);
 
-  console.log(JSON.stringify({ seededGames: created }, null, 2));
+  const refreshed = await provider.getBlock("latest");
+  const upcomingNow = refreshed?.timestamp ?? now;
+  const upcomingGames = await createGames(upcomingSamples, upcomingNow);
+
+  console.log(JSON.stringify({ historicalGames, upcomingGames }, null, 2));
 }
 
 main().catch((err) => {

@@ -1,0 +1,55 @@
+{
+  "targetUrl": "http://127.0.0.1:5173",
+  "startedAt": "2026-02-13T03:34:48.770Z",
+  "finalUrl": "http://127.0.0.1:5173/",
+  "title": "Chain Assassin — Hunt or Be Hunted. On-Chain.",
+  "navigation": {
+    "ok": true,
+    "status": 200,
+    "statusText": "OK",
+    "error": null
+  },
+  "console": [
+    {
+      "type": "debug",
+      "text": "[vite] connecting...",
+      "location": {
+        "url": "http://127.0.0.1:5173/@vite/client",
+        "lineNumber": 788,
+        "columnNumber": 8
+      }
+    },
+    {
+      "type": "info",
+      "text": "%cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold",
+      "location": {
+        "url": "http://127.0.0.1:5173/node_modules/.vite/deps/react-dom_client.js?v=28cbe039",
+        "lineNumber": 20102,
+        "columnNumber": 53
+      }
+    },
+    {
+      "type": "debug",
+      "text": "[vite] connected.",
+      "location": {
+        "url": "http://127.0.0.1:5173/@vite/client",
+        "lineNumber": 911,
+        "columnNumber": 14
+      }
+    }
+  ],
+  "pageErrors": [],
+  "requestFailures": [],
+  "abortedRequests": [
+    {
+      "method": "GET",
+      "url": "http://127.0.0.1:5173/media/demo.mp4",
+      "failure": {
+        "errorText": "net::ERR_ABORTED"
+      },
+      "resourceType": "media"
+    }
+  ],
+  "httpErrors": [],
+  "finishedAt": "2026-02-13T03:34:56.074Z"
+}
