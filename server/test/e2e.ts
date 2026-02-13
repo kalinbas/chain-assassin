@@ -2,33 +2,39 @@
  * End-to-End Test: Full multi-player game simulation on local Anvil chain.
  *
  * Prerequisites:
- *   1. Anvil running: `anvil` (default port 8545)
- *   2. Contract deployed: see test/run-e2e.sh
- *   3. Server running: pointed at Anvil's RPC
+ *   Run via: npm run test:e2e  (uses test/run-e2e.sh)
+ *   Or manually:
+ *     1. Anvil running: `anvil` (default port 8545)
+ *     2. Contract deployed: forge script script/Deploy.s.sol ...
+ *     3. Server running with test env vars (see run-e2e.sh)
  *
  * Scenarios tested:
  *   A) Full 6-player game lifecycle
  *      1. Create game on-chain (as operator)
  *      2. Register 6 players
- *      3. Check-in flow (success + rejection cases)
- *      4. Warp time → server auto-starts
- *      5. Connect all players via WebSocket
- *      6. Send location pings (all players)
- *      7. Kill rejection scenarios (wrong target, too far, no BLE, bad QR)
- *      8. Multiple hunters make kills, following target chain
- *      9. Verify leaderboard during gameplay
- *     10. Final kill ends game
- *     11. Verify game end on-chain
- *     12. Verify WebSocket messages (all types)
- *     13. On-chain prize claims (winner + double-claim + non-winner revert)
- *     14. Verify full database state (all 8 tables)
+ *      3. Send location pings (for auto-seed)
+ *      4. Warp time → server auto-starts game
+ *      5. Auto-seed check-in + viral QR check-in flow (success + rejection cases)
+ *      6. Connect all players via WebSocket
+ *      7. Wait for checkin → pregame → game phase transitions
+ *      8. Kill rejection scenarios (wrong target, too far, no BLE, bad QR)
+ *      9. Multiple hunters make kills, following target chain
+ *     10. Verify leaderboard during gameplay
+ *     11. Final kill ends game
+ *     12. Verify game end on-chain
+ *     13. Verify ALL WebSocket message types:
+ *         auth:success, game:pregame_started, game:started, game:started_broadcast,
+ *         kill:recorded, player:eliminated, target:assigned, hunter:updated,
+ *         leaderboard:update, game:ended
+ *     14. On-chain prize claims (winner + double-claim + non-winner revert)
+ *     15. Verify full database state (all 8 tables)
  *
  *   B) Game cancellation + refund flow
  *      1. Create game with high minPlayers
  *      2. Register only 2 players (insufficient)
  *      3. Warp time past deadline → trigger cancellation
  *      4. Claim refunds (success + double-refund revert + non-registered revert)
- *      5. Verify on-chain hasClaimed flags
+ *      5. Verify on-chain claimed flags via getPlayerInfo
  *
  *   C) Platform fee withdrawal
  *      1. Verify fees accrued from game A
@@ -310,7 +316,8 @@ async function scenarioA_createGame(): Promise<number> {
 
   const now = (await provider.getBlock("latest"))!.timestamp;
   const regDeadline = now + 60;
-  const expiryDeadline = now + 3600;
+  const gameDate = now + 120;
+  const maxDuration = 3600;
 
   const params = {
     title: "E2E Multi-Player Game",
@@ -318,13 +325,16 @@ async function scenarioA_createGame(): Promise<number> {
     minPlayers: 3,
     maxPlayers: 10,
     registrationDeadline: regDeadline,
-    expiryDeadline: expiryDeadline,
+    gameDate: gameDate,
+    maxDuration: maxDuration,
     centerLat: 19435244, // Mexico City
     centerLng: -99128056,
-    bps1st: 4000,
+    meetingLat: 19435244,
+    meetingLng: -99128056,
+    bps1st: 3500,    // sum + platformFeeBps(1000) = 10000
     bps2nd: 1500,
     bps3rd: 1000,
-    bpsKills: 2500,
+    bpsKills: 2000,
     bpsCreator: 1000,
   };
 
@@ -378,21 +388,28 @@ async function scenarioA_registerPlayers(gameId: number): Promise<void> {
 
 async function scenarioA_checkin(gameId: number): Promise<void> {
   log("A3", "Testing viral check-in flow...");
-  // With 6 players at 5%, gpsOnlySlots = ceil(0.3) = 1
-  // Player1 = GPS-only seed, rest need QR of a checked-in player
+  // Auto-seed mechanism: server auto-checks-in nearby players who have sent location pings.
+  // With 6 players at 5%, seedCount = max(1, ceil(0.3)) = 1
+  // Location pings were sent BEFORE game start so tryAutoSeed() seeds Player1 immediately.
 
-  // 1. Player1 checks in GPS-only (seed slot)
-  const p1Coords = playerCoords(0);
-  const p1Res = await apiCall(
-    "POST",
-    `/api/games/${gameId}/checkin`,
-    playerWallets[0],
-    { lat: p1Coords.lat, lng: p1Coords.lng }
-  );
-  const p1Data = await p1Res.json();
-  assert(p1Res.ok && p1Data.success, "Player1 checked in GPS-only (seed)");
+  // Wait for auto-seed to check in Player1 (tryAutoSeed runs on game start)
+  log("A3", "Waiting for auto-seed to check in a seed player...");
+  let seedPlayerIdx = -1;
+  for (let i = 0; i < 15; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (statusRes.ok) {
+      const statusData = await statusRes.json();
+      if (statusData.checkedInCount >= 1) {
+        seedPlayerIdx = 0; // Player1 is closest (playerCoords(0) is at zone center)
+        success(`Auto-seed checked in ${statusData.checkedInCount} player(s)`);
+        break;
+      }
+    }
+  }
+  assert(seedPlayerIdx >= 0, "Auto-seed checked in at least 1 player");
 
-  // 2. Player2 tries GPS-only (no QR) — should be rejected
+  // 1. Player2 tries without QR — should be rejected (only seeds bypass QR)
   const p2Coords = playerCoords(1);
   const p2NoQrRes = await apiCall(
     "POST",
@@ -401,9 +418,9 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
     { lat: p2Coords.lat, lng: p2Coords.lng }
   );
   const p2NoQrData = await p2NoQrRes.json();
-  assert(!p2NoQrRes.ok || !p2NoQrData.success, "Player2 rejected without QR (seed slots full)");
+  assert(!p2NoQrRes.ok || !p2NoQrData.success, "Player2 rejected without QR (must scan checked-in player)");
 
-  // 3. Player2 scans own QR — should be rejected
+  // 2. Player2 scans own QR — should be rejected
   const p2OwnQr = encodeQr(gameId, 2); // player 2's own QR
   const p2OwnRes = await apiCall(
     "POST",
@@ -414,7 +431,7 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const p2OwnData = await p2OwnRes.json();
   assert(!p2OwnRes.ok || !p2OwnData.success, "Player2 rejected scanning own QR");
 
-  // 4. Player2 scans not-yet-checked-in Player5 — should be rejected
+  // 3. Player2 scans not-yet-checked-in Player5 — should be rejected
   const p5Qr = encodeQr(gameId, 5); // player 5 hasn't checked in
   const p2BadRes = await apiCall(
     "POST",
@@ -425,8 +442,8 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const p2BadData = await p2BadRes.json();
   assert(!p2BadRes.ok || !p2BadData.success, "Rejected: scanned player not checked in");
 
-  // 5. Player2 scans checked-in Player1 — success
-  const p1Qr = encodeQr(gameId, 1); // player 1 is checked in
+  // 4. Player2 scans auto-seeded Player1 — success (viral check-in)
+  const p1Qr = encodeQr(gameId, 1); // player 1 was auto-seeded
   const p2Res = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
@@ -434,9 +451,12 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
     { lat: p2Coords.lat, lng: p2Coords.lng, qrPayload: p1Qr }
   );
   const p2Data = await p2Res.json();
-  assert(p2Res.ok && p2Data.success, "Player2 checked in via Player1's QR");
+  if (!p2Res.ok || !p2Data.success) {
+    log("A3", `Player2 checkin failed: ${p2Res.status} ${JSON.stringify(p2Data)}`);
+  }
+  assert(p2Res.ok && p2Data.success, "Player2 checked in via auto-seeded Player1's QR");
 
-  // 6. Player3 scans Player2 (viral chain) — success
+  // 5. Player3 scans Player2 (viral chain) — success
   const p2Qr = encodeQr(gameId, 2);
   const p3Coords = playerCoords(2);
   const p3Res = await apiCall(
@@ -448,7 +468,7 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const p3Data = await p3Res.json();
   assert(p3Res.ok && p3Data.success, "Player3 checked in via Player2's QR (viral chain)");
 
-  // 7. Player4 from too far away (with valid QR) — rejected
+  // 6. Player4 from too far away (with valid QR) — rejected
   const farRes = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
@@ -458,21 +478,40 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const farData = await farRes.json();
   assert(!farRes.ok || !farData.success, "Check-in from too far away rejected");
 
-  // 8. Player1 double check-in — rejected
+  // 7. Player1 double check-in — rejected
   const dupeRes = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
     playerWallets[0],
-    { lat: 19.4352, lng: -99.1281 }
+    { lat: 19.4352, lng: -99.1281, qrPayload: p1Qr }
   );
   const dupeData = await dupeRes.json();
   assert(!dupeRes.ok || !dupeData.success, "Double check-in rejected");
+
+  // 8. Check in remaining players (4, 5, 6) so all 6 are checked in for gameplay
+  for (let i = 3; i < NUM_PLAYERS; i++) {
+    const coords = playerCoords(i);
+    const res = await apiCall(
+      "POST",
+      `/api/games/${gameId}/checkin`,
+      playerWallets[i],
+      { lat: coords.lat, lng: coords.lng, qrPayload: p1Qr }
+    );
+    const data = await res.json();
+    assert(res.ok && data.success, `Player${i + 1} checked in via Player1's QR`);
+  }
+
+  // Verify all players are checked in
+  const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+  const statusData = await statusRes.json();
+  assert(statusData.checkedInCount === NUM_PLAYERS, `All ${NUM_PLAYERS} players checked in`);
 }
 
 async function scenarioA_waitForServerSync(gameId: number): Promise<void> {
   log("A4", "Waiting for server to sync events...");
 
   for (let i = 0; i < 20; i++) {
+    await provider.send("evm_mine", []);
     await sleep(1000);
     try {
       const res = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
@@ -522,6 +561,46 @@ async function scenarioA_warpTimeAndAutoStart(gameId: number): Promise<void> {
   }
 }
 
+/**
+ * Connect a spectator via WebSocket (no auth required).
+ */
+function connectSpectatorWs(
+  gameId: number
+): Promise<{ ws: WebSocket; messages: Record<string, unknown>[] }> {
+  return new Promise((resolve, reject) => {
+    const ws = new WebSocket(WS_URL);
+    const messages: Record<string, unknown>[] = [];
+
+    ws.on("error", (err) => reject(err));
+
+    ws.on("open", () => {
+      ws.send(JSON.stringify({ type: "spectate", gameId }));
+    });
+
+    ws.on("message", (data) => {
+      const msg = JSON.parse(data.toString());
+      messages.push(msg);
+
+      if (msg.type === "spectate:init") {
+        resolve({ ws, messages });
+      } else if (msg.type === "error") {
+        reject(new Error(`Spectator error: ${msg.message}`));
+      }
+    });
+
+    setTimeout(() => reject(new Error("Spectator connect timeout")), 5000);
+  });
+}
+
+async function scenarioA_connectSpectator(
+  gameId: number
+): Promise<{ ws: WebSocket; messages: Record<string, unknown>[] }> {
+  log("A6s", "Connecting spectator via WebSocket...");
+  const conn = await connectSpectatorWs(gameId);
+  success("Spectator WebSocket connected & received spectate:init");
+  return conn;
+}
+
 async function scenarioA_connectWebSockets(
   gameId: number
 ): Promise<{ ws: WebSocket; messages: Record<string, unknown>[] }[]> {
@@ -556,17 +635,49 @@ async function scenarioA_sendLocationPings(gameId: number): Promise<void> {
   }
 }
 
+async function scenarioA_waitForGamePhase(
+  connections: { ws: WebSocket; messages: Record<string, unknown>[] }[]
+): Promise<void> {
+  log("A8a", "Waiting for checkin → pregame → game transitions...");
+
+  // Wait for game:started message on Player1's connection (sent when pregame completes)
+  try {
+    await waitForWsMessage(connections[0].messages, "game:started", 30000);
+    success("Received game:started — game is now in active phase");
+  } catch {
+    // Try polling game status instead
+    for (let i = 0; i < 30; i++) {
+      await sleep(1000);
+      const res = await fetch(`${SERVER_URL}/api/games/${connections[0].messages[0]?.gameId || 1}/status`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.subPhase === "game") {
+          success("Game transitioned to active phase (via polling)");
+          return;
+        }
+        log("A8a", `Sub-phase: ${data.subPhase}, waiting...`);
+      }
+    }
+    fail("Game did not transition to active phase within 30s");
+  }
+}
+
 async function scenarioA_testKillRejections(
   gameId: number,
   connections: { ws: WebSocket; messages: Record<string, unknown>[] }[]
 ): Promise<void> {
   log("A8", "Testing kill rejection scenarios...");
 
-  // Get Player1's actual target from auth message
-  const p1Auth = connections[0].messages.find(
-    (m) => m.type === "auth:success"
+  // Get Player1's actual target from game:started message (sent after pregame completes)
+  const p1GameStarted = connections[0].messages.find(
+    (m) => m.type === "game:started"
   ) as any;
-  const p1Target = (p1Auth?.target?.address as string).toLowerCase();
+  if (!p1GameStarted?.target?.playerNumber) {
+    fail("Player1 did not receive target assignment in game:started message");
+  }
+  const p1TargetNumber = p1GameStarted.target.playerNumber as number;
+  const p1TargetIdx = p1TargetNumber - 1; // 0-based
+  const p1Target = playerWallets[p1TargetIdx].address.toLowerCase();
 
   // Find a NON-target player (someone Player1 is NOT hunting)
   const wrongTarget = playerWallets.find(
@@ -598,11 +709,6 @@ async function scenarioA_testKillRejections(
   log("A8", `Rejection reason: ${wrongData.error}`);
 
   // 2. Too far from target — should be rejected
-  // Find the target's player number
-  const p1TargetIdx = playerWallets.findIndex(
-    (w) => w.address.toLowerCase() === p1Target
-  );
-  const p1TargetNumber = p1TargetIdx + 1;
   const correctQr = encodeQr(gameId, p1TargetNumber);
   const farRes = await apiCall(
     "POST",
@@ -694,16 +800,18 @@ async function scenarioA_multiPlayerKills(
   const kills: { hunterIdx: number; targetIdx: number }[] = [];
   const alive = new Set(playerWallets.map((w) => w.address.toLowerCase()));
 
-  // Build initial target map from auth messages
+  // Build initial target map from game:started messages (target assignments)
   const targetMap = new Map<string, string>(); // hunter → target
   for (let i = 0; i < connections.length; i++) {
-    const authMsg = connections[i].messages.find(
-      (m) => m.type === "auth:success"
+    const gameStartedMsg = connections[i].messages.find(
+      (m) => m.type === "game:started"
     ) as any;
-    if (authMsg?.target?.address) {
+    if (gameStartedMsg?.target?.playerNumber) {
+      const targetPlayerNumber = gameStartedMsg.target.playerNumber as number;
+      const targetAddr = playerWallets[targetPlayerNumber - 1].address.toLowerCase();
       targetMap.set(
         playerWallets[i].address.toLowerCase(),
-        authMsg.target.address.toLowerCase()
+        targetAddr
       );
     }
   }
@@ -938,29 +1046,80 @@ async function refreshLocation(
 }
 
 async function scenarioA_verifyWsMessages(
-  connections: { ws: WebSocket; messages: Record<string, unknown>[] }[]
+  connections: { ws: WebSocket; messages: Record<string, unknown>[] }[],
+  totalKills: number
 ): Promise<void> {
   log("A10", "Verifying WebSocket messages...");
 
-  // Check all players received auth:success
+  // Log Player1's full message list for debugging
+  const p1Msgs = connections[0].messages;
+  const p1Types = p1Msgs.map((m) => m.type as string);
+  log("A10", `Player1 received ${p1Msgs.length} messages: ${p1Types.join(", ")}`);
+
+  // ── auth:success ─────────────────────────────────────────────
   for (let i = 0; i < connections.length; i++) {
-    const msgs = connections[i].messages;
-    const types = msgs.map((m) => m.type as string);
-    assert(types.includes("auth:success"), `Player${i + 1} received auth:success`);
+    const msg = connections[i].messages.find((m) => m.type === "auth:success") as any;
+    assert(!!msg, `Player${i + 1} received auth:success`);
+    assert(typeof msg.playerNumber === "number" && msg.playerNumber >= 1, `Player${i + 1} auth:success has playerNumber`);
+    assert(typeof msg.address === "string", `Player${i + 1} auth:success has address`);
+    assert(typeof msg.subPhase === "string", `Player${i + 1} auth:success has subPhase`);
   }
 
-  // Check that ALL players received kill:recorded broadcasts
-  // (kill:recorded is broadcast to the entire room)
+  // ── game:pregame_started ────────────────────────────────────
   for (let i = 0; i < connections.length; i++) {
-    const msgs = connections[i].messages;
-    const killMsgs = msgs.filter((m) => m.type === "kill:recorded");
+    const msg = connections[i].messages.find((m) => m.type === "game:pregame_started") as any;
+    assert(!!msg, `Player${i + 1} received game:pregame_started`);
+    assert(typeof msg.pregameDurationSeconds === "number", `game:pregame_started has pregameDurationSeconds`);
+    assert(typeof msg.pregameEndsAt === "number", `game:pregame_started has pregameEndsAt`);
+    assert(typeof msg.checkedInCount === "number" && msg.checkedInCount === NUM_PLAYERS, `game:pregame_started has correct checkedInCount`);
+  }
+
+  // ── game:started (per-player with target) ──────────────────
+  for (let i = 0; i < connections.length; i++) {
+    const msg = connections[i].messages.find((m) => m.type === "game:started") as any;
+    assert(!!msg, `Player${i + 1} received game:started`);
+    assert(typeof msg.target?.playerNumber === "number" && msg.target.playerNumber >= 1, `Player${i + 1} game:started has valid target.playerNumber`);
+    assert(typeof msg.hunterPlayerNumber === "number", `Player${i + 1} game:started has hunterPlayerNumber`);
+    assert(typeof msg.heartbeatDeadline === "number", `Player${i + 1} game:started has heartbeatDeadline`);
+    assert(typeof msg.heartbeatIntervalSeconds === "number", `Player${i + 1} game:started has heartbeatIntervalSeconds`);
+    assert(typeof msg.zone === "object" && msg.zone !== null, `Player${i + 1} game:started has zone object`);
+  }
+
+  // ── game:started_broadcast ─────────────────────────────────
+  for (let i = 0; i < connections.length; i++) {
+    const msg = connections[i].messages.find((m) => m.type === "game:started_broadcast") as any;
+    assert(!!msg, `Player${i + 1} received game:started_broadcast`);
+    assert(msg.playerCount === NUM_PLAYERS, `game:started_broadcast has correct playerCount`);
+  }
+
+  // ── kill:recorded (broadcast to ALL players) ───────────────
+  for (let i = 0; i < connections.length; i++) {
+    const msgs = connections[i].messages.filter((m) => m.type === "kill:recorded");
     assert(
-      killMsgs.length >= 1,
-      `Player${i + 1} received ${killMsgs.length} kill:recorded messages`
+      msgs.length === totalKills,
+      `Player${i + 1} received ${msgs.length}/${totalKills} kill:recorded`
     );
   }
+  // Verify kill:recorded message structure
+  const sampleKill = connections[0].messages.find((m) => m.type === "kill:recorded") as any;
+  assert(typeof sampleKill.hunterNumber === "number" && sampleKill.hunterNumber >= 1, "kill:recorded has valid hunterNumber");
+  assert(typeof sampleKill.targetNumber === "number" && sampleKill.targetNumber >= 1, "kill:recorded has valid targetNumber");
+  assert(typeof sampleKill.hunterKills === "number", "kill:recorded has hunterKills count");
 
-  // Check that some players received target:assigned (hunters get new targets after kills)
+  // ── player:eliminated (broadcast to ALL players) ───────────
+  for (let i = 0; i < connections.length; i++) {
+    const msgs = connections[i].messages.filter((m) => m.type === "player:eliminated");
+    assert(
+      msgs.length === totalKills,
+      `Player${i + 1} received ${msgs.length}/${totalKills} player:eliminated`
+    );
+  }
+  // Verify player:eliminated message structure
+  const sampleElim = connections[0].messages.find((m) => m.type === "player:eliminated") as any;
+  assert(typeof sampleElim.playerNumber === "number" && sampleElim.playerNumber >= 1, "player:eliminated has valid playerNumber");
+  assert(typeof sampleElim.reason === "string", "player:eliminated has reason field");
+
+  // ── target:assigned (per-player, sent to hunters who inherit new targets) ──
   const allTargetAssigned = connections
     .map((c) => c.messages.filter((m) => m.type === "target:assigned"))
     .flat();
@@ -968,36 +1127,164 @@ async function scenarioA_verifyWsMessages(
     allTargetAssigned.length >= 1,
     `Players received ${allTargetAssigned.length} target:assigned messages total`
   );
+  // Verify structure
+  const sampleTarget = allTargetAssigned[0] as any;
+  assert(typeof sampleTarget.target?.playerNumber === "number", "target:assigned has target.playerNumber");
+  assert(typeof sampleTarget.hunterPlayerNumber === "number", "target:assigned has hunterPlayerNumber");
 
-  // Check leaderboard updates were broadcast
-  const allLeaderboard = connections
-    .map((c) => c.messages.filter((m) => m.type === "leaderboard:update"))
+  // ── hunter:updated (per-player, sent when a player's hunter changes) ──
+  const allHunterUpdated = connections
+    .map((c) => c.messages.filter((m) => m.type === "hunter:updated"))
     .flat();
   assert(
-    allLeaderboard.length >= 1,
-    `Players received ${allLeaderboard.length} leaderboard:update messages total`
+    allHunterUpdated.length >= 1,
+    `Players received ${allHunterUpdated.length} hunter:updated messages total`
   );
+  const sampleHunter = allHunterUpdated[0] as any;
+  assert(typeof sampleHunter.hunterPlayerNumber === "number", "hunter:updated has hunterPlayerNumber");
 
-  // Log Player1's full message list for debugging
-  const p1Msgs = connections[0].messages;
-  const p1Types = p1Msgs.map((m) => m.type as string);
-  log("A10", `Player1 received ${p1Msgs.length} messages: ${p1Types.join(", ")}`);
+  // ── leaderboard:update (broadcast after each kill) ─────────
+  for (let i = 0; i < connections.length; i++) {
+    const msgs = connections[i].messages.filter((m) => m.type === "leaderboard:update");
+    assert(
+      msgs.length >= totalKills,
+      `Player${i + 1} received ${msgs.length} leaderboard:update (≥${totalKills} kills)`
+    );
+  }
+  // Verify structure
+  const sampleLb = connections[0].messages.filter((m) => m.type === "leaderboard:update").pop() as any;
+  assert(Array.isArray(sampleLb.entries), "leaderboard:update has entries array");
+  assert(sampleLb.entries.length > 0, "leaderboard:update entries is non-empty");
+  const lbEntry = sampleLb.entries[0] as any;
+  assert(typeof lbEntry.playerNumber === "number", "leaderboard entry has playerNumber");
+  assert(typeof lbEntry.kills === "number", "leaderboard entry has kills");
+  assert(typeof lbEntry.isAlive === "boolean", "leaderboard entry has isAlive");
 
-  // Wait for game:ended on any connection
-  let gotGameEnded = false;
+  // ── game:ended (broadcast when game ends) ──────────────────
+  // Wait for it if not yet received
+  let gameEndedMsg: any = null;
   for (const conn of connections) {
     try {
-      await waitForWsMessage(conn.messages, "game:ended", 5000);
-      gotGameEnded = true;
+      gameEndedMsg = await waitForWsMessage(conn.messages, "game:ended", 5000);
       break;
     } catch {
       // try next
     }
   }
-  if (gotGameEnded) {
-    success("At least one player received game:ended via WebSocket");
-  } else {
-    log("A10", "game:ended not yet received by any player (tx may still be pending)");
+  assert(!!gameEndedMsg, "At least one player received game:ended");
+  assert(typeof gameEndedMsg.winner1 === "number" && gameEndedMsg.winner1 >= 1, "game:ended has valid winner1");
+  assert(typeof gameEndedMsg.topKiller === "number" && gameEndedMsg.topKiller >= 1, "game:ended has valid topKiller");
+
+  // Verify ALL players received game:ended
+  for (let i = 0; i < connections.length; i++) {
+    const msg = connections[i].messages.find((m) => m.type === "game:ended");
+    assert(!!msg, `Player${i + 1} received game:ended`);
+  }
+
+  // ── Summary of all message types received ──────────────────
+  const allTypes = new Set<string>();
+  for (const conn of connections) {
+    for (const m of conn.messages) {
+      allTypes.add(m.type as string);
+    }
+  }
+  log("A10", `All WS message types received: ${[...allTypes].sort().join(", ")}`);
+
+  const expectedTypes = [
+    "auth:success",
+    "game:pregame_started",
+    "game:started",
+    "game:started_broadcast",
+    "kill:recorded",
+    "player:eliminated",
+    "target:assigned",
+    "hunter:updated",
+    "leaderboard:update",
+    "game:ended",
+  ];
+  for (const t of expectedTypes) {
+    assert(allTypes.has(t), `WS message type "${t}" was received`);
+  }
+}
+
+async function scenarioA_verifySpectatorWsMessages(
+  spectator: { ws: WebSocket; messages: Record<string, unknown>[] },
+  totalKills: number
+): Promise<void> {
+  log("A10s", "Verifying spectator WebSocket messages...");
+
+  const msgs = spectator.messages;
+  const types = msgs.map((m) => m.type as string);
+  log("A10s", `Spectator received ${msgs.length} messages: ${[...new Set(types)].sort().join(", ")}`);
+
+  // ── spectate:init ──────────────────────────────────────────
+  const initMsg = msgs.find((m) => m.type === "spectate:init") as any;
+  assert(!!initMsg, "Spectator received spectate:init");
+  assert(typeof initMsg.gameId === "number", "spectate:init has gameId");
+  assert(typeof initMsg.phase === "number" || typeof initMsg.phase === "string", "spectate:init has phase");
+  assert(typeof initMsg.playerCount === "number", "spectate:init has playerCount");
+  assert(typeof initMsg.aliveCount === "number", "spectate:init has aliveCount");
+  assert(Array.isArray(initMsg.leaderboard), "spectate:init has leaderboard array");
+  assert(Array.isArray(initMsg.players), "spectate:init has players array");
+
+  // ── spectator:positions (broadcast every 2s during game) ───
+  const posMsgs = msgs.filter((m) => m.type === "spectator:positions");
+  assert(
+    posMsgs.length >= 1,
+    `Spectator received ${posMsgs.length} spectator:positions messages`
+  );
+  const samplePos = posMsgs[0] as any;
+  assert(Array.isArray(samplePos.players), "spectator:positions has players array");
+  assert(typeof samplePos.zone === "object" && samplePos.zone !== null, "spectator:positions has zone object");
+  assert(typeof samplePos.aliveCount === "number", "spectator:positions has aliveCount");
+
+  // ── Broadcast messages that spectators also receive ────────
+  // Spectators receive all broadcast() messages via spectatorBroadcastFn
+
+  // kill:recorded
+  const killMsgs = msgs.filter((m) => m.type === "kill:recorded");
+  assert(
+    killMsgs.length === totalKills,
+    `Spectator received ${killMsgs.length}/${totalKills} kill:recorded`
+  );
+
+  // player:eliminated
+  const elimMsgs = msgs.filter((m) => m.type === "player:eliminated");
+  assert(
+    elimMsgs.length === totalKills,
+    `Spectator received ${elimMsgs.length}/${totalKills} player:eliminated`
+  );
+
+  // leaderboard:update
+  const lbMsgs = msgs.filter((m) => m.type === "leaderboard:update");
+  assert(
+    lbMsgs.length >= totalKills,
+    `Spectator received ${lbMsgs.length} leaderboard:update (≥${totalKills})`
+  );
+
+  // game:ended
+  let gameEndedMsg: any = null;
+  try {
+    gameEndedMsg = await waitForWsMessage(msgs, "game:ended", 5000);
+  } catch {
+    // May already be in messages
+    gameEndedMsg = msgs.find((m) => m.type === "game:ended");
+  }
+  assert(!!gameEndedMsg, "Spectator received game:ended");
+  assert(typeof (gameEndedMsg as any).winner1 === "number", "Spectator game:ended has winner1");
+
+  // Verify all expected spectator message types
+  const spectatorTypes = new Set(types);
+  const expectedSpectatorTypes = [
+    "spectate:init",
+    "spectator:positions",
+    "kill:recorded",
+    "player:eliminated",
+    "leaderboard:update",
+    "game:ended",
+  ];
+  for (const t of expectedSpectatorTypes) {
+    assert(spectatorTypes.has(t), `Spectator received "${t}"`);
   }
 }
 
@@ -1012,24 +1299,23 @@ async function scenarioA_verifyGameEnd(gameId: number): Promise<void> {
     if (Number(state.phase) === 2) {
       success("Game ended on-chain!");
 
-      log("A11", "Winners:", {
-        winner1: state.winner1,
-        winner2: state.winner2,
-        winner3: state.winner3,
-        topKiller: state.topKiller,
+      const w1Num = Number(state.winner1);
+      const w2Num = Number(state.winner2);
+      const w3Num = Number(state.winner3);
+      const tkNum = Number(state.topKiller);
+
+      log("A11", "Winners (playerNumbers):", {
+        winner1: w1Num,
+        winner2: w2Num,
+        winner3: w3Num,
+        topKiller: tkNum,
       });
 
-      // Winner1 should be a registered player
-      const winner1Idx = playerWallets.findIndex(
-        (w) => w.address.toLowerCase() === state.winner1.toLowerCase()
-      );
-      assert(winner1Idx >= 0, `Winner1 is ${playerName(state.winner1)} (last standing)`);
+      // Winner1 should be a valid player number (1-based)
+      assert(w1Num >= 1 && w1Num <= NUM_PLAYERS, `Winner1 is Player${w1Num} (last standing)`);
 
-      // Top killer should be a registered player
-      const topKillerIdx = playerWallets.findIndex(
-        (w) => w.address.toLowerCase() === state.topKiller.toLowerCase()
-      );
-      assert(topKillerIdx >= 0, `Top killer is ${playerName(state.topKiller)}`);
+      // Top killer should be a valid player number
+      assert(tkNum >= 1 && tkNum <= NUM_PLAYERS, `Top killer is Player${tkNum}`);
 
       // Log claimable amounts
       for (let j = 0; j < NUM_PLAYERS; j++) {
@@ -1062,12 +1348,17 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
   log("A12", "Claiming prizes on-chain...");
 
   const state = await operatorContract.getGameState(gameId);
+  const w1Num = Number(state.winner1);
+  const w2Num = Number(state.winner2);
+  const w3Num = Number(state.winner3);
+  const tkNum = Number(state.topKiller);
+
+  // Helper: playerNumber (1-based) → wallet index (0-based)
+  const numToIdx = (pNum: number) => pNum - 1;
 
   // Claim for winner1
-  const w1Idx = playerWallets.findIndex(
-    (w) => w.address.toLowerCase() === state.winner1.toLowerCase()
-  );
-  if (w1Idx >= 0) {
+  const w1Idx = numToIdx(w1Num);
+  if (w1Idx >= 0 && w1Idx < NUM_PLAYERS) {
     const w1BalBefore = await provider.getBalance(playerWallets[w1Idx].address);
     const w1Claimable = await operatorContract.getClaimableAmount(
       gameId,
@@ -1080,17 +1371,14 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
       const w1BalAfter = await provider.getBalance(playerWallets[w1Idx].address);
       assert(
         w1BalAfter > w1BalBefore - ethers.parseEther("0.001"),
-        `${playerName(state.winner1)} (winner1) balance increased after claim`
+        `Player${w1Num} (winner1) balance increased after claim`
       );
-      success(`${playerName(state.winner1)} (winner1) claimed prize`);
+      success(`Player${w1Num} (winner1) claimed prize`);
     }
 
-    // hasClaimed flag
-    const claimed = await operatorContract.hasClaimed(
-      gameId,
-      playerWallets[w1Idx].address
-    );
-    assert(claimed, "Winner1 hasClaimed flag set on-chain");
+    // Check claimed flag via getPlayerInfo
+    const pInfo = await operatorContract.getPlayerInfo(gameId, playerWallets[w1Idx].address);
+    assert(pInfo.claimed, "Winner1 claimed flag set on-chain");
 
     // Double claim should revert
     try {
@@ -1103,11 +1391,9 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
   }
 
   // Winner2 claims
-  if (state.winner2 !== ethers.ZeroAddress) {
-    const w2Idx = playerWallets.findIndex(
-      (w) => w.address.toLowerCase() === state.winner2.toLowerCase()
-    );
-    if (w2Idx >= 0) {
+  if (w2Num > 0) {
+    const w2Idx = numToIdx(w2Num);
+    if (w2Idx >= 0 && w2Idx < NUM_PLAYERS) {
       const w2Claimable = await operatorContract.getClaimableAmount(
         gameId,
         playerWallets[w2Idx].address
@@ -1115,17 +1401,15 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
       if (w2Claimable > 0n) {
         const w2Tx = await playerContracts[w2Idx].claimPrize(gameId);
         await w2Tx.wait();
-        success(`${playerName(state.winner2)} (winner2) claimed prize`);
+        success(`Player${w2Num} (winner2) claimed prize`);
       }
     }
   }
 
   // Winner3 claims
-  if (state.winner3 !== ethers.ZeroAddress) {
-    const w3Idx = playerWallets.findIndex(
-      (w) => w.address.toLowerCase() === state.winner3.toLowerCase()
-    );
-    if (w3Idx >= 0) {
+  if (w3Num > 0) {
+    const w3Idx = numToIdx(w3Num);
+    if (w3Idx >= 0 && w3Idx < NUM_PLAYERS) {
       const w3Claimable = await operatorContract.getClaimableAmount(
         gameId,
         playerWallets[w3Idx].address
@@ -1133,20 +1417,15 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
       if (w3Claimable > 0n) {
         const w3Tx = await playerContracts[w3Idx].claimPrize(gameId);
         await w3Tx.wait();
-        success(`${playerName(state.winner3)} (winner3) claimed prize`);
+        success(`Player${w3Num} (winner3) claimed prize`);
       }
     }
   }
 
   // Non-winner should have 0 claimable and revert
-  const winnerAddrs = new Set([
-    state.winner1.toLowerCase(),
-    state.winner2.toLowerCase(),
-    state.winner3.toLowerCase(),
-    state.topKiller.toLowerCase(),
-  ]);
+  const winnerNums = new Set([w1Num, w2Num, w3Num, tkNum]);
   const nonWinnerIdx = playerWallets.findIndex(
-    (w) => !winnerAddrs.has(w.address.toLowerCase())
+    (_, i) => !winnerNums.has(i + 1)
   );
   if (nonWinnerIdx >= 0) {
     const nwClaimable = await operatorContract.getClaimableAmount(
@@ -1155,7 +1434,7 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
     );
     assert(
       nwClaimable === 0n,
-      `${playerName(playerWallets[nonWinnerIdx].address)} (non-winner) has 0 claimable`
+      `Player${nonWinnerIdx + 1} (non-winner) has 0 claimable`
     );
 
     try {
@@ -1394,7 +1673,8 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
 
   const now = (await provider.getBlock("latest"))!.timestamp;
   const regDeadline = now + 60;
-  const expiryDeadline = now + 3600;
+  const gameDate = now + 120;
+  const maxDuration = 3600;
 
   const params = {
     title: "Cancellation Test Game",
@@ -1402,10 +1682,13 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
     minPlayers: 5,
     maxPlayers: 10,
     registrationDeadline: regDeadline,
-    expiryDeadline: expiryDeadline,
+    gameDate: gameDate,
+    maxDuration: maxDuration,
     centerLat: 19435244,
     centerLng: -99128056,
-    bps1st: 5000,
+    meetingLat: 19435244,
+    meetingLng: -99128056,
+    bps1st: 4000,    // sum + platformFeeBps(1000) = 10000
     bps2nd: 2000,
     bps3rd: 1000,
     bpsKills: 1000,
@@ -1525,17 +1808,11 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
     success("Non-registered player refund correctly reverted");
   }
 
-  // 9. Verify hasClaimed flags
-  const p1Claimed = await operatorContract.hasClaimed(
-    gameId,
-    playerWallets[0].address
-  );
-  const p2Claimed = await operatorContract.hasClaimed(
-    gameId,
-    playerWallets[1].address
-  );
-  assert(p1Claimed, "Player1 hasClaimed flag set for refund");
-  assert(p2Claimed, "Player2 hasClaimed flag set for refund");
+  // 9. Verify claimed flags via getPlayerInfo
+  const p1Info = await operatorContract.getPlayerInfo(gameId, playerWallets[0].address);
+  const p2Info = await operatorContract.getPlayerInfo(gameId, playerWallets[1].address);
+  assert(p1Info.claimed, "Player1 claimed flag set for refund");
+  assert(p2Info.claimed, "Player2 claimed flag set for refund");
 
   // 10. Verify database for game B
   log("B6", "Verifying game B in database...");
@@ -1631,11 +1908,19 @@ async function main() {
 
   const gameId = await scenarioA_createGame();
   await scenarioA_registerPlayers(gameId);
-  await scenarioA_checkin(gameId);
   await scenarioA_waitForServerSync(gameId);
+  // Send location pings BEFORE game start so auto-seed can find nearby players
+  await scenarioA_sendLocationPings(gameId);
   await scenarioA_warpTimeAndAutoStart(gameId);
+  await scenarioA_checkin(gameId);
+
+  // Connect spectator early — observes checkin→pregame→game→ended transitions
+  const spectator = await scenarioA_connectSpectator(gameId);
 
   const connections = await scenarioA_connectWebSockets(gameId);
+  // Wait for checkin → pregame → game phase transitions
+  await scenarioA_waitForGamePhase(connections);
+  // Refresh locations after game starts (needed for kill proximity checks)
   await scenarioA_sendLocationPings(gameId);
   await scenarioA_testKillRejections(gameId, connections);
 
@@ -1645,9 +1930,11 @@ async function main() {
   await sleep(3000);
 
   await scenarioA_verifyGameEnd(gameId);
-  await scenarioA_verifyWsMessages(connections);
+  await scenarioA_verifyWsMessages(connections, kills.length);
+  await scenarioA_verifySpectatorWsMessages(spectator, kills.length);
 
   // Close WebSocket connections
+  spectator.ws.close();
   for (const conn of connections) {
     conn.ws.close();
   }

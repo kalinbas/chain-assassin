@@ -45,6 +45,20 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.createGame(_defaultParams(), _defaultShrinks());
     }
 
+    function test_startGame_revertsIfGameNotFound() public {
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.startGame(1);
+    }
+
+    function test_startGame_revertsIfGameIdZero() public {
+        vm.warp(block.timestamp + 2 days);
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.startGame(0);
+    }
+
     function test_createGame_revertsIfMinPlayersTooLow_zero() public {
         IChainAssassin.CreateGameParams memory params = _defaultParams();
         params.bps1st = 8000;
@@ -283,6 +297,18 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         assertEq(number, 1);
     }
 
+    function test_register_revertsIfGameNotFound() public {
+        vm.prank(player1);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.register{value: ENTRY_FEE}(1);
+    }
+
+    function test_register_revertsIfGameIdZero() public {
+        vm.prank(player1);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.register{value: ENTRY_FEE}(0);
+    }
+
     function test_register_revertsWrongFee() public {
         uint256 gameId = _createDefaultGame();
         vm.prank(player1);
@@ -452,6 +478,15 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         game.recordKill(gameId, 99, 1);
     }
 
+    function test_recordKill_revertsIfHunterZero() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        _startGame(gameId);
+
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.HunterNotRegistered.selector);
+        game.recordKill(gameId, 0, 1);
+    }
+
     function test_recordKill_revertsIfTargetNotRegistered() public {
         uint256 gameId = _createAndRegisterPlayers(3);
         _startGame(gameId);
@@ -459,6 +494,15 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.TargetNotRegistered.selector);
         game.recordKill(gameId, 1, 99);
+    }
+
+    function test_recordKill_revertsIfTargetZero() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        _startGame(gameId);
+
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.TargetNotRegistered.selector);
+        game.recordKill(gameId, 1, 0);
     }
 
     function test_recordKill_revertsIfNotActive() public {
@@ -516,6 +560,15 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(operator);
         vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
         game.eliminatePlayer(gameId, 99);
+    }
+
+    function test_eliminatePlayer_revertsIfZero() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        _startGame(gameId);
+
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
+        game.eliminatePlayer(gameId, 0);
     }
 
     function test_eliminatePlayer_revertsIfNotOperator() public {

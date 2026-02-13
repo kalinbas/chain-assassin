@@ -77,6 +77,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
 
     /// @dev Reverts with `WrongPhase` unless the game is in the expected phase.
     modifier inPhase(uint256 gameId, GamePhase phase) {
+        if (gameId == 0 || gameId >= nextGameId) revert GameNotFound();
         if (_gameStates[gameId].phase != phase) revert WrongPhase();
         _;
     }
@@ -211,10 +212,17 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
             baseReward: uint128(msg.value)
         });
 
-        // Seed totalCollected with base reward so BPS math includes it
-        if (msg.value > 0) {
-            _gameStates[gameId].totalCollected = uint128(msg.value);
-        }
+        // Explicitly initialize game state to prevent stale/prewritten values
+        // from affecting newly created game IDs.
+        _gameStates[gameId] = GameState({
+            phase: GamePhase.REGISTRATION,
+            playerCount: 0,
+            totalCollected: uint128(msg.value),
+            winner1: 0,
+            winner2: 0,
+            winner3: 0,
+            topKiller: 0
+        });
 
         for (uint256 i = 0; i < shrinks.length; i++) {
             _zoneShrinks[gameId].push(shrinks[i]);
@@ -426,6 +434,8 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     ///      No platform fees are accrued since endGame was never called.
     /// @param gameId The game in REGISTRATION or ACTIVE phase.
     function triggerExpiry(uint256 gameId) external {
+        if (gameId == 0 || gameId >= nextGameId) revert GameNotFound();
+
         GamePhase phase = _gameStates[gameId].phase;
         if (phase != GamePhase.ACTIVE && phase != GamePhase.REGISTRATION) revert WrongPhase();
 

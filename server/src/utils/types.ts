@@ -139,11 +139,6 @@ export interface WsLocationMessage {
   timestamp: number;
 }
 
-export interface WsBleProximityMessage {
-  type: "ble_proximity";
-  nearbyAddresses: string[];
-}
-
 export interface WsSpectateMessage {
   type: "spectate";
   gameId: number;
@@ -160,7 +155,6 @@ export interface WsHeartbeatScanMessage {
 export type WsClientMessage =
   | WsAuthMessage
   | WsLocationMessage
-  | WsBleProximityMessage
   | WsSpectateMessage
   | WsHeartbeatScanMessage;
 

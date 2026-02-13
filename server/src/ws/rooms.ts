@@ -152,9 +152,3 @@ export function getConnection(ws: WebSocket): PlayerConnection | undefined {
   return connectionMap.get(ws);
 }
 
-/**
- * Get the number of connected players in a room.
- */
-export function getRoomSize(gameId: number): number {
-  return rooms.get(gameId)?.size ?? 0;
-}

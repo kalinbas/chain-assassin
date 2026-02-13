@@ -17,6 +17,9 @@ CONTRACTS_DIR="$(dirname "$SERVER_DIR")/contracts"
 RPC_URL="http://127.0.0.1:8545"
 RPC_WS_URL="ws://127.0.0.1:8545"
 
+# Test database path
+E2E_DB_PATH="$SERVER_DIR/data/e2e-test.db"
+
 # Cleanup function
 cleanup() {
   echo -e "\n${CYAN}Cleaning up...${NC}"
@@ -28,8 +31,11 @@ cleanup() {
     kill $SERVER_PID 2>/dev/null || true
     echo "  Stopped Server (PID $SERVER_PID)"
   fi
-  # Clean up test database
-  rm -f "$SERVER_DIR/data/e2e-test.db" "$SERVER_DIR/data/e2e-test.db-wal" "$SERVER_DIR/data/e2e-test.db-shm"
+  # Clean up test database and WAL/SHM files
+  rm -f "$E2E_DB_PATH" "$E2E_DB_PATH-wal" "$E2E_DB_PATH-shm"
+  echo "  Cleaned up test database"
+  # Clean up .env.test
+  rm -f "$SERVER_DIR/.env.test"
 }
 trap cleanup EXIT
 
@@ -90,26 +96,25 @@ echo -e "\n${CYAN}[3/5] Starting game server...${NC}"
 
 cd "$SERVER_DIR"
 
-# Create .env for test
-cat > "$SERVER_DIR/.env.test" << EOF
-RPC_URL=$RPC_URL
-RPC_WS_URL=$RPC_WS_URL
-CONTRACT_ADDRESS=$CONTRACT_ADDRESS
-OPERATOR_PRIVATE_KEY=$DEPLOYER_KEY
-CHAIN_ID=31337
-PORT=3000
-HOST=0.0.0.0
-DB_PATH=./data/e2e-test.db
-KILL_PROXIMITY_METERS=500
-ZONE_GRACE_SECONDS=60
-GPS_PING_INTERVAL_SECONDS=5
-BLE_REQUIRED=true
-LOG_LEVEL=info
-EOF
+# Delete stale test database before starting server
+rm -f "$E2E_DB_PATH" "$E2E_DB_PATH-wal" "$E2E_DB_PATH-shm"
 
-# Start the server with test env
-DOTENV_CONFIG_PATH="$SERVER_DIR/.env.test" \
-  NODE_ENV=test \
+# Start the server with test env vars
+DB_PATH="$E2E_DB_PATH" \
+  RPC_URL=$RPC_URL \
+  RPC_WS_URL=$RPC_WS_URL \
+  CONTRACT_ADDRESS=$CONTRACT_ADDRESS \
+  OPERATOR_PRIVATE_KEY=$DEPLOYER_KEY \
+  CHAIN_ID=31337 \
+  PORT=3000 \
+  HOST=0.0.0.0 \
+  POLLING_INTERVAL_MS=1000 \
+  CHECKIN_DURATION_SECONDS=30 \
+  PREGAME_DURATION_SECONDS=5 \
+  KILL_PROXIMITY_METERS=500 \
+  ZONE_GRACE_SECONDS=60 \
+  BLE_REQUIRED=true \
+  LOG_LEVEL=warn \
   npx tsx src/index.ts &
 SERVER_PID=$!
 echo "  Server started (PID $SERVER_PID)"
@@ -143,8 +148,5 @@ if [ $TEST_EXIT -eq 0 ]; then
 else
   echo -e "${RED}E2E tests failed (exit code: $TEST_EXIT)${NC}"
 fi
-
-# Clean up .env.test
-rm -f "$SERVER_DIR/.env.test"
 
 exit $TEST_EXIT

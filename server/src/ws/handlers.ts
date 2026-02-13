@@ -30,9 +30,6 @@ export function handleWsMessage(ws: WebSocket, raw: string): void {
       handleLocation(ws, message);
       break;
 
-    case "ble_proximity":
-      break;
-
     case "heartbeat_scan":
       handleWsHeartbeatScan(ws, message as { type: "heartbeat_scan"; qrPayload: string; lat: number; lng: number; bleNearbyAddresses?: string[] });
       break;

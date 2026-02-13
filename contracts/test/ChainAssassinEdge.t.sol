@@ -44,6 +44,27 @@ contract ReentrancyAttacker {
     }
 }
 
+// Receiver that always reverts on ETH transfers to exercise TransferFailed paths.
+contract RejectingReceiver {
+    ChainAssassin public target;
+
+    constructor(ChainAssassin _target) {
+        target = _target;
+    }
+
+    function claimPrize(uint256 gameId) external {
+        target.claimPrize(gameId);
+    }
+
+    function claimRefund(uint256 gameId) external {
+        target.claimRefund(gameId);
+    }
+
+    receive() external payable {
+        revert("reject-eth");
+    }
+}
+
 contract ChainAssassinEdgeTest is ChainAssassinTestBase {
     // ============ Reentrancy Tests ============
 
@@ -102,6 +123,80 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         assertEq(attackerAddr.balance - balBefore, ENTRY_FEE);
         (,,, bool claimed2,) = game.getPlayerInfo(gameId, attackerAddr);
         assertTrue(claimed2);
+    }
+
+    // ============ Transfer Failure Paths ============
+
+    function test_claimPrize_revertsIfTransferFails() public {
+        RejectingReceiver rejector = new RejectingReceiver(game);
+        address rejectorAddr = address(rejector);
+        vm.deal(rejectorAddr, 10 ether);
+
+        vm.prank(operator);
+        uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
+
+        vm.prank(rejectorAddr);
+        game.register{value: ENTRY_FEE}(gameId);
+        _registerPlayer(gameId, player1);
+        _registerPlayer(gameId, player2);
+
+        _startGame(gameId);
+        vm.prank(operator);
+        game.endGame(gameId, 1, 2, 3, 1);
+
+        vm.expectRevert(IChainAssassin.TransferFailed.selector);
+        rejector.claimPrize(gameId);
+
+        (,,, bool claimed,) = game.getPlayerInfo(gameId, rejectorAddr);
+        assertFalse(claimed);
+    }
+
+    function test_claimRefund_revertsIfTransferFails() public {
+        RejectingReceiver rejector = new RejectingReceiver(game);
+        address rejectorAddr = address(rejector);
+        vm.deal(rejectorAddr, 10 ether);
+
+        vm.prank(operator);
+        uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
+
+        vm.prank(rejectorAddr);
+        game.register{value: ENTRY_FEE}(gameId);
+
+        vm.warp(block.timestamp + 2 days);
+        game.triggerCancellation(gameId);
+
+        vm.expectRevert(IChainAssassin.TransferFailed.selector);
+        rejector.claimRefund(gameId);
+
+        (,,, bool claimed,) = game.getPlayerInfo(gameId, rejectorAddr);
+        assertFalse(claimed);
+    }
+
+    function test_withdrawCreatorFees_revertsIfTransferFails() public {
+        RejectingReceiver rejector = new RejectingReceiver(game);
+        _setupEndedGame();
+
+        uint256 accruedBefore = game.creatorFeesAccrued(operator);
+        assertTrue(accruedBefore > 0);
+
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.TransferFailed.selector);
+        game.withdrawCreatorFees(address(rejector));
+
+        assertEq(game.creatorFeesAccrued(operator), accruedBefore);
+    }
+
+    function test_withdrawPlatformFees_revertsIfTransferFails() public {
+        RejectingReceiver rejector = new RejectingReceiver(game);
+        _setupEndedGame();
+
+        uint256 accruedBefore = game.platformFeesAccrued();
+        assertTrue(accruedBefore > 0);
+
+        vm.expectRevert(IChainAssassin.TransferFailed.selector);
+        game.withdrawPlatformFees(address(rejector));
+
+        assertEq(game.platformFeesAccrued(), accruedBefore);
     }
 
     // ============ Multiple Games ============
@@ -210,6 +305,20 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
         game.triggerExpiry(gameId);
     }
 
+    function test_triggerExpiry_revertsIfGameNotFound() public {
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.triggerExpiry(1);
+    }
+
+    function test_uncreatedIdCannotBePreCancelledThenBrickCreation() public {
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.triggerExpiry(1);
+
+        uint256 gameId = _createDefaultGame();
+        IChainAssassin.GameState memory state = game.getGameState(gameId);
+        assertEq(uint8(state.phase), uint8(IChainAssassin.GamePhase.REGISTRATION));
+    }
+
     function test_triggerExpiry_worksForRegistrationPhase() public {
         vm.prank(operator);
         uint256 gameId = game.createGame(_defaultParams(), _defaultShrinks());
@@ -249,6 +358,37 @@ contract ChainAssassinEdgeTest is ChainAssassinTestBase {
 
         vm.expectRevert(IChainAssassin.WrongPhase.selector);
         game.triggerExpiry(gameId);
+    }
+
+    // ============ GameNotFound Checks ============
+
+    function test_triggerCancellation_revertsIfGameNotFound() public {
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.triggerCancellation(1);
+    }
+
+    function test_recordKill_revertsIfGameNotFound() public {
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.recordKill(1, 1, 2);
+    }
+
+    function test_endGame_revertsIfGameNotFound() public {
+        vm.prank(operator);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.endGame(1, 1, 2, 3, 1);
+    }
+
+    function test_claimPrize_revertsIfGameNotFound() public {
+        vm.prank(player1);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.claimPrize(1);
+    }
+
+    function test_claimRefund_revertsIfGameNotFound() public {
+        vm.prank(player1);
+        vm.expectRevert(IChainAssassin.GameNotFound.selector);
+        game.claimRefund(1);
     }
 
     // ============ Operator Management ============

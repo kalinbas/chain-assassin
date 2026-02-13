@@ -101,6 +101,8 @@ interface IChainAssassin {
     // --- General ---
     /// @dev A zero-address was passed where a real address is required.
     error ZeroAddress();
+    /// @dev The provided gameId does not correspond to a created game.
+    error GameNotFound();
     /// @dev An ETH transfer via `call` failed.
     error TransferFailed();
 

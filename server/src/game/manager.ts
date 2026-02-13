@@ -48,6 +48,16 @@ import { getHttpProvider } from "../blockchain/client.js";
 
 const log = createLogger("gameManager");
 
+/** Clear and delete a timer from a map. */
+function clearMapTimer<K>(
+  map: Map<K, ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>>,
+  key: K,
+  clearFn: (t: ReturnType<typeof setTimeout> | ReturnType<typeof setInterval>) => void = clearTimeout
+): void {
+  const t = map.get(key);
+  if (t) { clearFn(t); map.delete(key); }
+}
+
 // In-memory active game state
 const activeGames = new Map<number, {
   zoneTracker: ZoneTracker;
@@ -186,16 +196,14 @@ export async function onPlayerRegistered(gameId: number, playerAddress: string, 
 function tryAutoSeed(gameId: number, seedCount: number): void {
   const checkedIn = getCheckedInCount(gameId);
   if (checkedIn >= seedCount) {
-    const timer = autoSeedTimers.get(gameId);
-    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    clearMapTimer(autoSeedTimers, gameId, clearInterval);
     log.info({ gameId, checkedIn, seedCount }, "Auto-seed: target reached, stopping retries");
     return;
   }
 
   const game = getGame(gameId);
   if (!game || game.subPhase !== "checkin") {
-    const timer = autoSeedTimers.get(gameId);
-    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    clearMapTimer(autoSeedTimers, gameId, clearInterval);
     return;
   }
 
@@ -236,8 +244,7 @@ function tryAutoSeed(gameId: number, seedCount: number): void {
   }
 
   if (getCheckedInCount(gameId) >= seedCount) {
-    const timer = autoSeedTimers.get(gameId);
-    if (timer) { clearInterval(timer); autoSeedTimers.delete(gameId); }
+    clearMapTimer(autoSeedTimers, gameId, clearInterval);
     log.info({ gameId }, "Auto-seed: target reached after seeding");
   }
 }
@@ -296,8 +303,7 @@ export function onGameStarted(gameId: number): void {
  */
 function completeCheckin(gameId: number): void {
   // Stop auto-seed retries
-  const ast = autoSeedTimers.get(gameId);
-  if (ast) { clearInterval(ast); autoSeedTimers.delete(gameId); }
+  clearMapTimer(autoSeedTimers, gameId, clearInterval);
 
   const game = getGame(gameId);
   if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") return;
@@ -806,37 +812,26 @@ async function gameTick(gameId: number): Promise<void> {
 }
 
 /**
- * Eliminate a player for being out of zone too long.
+ * Shared post-elimination logic: on-chain call, broadcasts, target reassignment, game-end check.
+ * Used by both zone and heartbeat elimination paths.
  */
-async function handleZoneElimination(gameId: number, address: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-
-  // Check if player is still alive (might have been killed in the meantime)
-  const player = getPlayer(gameId, address);
-  if (!player || !player.isAlive) {
-    const active = activeGames.get(gameId);
-    active?.zoneTracker.clearPlayer(address);
-    return;
-  }
-
-  log.info({ gameId, address }, "Eliminating player for zone violation");
-
-  // Update DB
-  dbEliminatePlayer(gameId, address, "zone", now);
-
-  // Update target chain
-  const reassignment = removeFromChain(gameId, address);
-
+async function eliminateAndReassign(
+  gameId: number,
+  address: string,
+  player: Player,
+  reason: string,
+  reassignment: { reassignedHunter: string; newTarget: string } | null
+): Promise<void> {
   // Clear zone tracking
   const active = activeGames.get(gameId);
   active?.zoneTracker.clearPlayer(address);
 
   // Submit on-chain
   if (!isSimulatedGame(gameId)) {
-    const pNum = player?.playerNumber ?? 0;
+    const pNum = player.playerNumber;
     if (pNum > 0) {
       operator.eliminatePlayer(gameId, pNum).catch((err) => {
-        log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain");
+        log.error({ gameId, address, error: err.message }, `Failed to eliminate player on-chain (${reason})`);
       });
     }
   }
@@ -844,9 +839,9 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
   // Broadcast elimination
   broadcast(gameId, {
     type: "player:eliminated",
-    playerNumber: player?.playerNumber ?? 0,
+    playerNumber: player.playerNumber,
     eliminatorNumber: 0,
-    reason: "zone_violation",
+    reason,
   });
 
   // Notify reassigned hunter of new target + their updated hunter number
@@ -857,85 +852,6 @@ async function handleZoneElimination(gameId: number, address: string): Promise<v
     sendToPlayer(gameId, reassignment.reassignedHunter, {
       type: "target:assigned",
       target: {
-        address: reassignment.newTarget,
-        playerNumber: newTargetPlayer?.playerNumber ?? 0,
-      },
-      hunterPlayerNumber: hunterOfReassignedPlayer?.playerNumber ?? 0,
-    });
-
-    // Also notify the new target that their hunter changed
-    const hunterOfNewTarget = findHunterOf(gameId, reassignment.newTarget);
-    if (hunterOfNewTarget) {
-      const hunterOfNewTargetPlayer = getPlayer(gameId, hunterOfNewTarget);
-      sendToPlayer(gameId, reassignment.newTarget, {
-        type: "hunter:updated",
-        hunterPlayerNumber: hunterOfNewTargetPlayer?.playerNumber ?? 0,
-      });
-    }
-  }
-
-  // Broadcast leaderboard update
-  broadcast(gameId, {
-    type: "leaderboard:update",
-    entries: getLeaderboard(gameId),
-  });
-
-  // Check if game should end
-  const aliveCount = getAlivePlayerCount(gameId);
-  if (aliveCount <= 1) {
-    await endGameWithWinners(gameId);
-  }
-}
-
-/**
- * Eliminate a player for missing their heartbeat scan deadline.
- */
-async function handleHeartbeatElimination(gameId: number, address: string): Promise<void> {
-  const now = Math.floor(Date.now() / 1000);
-
-  // Check if player is still alive
-  const player = getPlayer(gameId, address);
-  if (!player || !player.isAlive) return;
-
-  log.info({ gameId, address, playerNumber: player.playerNumber }, "Eliminating player for missed heartbeat");
-
-  // Update DB
-  dbEliminatePlayer(gameId, address, "heartbeat", now);
-
-  // Update target chain
-  const reassignment = removeFromChain(gameId, address);
-
-  // Clear zone tracking
-  const active = activeGames.get(gameId);
-  active?.zoneTracker.clearPlayer(address);
-
-  // Submit on-chain
-  if (!isSimulatedGame(gameId)) {
-    const pNum = player?.playerNumber ?? 0;
-    if (pNum > 0) {
-      operator.eliminatePlayer(gameId, pNum).catch((err) => {
-        log.error({ gameId, address, error: err.message }, "Failed to eliminate player on-chain (heartbeat)");
-      });
-    }
-  }
-
-  // Broadcast elimination
-  broadcast(gameId, {
-    type: "player:eliminated",
-    playerNumber: player?.playerNumber ?? 0,
-    eliminatorNumber: 0,
-    reason: "heartbeat_timeout",
-  });
-
-  // Notify reassigned hunter of new target
-  if (reassignment) {
-    const newTargetPlayer = getPlayer(gameId, reassignment.newTarget);
-    const hunterOfReassigned = findHunterOf(gameId, reassignment.reassignedHunter);
-    const hunterOfReassignedPlayer = hunterOfReassigned ? getPlayer(gameId, hunterOfReassigned) : null;
-    sendToPlayer(gameId, reassignment.reassignedHunter, {
-      type: "target:assigned",
-      target: {
-        address: reassignment.newTarget,
         playerNumber: newTargetPlayer?.playerNumber ?? 0,
       },
       hunterPlayerNumber: hunterOfReassignedPlayer?.playerNumber ?? 0,
@@ -963,6 +879,38 @@ async function handleHeartbeatElimination(gameId: number, address: string): Prom
   if (aliveCount <= 1) {
     await endGameWithWinners(gameId);
   }
+}
+
+/**
+ * Eliminate a player for being out of zone too long.
+ */
+async function handleZoneElimination(gameId: number, address: string): Promise<void> {
+  const player = getPlayer(gameId, address);
+  if (!player || !player.isAlive) {
+    const active = activeGames.get(gameId);
+    active?.zoneTracker.clearPlayer(address);
+    return;
+  }
+
+  log.info({ gameId, address }, "Eliminating player for zone violation");
+  const now = Math.floor(Date.now() / 1000);
+  dbEliminatePlayer(gameId, address, "zone", now);
+  const reassignment = removeFromChain(gameId, address);
+  await eliminateAndReassign(gameId, address, player, "zone_violation", reassignment);
+}
+
+/**
+ * Eliminate a player for missing their heartbeat scan deadline.
+ */
+async function handleHeartbeatElimination(gameId: number, address: string): Promise<void> {
+  const player = getPlayer(gameId, address);
+  if (!player || !player.isAlive) return;
+
+  log.info({ gameId, address, playerNumber: player.playerNumber }, "Eliminating player for missed heartbeat");
+  const now = Math.floor(Date.now() / 1000);
+  dbEliminatePlayer(gameId, address, "heartbeat", now);
+  const reassignment = removeFromChain(gameId, address);
+  await eliminateAndReassign(gameId, address, player, "heartbeat_timeout", reassignment);
 }
 
 /**
@@ -1250,10 +1198,8 @@ export function scheduleTimers(config: GameConfig): void {
  * Cancel all pending timers for a game.
  */
 export function cancelTimers(gameId: number): void {
-  const dt = deadlineTimers.get(gameId);
-  if (dt) { clearTimeout(dt); deadlineTimers.delete(gameId); }
-  const gt = gameDateTimers.get(gameId);
-  if (gt) { clearTimeout(gt); gameDateTimers.delete(gameId); }
+  clearMapTimer(deadlineTimers, gameId);
+  clearMapTimer(gameDateTimers, gameId);
 }
 
 // ============ Deadline Check (registrationDeadline) ============
@@ -1357,8 +1303,8 @@ export function recoverGames(): void {
     } else if (fullGame.subPhase === "pregame") {
       // Recover pregame timer — calculate remaining time
       const elapsed = Math.floor(Date.now() / 1000) - fullGame.startedAt;
-      const checkinElapsed = config.checkinDurationSeconds;
-      const pregameElapsed = elapsed - checkinElapsed;
+      const checkinDuration = config.checkinDurationSeconds;
+      const pregameElapsed = elapsed - checkinDuration;
       const remaining = Math.max(0, config.pregameDurationSeconds - pregameElapsed);
       if (remaining <= 0) {
         log.info({ gameId: game.gameId }, "Completing expired pregame on recovery");
@@ -1407,16 +1353,8 @@ function cleanupActiveGame(gameId: number): void {
     activeGames.delete(gameId);
   }
   stopPreGameSpectatorBroadcast(gameId);
-  const checkinTimer = checkinTimers.get(gameId);
-  if (checkinTimer) {
-    clearTimeout(checkinTimer);
-    checkinTimers.delete(gameId);
-  }
-  const pregameTimer = pregameTimers.get(gameId);
-  if (pregameTimer) {
-    clearTimeout(pregameTimer);
-    pregameTimers.delete(gameId);
-  }
+  clearMapTimer(checkinTimers, gameId);
+  clearMapTimer(pregameTimers, gameId);
   log.info({ gameId }, "Active game cleaned up");
 }
 
@@ -1454,6 +1392,11 @@ export function cleanupAll(): void {
     clearInterval(interval);
   }
   preGameSpectatorIntervals.clear();
+
+  for (const [gameId, interval] of autoSeedTimers) {
+    clearInterval(interval);
+  }
+  autoSeedTimers.clear();
 }
 
 // ============ Query Helpers ============

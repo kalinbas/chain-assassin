@@ -56,9 +56,3 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
   return wss;
 }
 
-/**
- * Get the WebSocket server instance.
- */
-export function getWss(): WebSocketServer {
-  return wss;
-}

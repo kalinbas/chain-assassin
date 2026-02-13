@@ -90,6 +90,54 @@ contract ChainAssassinPrizeTest is ChainAssassinTestBase {
         game.claimPrize(gameId);
     }
 
+    function test_claimPrize_revertsNotRegistered() public {
+        uint256 gameId = _setupEndedGame();
+
+        vm.prank(player5); // never registered in _setupEndedGame
+        vm.expectRevert(IChainAssassin.PlayerNotRegistered.selector);
+        game.claimPrize(gameId);
+    }
+
+    function test_getClaimableAmount_zeroIfNotEnded() public {
+        uint256 gameId = _createAndRegisterPlayers(3);
+        assertEq(game.getClaimableAmount(gameId, player1), 0);
+    }
+
+    function test_getClaimableAmount_zeroIfNotRegistered() public {
+        uint256 gameId = _setupEndedGame();
+        assertEq(game.getClaimableAmount(gameId, player5), 0);
+    }
+
+    function test_getClaimableAmount_zeroIfAlreadyClaimed() public {
+        uint256 gameId = _setupEndedGame();
+
+        vm.prank(player1);
+        game.claimPrize(gameId);
+
+        assertEq(game.getClaimableAmount(gameId, player1), 0);
+    }
+
+    function test_getPlayerInfo_unregisteredDefaults() public {
+        uint256 gameId = _createDefaultGame();
+
+        (bool registered, bool alive, uint16 kills, bool claimed, uint16 number) = game.getPlayerInfo(gameId, player5);
+        assertFalse(registered);
+        assertFalse(alive);
+        assertEq(kills, 0);
+        assertFalse(claimed);
+        assertEq(number, 0);
+    }
+
+    function test_getPlayer_uninitializedSlotReturnsZeroState() public {
+        uint256 gameId = _createDefaultGame();
+
+        IChainAssassin.PlayerState memory p = game.getPlayer(gameId, 42);
+        assertEq(p.addr, address(0));
+        assertFalse(p.alive);
+        assertFalse(p.claimed);
+        assertEq(p.killCount, 0);
+    }
+
     function test_allPrizesPlusFeesSumCorrectly() public {
         uint256 gameId = _setupEndedGame();
         uint256 total = 0.2 ether; // 4 * 0.05
