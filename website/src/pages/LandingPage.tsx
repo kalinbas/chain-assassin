@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Hero } from '../components/landing/Hero';
 import { ActiveGame } from '../components/landing/ActiveGame';
 import { GamesGrid } from '../components/landing/GamesGrid';
@@ -10,6 +11,10 @@ import { HostSection } from '../components/landing/HostSection';
 import { FAQ } from '../components/landing/FAQ';
 
 export function LandingPage() {
+  useEffect(() => {
+    document.title = 'Chain Assassin — Hunt or Be Hunted. On-Chain.';
+  }, []);
+
   return (
     <>
       <Hero />

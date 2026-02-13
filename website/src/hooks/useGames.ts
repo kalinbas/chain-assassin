@@ -8,7 +8,7 @@ interface GamesState {
   error: string | null;
 }
 
-const POLL_INTERVAL_MS = 30_000;
+const POLL_INTERVAL_MS = 60_000;
 
 const listeners = new Set<(state: GamesState) => void>();
 
@@ -63,6 +63,9 @@ function startPolling() {
     void fetchGames();
   }
   pollTimer = setInterval(() => {
+    if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+      return;
+    }
     void fetchGames();
   }, POLL_INTERVAL_MS);
 }
@@ -92,7 +95,29 @@ export function useGames() {
 
     startPolling();
 
+    const onVisibilityOrFocus = () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
+        return;
+      }
+      void fetchGames();
+    };
+
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', onVisibilityOrFocus);
+    }
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', onVisibilityOrFocus);
+      window.addEventListener('online', onVisibilityOrFocus);
+    }
+
     return () => {
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', onVisibilityOrFocus);
+      }
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', onVisibilityOrFocus);
+        window.removeEventListener('online', onVisibilityOrFocus);
+      }
       listeners.delete(listener);
       if (listeners.size === 0) {
         stopPolling();

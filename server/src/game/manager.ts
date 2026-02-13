@@ -302,7 +302,7 @@ function tryAutoSeed(gameId: number, seedCount: number): void {
   }
 
   const game = getGame(gameId);
-  if (!game || game.subPhase !== "checkin") {
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "checkin") {
     clearMapTimer(autoSeedTimers, gameId, clearInterval);
     return;
   }
@@ -1576,6 +1576,7 @@ function cleanupActiveGame(gameId: number): void {
     activeGames.delete(gameId);
   }
   stopPreGameSpectatorBroadcast(gameId);
+  clearMapTimer(autoSeedTimers, gameId, clearInterval);
   clearMapTimer(checkinTimers, gameId, clearInterval);
   clearMapTimer(pregameTimers, gameId);
   log.info({ gameId }, "Active game cleaned up");
