@@ -1,816 +1,613 @@
-2026-02-13T03:48:16.817152Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:16.846480Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.864394Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.867727Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:16.867803Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:16.867810Z  INFO node::user: eth_chainId
-2026-02-13T03:48:16.868419Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:16.868494Z  INFO node::user: eth_chainId
-2026-02-13T03:48:16.868528Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:16.868813Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.868835Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.868843Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.868882Z  INFO node::user: eth_getAccountInfo
-2026-02-13T03:48:16.868887Z  INFO node::user: eth_getAccount
-2026-02-13T03:48:16.868895Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.868950Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.868983Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.868990Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.869071Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.869084Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.869088Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.869297Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.869308Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.869309Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.869710Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.869716Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.869727Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.869922Z  INFO node::user: eth_getBalance
-2026-02-13T03:48:16.869930Z  INFO node::user: eth_getCode
-2026-02-13T03:48:16.869935Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:16.954327Z  INFO node::user: eth_chainId
-2026-02-13T03:48:17.555815Z  INFO node::user: eth_chainId
-2026-02-13T03:48:17.556694Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:17.556694Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:17.556697Z  INFO node::user: eth_chainId
-2026-02-13T03:48:17.558210Z  INFO node::user: eth_chainId
-2026-02-13T03:48:17.558485Z  INFO node::user: eth_feeHistory
-2026-02-13T03:48:17.585472Z  INFO node::user: eth_feeHistory
-2026-02-13T03:48:17.586069Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:17.586209Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:17.586937Z  INFO node::user: 
-2026-02-13T03:48:17.586949Z  INFO node::user:     Transaction: 0xf843f20283d51fce77ba8dd458e16ede8664627f8ec8ed3d7ed462d72ccf8484
-2026-02-13T03:48:17.586959Z  INFO node::user:     Contract created: 0x5FbDB2315678afecb367f032d93F642f64180aa3
-2026-02-13T03:48:17.586971Z  INFO node::user:     Gas used: 2782436
-2026-02-13T03:48:17.586980Z  INFO node::user: 
-2026-02-13T03:48:17.586988Z  INFO node::user:     Transaction: 0xf422163550167bd325d43e1239a55d5a56e582c1f8eefa2bf21f8ca814a08991
-2026-02-13T03:48:17.586992Z  INFO node::user:     Gas used: 2830050
-2026-02-13T03:48:17.586996Z  INFO node::user: 
-2026-02-13T03:48:17.587005Z  INFO node::user:     Block Number: 1
-2026-02-13T03:48:17.587010Z  INFO node::user:     Block Hash: 0xe1c0bc54b2bbb6018e47404171c2ec29a8488f775f6d7f576cc220b773084bbf
-2026-02-13T03:48:17.587023Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:17 +0000"
+2026-02-13T21:10:39.966948Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:40.021192Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.056244Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.062155Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:40.062277Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.062322Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:40.066619Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.066667Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:40.066672Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:40.069231Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.069277Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.069295Z  INFO node::user: eth_getAccountInfo
+2026-02-13T21:10:40.069304Z  INFO node::user: eth_getAccount
+2026-02-13T21:10:40.069280Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.069518Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.069591Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.069599Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.069647Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.069733Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.069747Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.069778Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.070905Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.070923Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.070927Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.072014Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.072020Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.072024Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.072489Z  INFO node::user: eth_getBalance
+2026-02-13T21:10:40.072506Z  INFO node::user: eth_getCode
+2026-02-13T21:10:40.072509Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:40.158687Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.669651Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.672099Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:40.672185Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:40.672197Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.673295Z  INFO node::user: eth_chainId
+2026-02-13T21:10:40.674599Z  INFO node::user: eth_feeHistory
+2026-02-13T21:10:40.694102Z  INFO node::user: eth_feeHistory
+2026-02-13T21:10:40.695428Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:40.695489Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:40.698461Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:40.698472Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:40.699010Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:40.699105Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:40.699211Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:40.699273Z  INFO node::user: 
+2026-02-13T21:10:40.699277Z  INFO node::user:     Transaction: 0xf843f20283d51fce77ba8dd458e16ede8664627f8ec8ed3d7ed462d72ccf8484
+2026-02-13T21:10:40.699403Z  INFO node::user:     Contract created: 0x5FbDB2315678afecb367f032d93F642f64180aa3
+2026-02-13T21:10:40.699408Z  INFO node::user:     Gas used: 2782436
+2026-02-13T21:10:40.699410Z  INFO node::user: 
+2026-02-13T21:10:40.699418Z  INFO node::user:     Transaction: 0xf422163550167bd325d43e1239a55d5a56e582c1f8eefa2bf21f8ca814a08991
+2026-02-13T21:10:40.699421Z  INFO node::user:     Gas used: 2830050
+2026-02-13T21:10:40.699423Z  INFO node::user: 
+2026-02-13T21:10:40.699426Z  INFO node::user:     Block Number: 1
+2026-02-13T21:10:40.699429Z  INFO node::user:     Block Hash: 0x240f11a77fbc7a5c36cc1b4f1aff684fc679307dc9094293c09bde6e6ed6a8ba
+2026-02-13T21:10:40.699446Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:40 +0000"
 
-2026-02-13T03:48:17.587230Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:17.587230Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:17.587504Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:17.587569Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:17.918699Z  INFO node::user: eth_chainId
-2026-02-13T03:48:17.918781Z  INFO node::user: eth_call
-2026-02-13T03:48:17.930229Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:18.214379Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.224740Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:18.237082Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.237101Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.250513Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.262134Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.273685Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.285207Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:18.285225Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:18.298972Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:18.298998Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.299133Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.299291Z  INFO node::user: 
-2026-02-13T03:48:18.299296Z  INFO node::user:     Transaction: 0xc33a3b15263925e8d5bf9ad0c2f15e1a553628ca2fb6338bda961f21a7995c96
-2026-02-13T03:48:18.299298Z  INFO node::user:     Gas used: 232985
-2026-02-13T03:48:18.299301Z  INFO node::user: 
-2026-02-13T03:48:18.299304Z  INFO node::user:     Block Number: 2
-2026-02-13T03:48:18.299306Z  INFO node::user:     Block Hash: 0x9e0163dc105b399c0dc192738aa6479584261ba4458b1594241e26055da42686
-2026-02-13T03:48:18.299309Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:40.699606Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:40.950984Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:40.950984Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:40.951210Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:41.542812Z  INFO node::user: eth_chainId
+2026-02-13T21:10:41.543635Z  INFO node::user: eth_call
+2026-02-13T21:10:41.557094Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:42.097029Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.106640Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:42.119344Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.119388Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.135860Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.162845Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.177485Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.188437Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:42.188462Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:42.202421Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:42.202454Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.202559Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.202755Z  INFO node::user: 
+2026-02-13T21:10:42.202767Z  INFO node::user:     Transaction: 0xb385cb32ae2a3689b0c648984bf3b0fa451f1c75181a2601d418dc9f2a753eed
+2026-02-13T21:10:42.202770Z  INFO node::user:     Gas used: 232985
+2026-02-13T21:10:42.202773Z  INFO node::user: 
+2026-02-13T21:10:42.202775Z  INFO node::user:     Block Number: 2
+2026-02-13T21:10:42.202777Z  INFO node::user:     Block Hash: 0x59591ddf2a77fa68e0741e09933dee5c6f9eb9097f7d143b6edd767396cd076e
+2026-02-13T21:10:42.202779Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.312431Z  INFO node::user: eth_call
-2026-02-13T03:48:18.312453Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.313636Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.313654Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.324636Z  INFO node::user: eth_call
-2026-02-13T03:48:18.324658Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.327365Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.327376Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.339169Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.350866Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.362447Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.375047Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.375185Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.375310Z  INFO node::user: 
-2026-02-13T03:48:18.375319Z  INFO node::user:     Transaction: 0x7d3b3c759cd143e280656da7c3b4ff1a51b79c97584569859486ef0f2b9fb1cb
-2026-02-13T03:48:18.375322Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:18.375324Z  INFO node::user: 
-2026-02-13T03:48:18.375327Z  INFO node::user:     Block Number: 3
-2026-02-13T03:48:18.375329Z  INFO node::user:     Block Hash: 0xd4025488c208d5fa502d2a845de5d4ad0e4762fd3d07dfd4d7fd4c4981e34fbe
-2026-02-13T03:48:18.375332Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.215761Z  INFO node::user: eth_call
+2026-02-13T21:10:42.215792Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.216942Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.216957Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.228460Z  INFO node::user: eth_call
+2026-02-13T21:10:42.228511Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.230241Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.230270Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.242915Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.254770Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.266313Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.278742Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.278876Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.278996Z  INFO node::user: 
+2026-02-13T21:10:42.279003Z  INFO node::user:     Transaction: 0x7d3b3c759cd143e280656da7c3b4ff1a51b79c97584569859486ef0f2b9fb1cb
+2026-02-13T21:10:42.279006Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:42.279008Z  INFO node::user: 
+2026-02-13T21:10:42.279011Z  INFO node::user:     Block Number: 3
+2026-02-13T21:10:42.279012Z  INFO node::user:     Block Hash: 0xf76838f6cc19c28d63c515082b0aad9dfeb79652fbe5fba47e84d5ca9d705019
+2026-02-13T21:10:42.279015Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.387273Z  INFO node::user: eth_call
-2026-02-13T03:48:18.387314Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.388343Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.388351Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.399681Z  INFO node::user: eth_call
-2026-02-13T03:48:18.399710Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.399909Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.399919Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.411770Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.423495Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.435046Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.447088Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.447225Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.447332Z  INFO node::user: 
-2026-02-13T03:48:18.447335Z  INFO node::user:     Transaction: 0x3c1eb9ee0cd3ae3f17917cb711f0d29d9db04b28c8cc74217e571508a29b2766
-2026-02-13T03:48:18.447337Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:18.447339Z  INFO node::user: 
-2026-02-13T03:48:18.447341Z  INFO node::user:     Block Number: 4
-2026-02-13T03:48:18.447343Z  INFO node::user:     Block Hash: 0x1b2f905dcf6a06dcaf6ac6eafe0cd31fbf1b02d7b7023a2cfca50dd9fd1082a7
-2026-02-13T03:48:18.447346Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.290754Z  INFO node::user: eth_call
+2026-02-13T21:10:42.290791Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.292257Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.292264Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.303152Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.303221Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.303333Z  INFO node::user: eth_call
+2026-02-13T21:10:42.303357Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.314938Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.326711Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.338403Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.349811Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.349925Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.350020Z  INFO node::user: 
+2026-02-13T21:10:42.350024Z  INFO node::user:     Transaction: 0x3c1eb9ee0cd3ae3f17917cb711f0d29d9db04b28c8cc74217e571508a29b2766
+2026-02-13T21:10:42.350026Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:42.350027Z  INFO node::user: 
+2026-02-13T21:10:42.350029Z  INFO node::user:     Block Number: 4
+2026-02-13T21:10:42.350031Z  INFO node::user:     Block Hash: 0xfd26c1faa25aacc49904d906409dda7cae227853877942028b25607e47fc460c
+2026-02-13T21:10:42.350040Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.459575Z  INFO node::user: eth_call
-2026-02-13T03:48:18.459606Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.460237Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.460252Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.471993Z  INFO node::user: eth_call
-2026-02-13T03:48:18.472039Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.472249Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.472267Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.484333Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.496282Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.507776Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.519366Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:18.530442Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.530560Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.530663Z  INFO node::user: 
-2026-02-13T03:48:18.530666Z  INFO node::user:     Transaction: 0x9fe9b2c9cefdc876bdb0182e4efe0cd4296bfa852d34e55c3f4103ad49774add
-2026-02-13T03:48:18.530669Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:18.530671Z  INFO node::user: 
-2026-02-13T03:48:18.530673Z  INFO node::user:     Block Number: 5
-2026-02-13T03:48:18.530674Z  INFO node::user:     Block Hash: 0x659db22a9966bf121476dbeaae9900af7784ba966962c8a5e5e1207c22f12774
-2026-02-13T03:48:18.530676Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.361540Z  INFO node::user: eth_call
+2026-02-13T21:10:42.361585Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.361994Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.362005Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.373300Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.373333Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.373721Z  INFO node::user: eth_call
+2026-02-13T21:10:42.373741Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.385304Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.396974Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.408457Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.420144Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:42.432689Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.432800Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.432912Z  INFO node::user: 
+2026-02-13T21:10:42.432915Z  INFO node::user:     Transaction: 0x9fe9b2c9cefdc876bdb0182e4efe0cd4296bfa852d34e55c3f4103ad49774add
+2026-02-13T21:10:42.432917Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:42.432920Z  INFO node::user: 
+2026-02-13T21:10:42.432922Z  INFO node::user:     Block Number: 5
+2026-02-13T21:10:42.432923Z  INFO node::user:     Block Hash: 0x564c334a9e16831f1570d81e76f04d6a4d328cb7de292ea93220c11d8dd03ce6
+2026-02-13T21:10:42.432925Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.542179Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.542206Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.543215Z  INFO node::user: eth_call
-2026-02-13T03:48:18.543239Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.554014Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.554038Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.555013Z  INFO node::user: eth_call
-2026-02-13T03:48:18.555027Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.566016Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.577866Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.589378Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.600914Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:18.600938Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:18.613425Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:18.613453Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.613560Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.613693Z  INFO node::user: 
-2026-02-13T03:48:18.613702Z  INFO node::user:     Transaction: 0x48c19454e02c26ae6758ef18c0ddada4cf70b4414ba45bae832d3a6cbf31e83b
-2026-02-13T03:48:18.613705Z  INFO node::user:     Gas used: 232961
-2026-02-13T03:48:18.613707Z  INFO node::user: 
-2026-02-13T03:48:18.613710Z  INFO node::user:     Block Number: 6
-2026-02-13T03:48:18.613712Z  INFO node::user:     Block Hash: 0x0793cc5e4e5e41515e9631622dea2dbc9966b3b318ee9d2719d0d6e5f34d8c5d
-2026-02-13T03:48:18.613714Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.444920Z  INFO node::user: eth_call
+2026-02-13T21:10:42.444969Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.445248Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.445270Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.456806Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.457032Z  INFO node::user: eth_call
+2026-02-13T21:10:42.457062Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.468719Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.479374Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.490178Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:42.490203Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:42.502343Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:42.502368Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.502467Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.502594Z  INFO node::user: 
+2026-02-13T21:10:42.502597Z  INFO node::user:     Transaction: 0x0e3362e3aaf1fda4bded12b00104f082ee89f18a58d6c03dce9e15c8e74a5e61
+2026-02-13T21:10:42.502599Z  INFO node::user:     Gas used: 232961
+2026-02-13T21:10:42.502601Z  INFO node::user: 
+2026-02-13T21:10:42.502604Z  INFO node::user:     Block Number: 6
+2026-02-13T21:10:42.502605Z  INFO node::user:     Block Hash: 0x9d9f2059d791f3f9d77d8702221c7750642dd9395e28ce71b819b5396b54416e
+2026-02-13T21:10:42.502608Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.625943Z  INFO node::user: eth_call
-2026-02-13T03:48:18.625973Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.626789Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.626808Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.638086Z  INFO node::user: eth_call
-2026-02-13T03:48:18.638120Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.638266Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.650076Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.661988Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.673485Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.685588Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.685712Z  WARN backend: [0x75d29373a284df963666fee565d2c274bb8e32daf96eae93f439a0efe79c105c] nonce too low
-2026-02-13T03:48:18.685723Z  INFO node::user: 
+2026-02-13T21:10:42.514778Z  INFO node::user: eth_call
+2026-02-13T21:10:42.514802Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.514856Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.514865Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.526770Z  INFO node::user: eth_call
+2026-02-13T21:10:42.526797Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.527162Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.539122Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.550013Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.561251Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.572786Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.572892Z  WARN backend: [0x75d29373a284df963666fee565d2c274bb8e32daf96eae93f439a0efe79c105c] nonce too low
+2026-02-13T21:10:42.575100Z  INFO node::user: 
 RPC request failed:
-2026-02-13T03:48:18.685725Z  INFO node::user:     Request: EthSendRawTransaction(0x02f898827a6980843b9aca00848de014f283017a7a945fbdb2315678afecb367f032d93f642f64180aa387354a6ba7a18000a4f207564e0000000000000000000000000000000000000000000000000000000000000002c001a0a1524b02787acbdf0e16aed3fd54ccdd0f96d67fef3f3ec0f25479e0e16abba9a03760e3e9f1bfd26e474612b0d6e45ea1c687341381667ce0493d692adf205402)
-2026-02-13T03:48:18.685731Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:42.575105Z  INFO node::user:     Request: EthSendRawTransaction(0x02f898827a6980843b9aca00848de014f283017a7a945fbdb2315678afecb367f032d93f642f64180aa387354a6ba7a18000a4f207564e0000000000000000000000000000000000000000000000000000000000000002c001a0a1524b02787acbdf0e16aed3fd54ccdd0f96d67fef3f3ec0f25479e0e16abba9a03760e3e9f1bfd26e474612b0d6e45ea1c687341381667ce0493d692adf205402)
+2026-02-13T21:10:42.575260Z  INFO node::user:     Error: Transaction rejected: nonce too low
 
-2026-02-13T03:48:18.685743Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.697093Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.709226Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.721047Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.733340Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.733474Z  WARN backend: [0x75d29373a284df963666fee565d2c274bb8e32daf96eae93f439a0efe79c105c] nonce too low
-2026-02-13T03:48:18.733481Z  INFO node::user: 
+2026-02-13T21:10:42.575266Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.587142Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.598285Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.609965Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.621145Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.621280Z  WARN backend: [0x75d29373a284df963666fee565d2c274bb8e32daf96eae93f439a0efe79c105c] nonce too low
+2026-02-13T21:10:42.621286Z  INFO node::user: 
 RPC request failed:
-2026-02-13T03:48:18.733484Z  INFO node::user:     Request: EthSendRawTransaction(0x02f898827a6980843b9aca00848de014f283017a7a945fbdb2315678afecb367f032d93f642f64180aa387354a6ba7a18000a4f207564e0000000000000000000000000000000000000000000000000000000000000002c001a0a1524b02787acbdf0e16aed3fd54ccdd0f96d67fef3f3ec0f25479e0e16abba9a03760e3e9f1bfd26e474612b0d6e45ea1c687341381667ce0493d692adf205402)
-2026-02-13T03:48:18.733488Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:42.621288Z  INFO node::user:     Request: EthSendRawTransaction(0x02f898827a6980843b9aca00848de014f283017a7a945fbdb2315678afecb367f032d93f642f64180aa387354a6ba7a18000a4f207564e0000000000000000000000000000000000000000000000000000000000000002c001a0a1524b02787acbdf0e16aed3fd54ccdd0f96d67fef3f3ec0f25479e0e16abba9a03760e3e9f1bfd26e474612b0d6e45ea1c687341381667ce0493d692adf205402)
+2026-02-13T21:10:42.621292Z  INFO node::user:     Error: Transaction rejected: nonce too low
 
-2026-02-13T03:48:18.733493Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.745264Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.745289Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.756920Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.767879Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.779519Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.791301Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:18.803537Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.803666Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.803785Z  INFO node::user: 
-2026-02-13T03:48:18.803792Z  INFO node::user:     Transaction: 0x740add039166266be26a0a08ea1e9573825ed0a3de7d18adbc1132efa986afea
-2026-02-13T03:48:18.803795Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:18.803797Z  INFO node::user: 
-2026-02-13T03:48:18.803803Z  INFO node::user:     Block Number: 7
-2026-02-13T03:48:18.803805Z  INFO node::user:     Block Hash: 0xf802aba23e5c8e7c139ccfa3fca633d7748124690647eb4a9dc5094427530747
-2026-02-13T03:48:18.803808Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.621297Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.632235Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.632265Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.643962Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.655626Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.666135Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.677560Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:42.688984Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.689148Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.689320Z  INFO node::user: 
+2026-02-13T21:10:42.689328Z  INFO node::user:     Transaction: 0x740add039166266be26a0a08ea1e9573825ed0a3de7d18adbc1132efa986afea
+2026-02-13T21:10:42.689331Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:42.689334Z  INFO node::user: 
+2026-02-13T21:10:42.689342Z  INFO node::user:     Block Number: 7
+2026-02-13T21:10:42.689345Z  INFO node::user:     Block Hash: 0x43d59bfdb89919fde2eb4755b48b345141f738c498bf5440c555a2ddd7b98112
+2026-02-13T21:10:42.689348Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.816029Z  INFO node::user: eth_call
-2026-02-13T03:48:18.816095Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.816596Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.816603Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.828179Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.828185Z  INFO node::user: eth_call
-2026-02-13T03:48:18.828203Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.828216Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.839963Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.851770Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.863192Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.873771Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:18.873793Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:18.885962Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:18.885974Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.886099Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.886221Z  INFO node::user: 
-2026-02-13T03:48:18.886227Z  INFO node::user:     Transaction: 0x09a11e832f69bb155e273f8511819fc34221660258f2cee19d0856f8bca9c6a2
-2026-02-13T03:48:18.886230Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:18.886232Z  INFO node::user: 
-2026-02-13T03:48:18.886235Z  INFO node::user:     Block Number: 8
-2026-02-13T03:48:18.886237Z  INFO node::user:     Block Hash: 0x306bde3036054c1f5720d53792924891b1bdfc4f073829e546012cd82d52913b
-2026-02-13T03:48:18.886240Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.701546Z  INFO node::user: eth_call
+2026-02-13T21:10:42.701578Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.702788Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.702801Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.713567Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.713574Z  INFO node::user: eth_call
+2026-02-13T21:10:42.713600Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.713612Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.725369Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.736179Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.746929Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.757775Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:42.757811Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:42.769721Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:42.769743Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.769908Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.770104Z  INFO node::user: 
+2026-02-13T21:10:42.770110Z  INFO node::user:     Transaction: 0x09a11e832f69bb155e273f8511819fc34221660258f2cee19d0856f8bca9c6a2
+2026-02-13T21:10:42.770115Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:42.770118Z  INFO node::user: 
+2026-02-13T21:10:42.770122Z  INFO node::user:     Block Number: 8
+2026-02-13T21:10:42.770124Z  INFO node::user:     Block Hash: 0x4da6b391520a400f32dab1ecda6fb09993537400479c720cd34cde9aa0eef453
+2026-02-13T21:10:42.770129Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.898271Z  INFO node::user: eth_call
-2026-02-13T03:48:18.898284Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.899168Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.899176Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.910113Z  INFO node::user: eth_call
-2026-02-13T03:48:18.910122Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.910632Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.910647Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.921965Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:18.933560Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.944919Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.957285Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:18.957528Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.957740Z  INFO node::user: 
-2026-02-13T03:48:18.957752Z  INFO node::user:     Transaction: 0x5506f33e6d52ef8ce543fb8b092cbc8b52da023e953cf7b50f350b7b4f07e8aa
-2026-02-13T03:48:18.957757Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:18.957760Z  INFO node::user: 
-2026-02-13T03:48:18.957765Z  INFO node::user:     Block Number: 9
-2026-02-13T03:48:18.957768Z  INFO node::user:     Block Hash: 0x7fff7e5137eb0eb9a94ace990b7a963a6cb132e5131111ced9c60f35dd89df48
-2026-02-13T03:48:18.957772Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:18 +0000"
+2026-02-13T21:10:42.782816Z  INFO node::user: eth_call
+2026-02-13T21:10:42.782849Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.783099Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.783108Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.794174Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.794216Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.794517Z  INFO node::user: eth_call
+2026-02-13T21:10:42.794544Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.806317Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.818049Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.829521Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.842234Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.842412Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.842601Z  INFO node::user: 
+2026-02-13T21:10:42.842605Z  INFO node::user:     Transaction: 0x5506f33e6d52ef8ce543fb8b092cbc8b52da023e953cf7b50f350b7b4f07e8aa
+2026-02-13T21:10:42.842609Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:42.842612Z  INFO node::user: 
+2026-02-13T21:10:42.842616Z  INFO node::user:     Block Number: 9
+2026-02-13T21:10:42.842618Z  INFO node::user:     Block Hash: 0x33542c50e95739718bca3e0780b60a465c54de8d16a3d7add1e5b50f5e89fad9
+2026-02-13T21:10:42.842622Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:18.970090Z  INFO node::user: eth_call
-2026-02-13T03:48:18.970109Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.971358Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.971365Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:18.982115Z  INFO node::user: eth_call
-2026-02-13T03:48:18.982130Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.982942Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:18.982955Z  INFO node::user: eth_chainId
-2026-02-13T03:48:18.995101Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.007108Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.018549Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.031277Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.031509Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.031787Z  INFO node::user: 
-2026-02-13T03:48:19.031798Z  INFO node::user:     Transaction: 0x86bd7066f20fd0a416ac528d5958c3af6063172d42499789332eedb1a0b9bb3d
-2026-02-13T03:48:19.031803Z  INFO node::user:     Gas used: 232949
-2026-02-13T03:48:19.031807Z  INFO node::user: 
-2026-02-13T03:48:19.031811Z  INFO node::user:     Block Number: 10
-2026-02-13T03:48:19.031814Z  INFO node::user:     Block Hash: 0xd0cf91378c18a11d440ef5440c472e565008625257e2ec4e0e6da9ddc0c9389f
-2026-02-13T03:48:19.031818Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:19 +0000"
+2026-02-13T21:10:42.855215Z  INFO node::user: eth_call
+2026-02-13T21:10:42.855263Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.855399Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.855410Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.867454Z  INFO node::user: eth_call
+2026-02-13T21:10:42.867458Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.867535Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.879102Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.890921Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.903280Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.903424Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.903612Z  INFO node::user: 
+2026-02-13T21:10:42.903617Z  INFO node::user:     Transaction: 0xc2a50005fabbd3b825eb0c84913ddeec1b17ee65606f914ef35402dad60a9343
+2026-02-13T21:10:42.903620Z  INFO node::user:     Gas used: 232949
+2026-02-13T21:10:42.903622Z  INFO node::user: 
+2026-02-13T21:10:42.903625Z  INFO node::user:     Block Number: 10
+2026-02-13T21:10:42.903626Z  INFO node::user:     Block Hash: 0x946152763a5594d70fcb7ed23b3f32c2adfad1722f6a32b4f4006f1746b6cfcc
+2026-02-13T21:10:42.903629Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:19.044609Z  INFO node::user: eth_call
-2026-02-13T03:48:19.044636Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.046033Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.046045Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.056493Z  INFO node::user: eth_call
-2026-02-13T03:48:19.056522Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.058564Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:19.058578Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.069409Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.080067Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.091587Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.103087Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.115149Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.115501Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.115751Z  INFO node::user: 
-2026-02-13T03:48:19.115763Z  INFO node::user:     Transaction: 0x4e492ea497d4582735d718b92f4c28bfd1ff57ddc4e235f79aaba2d9c9efdf99
-2026-02-13T03:48:19.115770Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:19.115775Z  INFO node::user: 
-2026-02-13T03:48:19.115780Z  INFO node::user:     Block Number: 11
-2026-02-13T03:48:19.115784Z  INFO node::user:     Block Hash: 0xd7ad4949eb64dceceb9d78720d22952c102a4607c3e046eee641f8846ab388a4
-2026-02-13T03:48:19.115790Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:19 +0000"
+2026-02-13T21:10:42.916237Z  INFO node::user: eth_call
+2026-02-13T21:10:42.916270Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.916999Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.917014Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.928001Z  INFO node::user: eth_call
+2026-02-13T21:10:42.928044Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.929465Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:42.929483Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.941025Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:42.952705Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.963333Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.974936Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:42.986273Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:42.986400Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.986529Z  INFO node::user: 
+2026-02-13T21:10:42.986533Z  INFO node::user:     Transaction: 0x4e492ea497d4582735d718b92f4c28bfd1ff57ddc4e235f79aaba2d9c9efdf99
+2026-02-13T21:10:42.986535Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:42.986538Z  INFO node::user: 
+2026-02-13T21:10:42.986540Z  INFO node::user:     Block Number: 11
+2026-02-13T21:10:42.986541Z  INFO node::user:     Block Hash: 0x1a76111e8d48421cfc3d7e69662864702469a45f353887dd1e76da0afc142102
+2026-02-13T21:10:42.986544Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:42 +0000"
 
-2026-02-13T03:48:19.128962Z  INFO node::user: eth_call
-2026-02-13T03:48:19.129007Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.129179Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.129196Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.139969Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:19.140012Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.141686Z  INFO node::user: eth_call
-2026-02-13T03:48:19.141714Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.150847Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.162507Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.173920Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.185378Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:19.185397Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:19.198217Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:19.198267Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.198573Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.198841Z  INFO node::user: 
-2026-02-13T03:48:19.198857Z  INFO node::user:     Transaction: 0x0716fd31638b167d38abf773da3e5e12c2d756fe308639a66c4e03768f7e4ebe
-2026-02-13T03:48:19.198863Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:19.198869Z  INFO node::user: 
-2026-02-13T03:48:19.198876Z  INFO node::user:     Block Number: 12
-2026-02-13T03:48:19.198881Z  INFO node::user:     Block Hash: 0x68eb988d6265643f10ec54613d6b5676e7ab5639cdb1826ea30715ab207d309a
-2026-02-13T03:48:19.198886Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:48:19 +0000"
+2026-02-13T21:10:42.998342Z  INFO node::user: eth_chainId
+2026-02-13T21:10:42.998372Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:42.998350Z  INFO node::user: eth_call
+2026-02-13T21:10:42.998391Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.009513Z  INFO node::user: eth_call
+2026-02-13T21:10:43.009527Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.009933Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.009954Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.021561Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.032257Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.043587Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.055133Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:43.055153Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:43.067062Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:43.067075Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.067211Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.067350Z  INFO node::user: 
+2026-02-13T21:10:43.067359Z  INFO node::user:     Transaction: 0x0716fd31638b167d38abf773da3e5e12c2d756fe308639a66c4e03768f7e4ebe
+2026-02-13T21:10:43.067362Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:43.067365Z  INFO node::user: 
+2026-02-13T21:10:43.067368Z  INFO node::user:     Block Number: 12
+2026-02-13T21:10:43.067370Z  INFO node::user:     Block Hash: 0x54cef5786ec4463e06acccb3cd297580f3585659a93598fbbfc1bfe61f7fd603
+2026-02-13T21:10:43.067373Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:10:43 +0000"
 
-2026-02-13T03:48:19.212176Z  INFO node::user: eth_call
-2026-02-13T03:48:19.212240Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.212624Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.212649Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.223763Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.224569Z  INFO node::user: eth_call
-2026-02-13T03:48:19.224593Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.237782Z  INFO node::user: evm_increaseTime
-2026-02-13T03:48:19.249412Z  INFO node::user: evm_mine
-2026-02-13T03:48:19.249580Z  INFO node::user: 
-2026-02-13T03:48:19.249590Z  INFO node::user:     Block Number: 13
-2026-02-13T03:48:19.249595Z  INFO node::user:     Block Hash: 0xc73d229617d32f96e7a455410ea1019d6f8b3ed42e46f95b4a3beb775f3616b6
-2026-02-13T03:48:19.249600Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:48 +0000"
+2026-02-13T21:10:43.079646Z  INFO node::user: eth_call
+2026-02-13T21:10:43.079714Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.079865Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.079884Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.092110Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.092183Z  INFO node::user: eth_call
+2026-02-13T21:10:43.092193Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.106146Z  INFO node::user: evm_increaseTime
+2026-02-13T21:10:43.118032Z  INFO node::user: evm_mine
+2026-02-13T21:10:43.118148Z  INFO node::user: 
+2026-02-13T21:10:43.118156Z  INFO node::user:     Block Number: 13
+2026-02-13T21:10:43.118160Z  INFO node::user:     Block Hash: 0x4c1bedaea61512b54206f5c3c1a4ceacae9b828eaf0624c11b5578b02e81497e
+2026-02-13T21:10:43.118164Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.261408Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:19.261441Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.273499Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.285801Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.297432Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.310765Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.311180Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.311479Z  INFO node::user: 
-2026-02-13T03:48:19.311493Z  INFO node::user:     Transaction: 0x43b830dc515f092f1efb581f8b68044889774f3d59380027da047feb17adc657
-2026-02-13T03:48:19.311500Z  INFO node::user:     Gas used: 35338
-2026-02-13T03:48:19.311505Z  INFO node::user: 
-2026-02-13T03:48:19.311511Z  INFO node::user:     Block Number: 14
-2026-02-13T03:48:19.311516Z  INFO node::user:     Block Hash: 0x912b114c523c07a3b41317e99b00aaa4f6d4c023f27aeac63eca0df4273e89cd
-2026-02-13T03:48:19.311522Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:48 +0000"
+2026-02-13T21:10:43.130308Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.141980Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.152956Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.164550Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.164679Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.164836Z  INFO node::user: 
+2026-02-13T21:10:43.164841Z  INFO node::user:     Transaction: 0x43b830dc515f092f1efb581f8b68044889774f3d59380027da047feb17adc657
+2026-02-13T21:10:43.164844Z  INFO node::user:     Gas used: 35338
+2026-02-13T21:10:43.164847Z  INFO node::user: 
+2026-02-13T21:10:43.164850Z  INFO node::user:     Block Number: 14
+2026-02-13T21:10:43.164852Z  INFO node::user:     Block Hash: 0x0fc251ab7030d4fcf5d38546c9a4a310f5bf103d9452c1006b72893b50040732
+2026-02-13T21:10:43.164855Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.325958Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.326006Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.326130Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.326146Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.338764Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.351500Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.363303Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.375511Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.387112Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.399046Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.399332Z  WARN backend: [0xc7b844e2b2b84f6ae129bc13fd472c7b8325155857cfd75443f9b82aa12eff2c] nonce too low
-2026-02-13T03:48:19.399344Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.399349Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90112827a6905843b9aca0084517759088301687a945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a05aa245a34f7ac4c969a32a692f05beb7fe36ab1a5b35e80332366802ca333988a07987a54e1518349dcb6d2588a6ebd68ed78940b9da96681c95f756c1cab23139)
-2026-02-13T03:48:19.399381Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.177279Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.177307Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:43.177947Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.177961Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.189456Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.201258Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.212857Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.225252Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.225413Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.225588Z  INFO node::user: 
+2026-02-13T21:10:43.225595Z  INFO node::user:     Transaction: 0xc2b263ce5fba3509e870a0514afdc7c24c7d28dba98eb85bf7276f749dfa577e
+2026-02-13T21:10:43.225598Z  INFO node::user:     Gas used: 92282
+2026-02-13T21:10:43.225600Z  INFO node::user: 
+2026-02-13T21:10:43.225609Z  INFO node::user:     Block Number: 15
+2026-02-13T21:10:43.225611Z  INFO node::user:     Block Hash: 0x7e3b54de14f31cb1e2480ea4c56d3cbcda39bc9f35e2fec7075cd2480a3cb6b4
+2026-02-13T21:10:43.225629Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.399392Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.411118Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.423352Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.435008Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.446552Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:19.446610Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:19.458982Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:19.459029Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.459248Z  WARN backend: [0xc7b844e2b2b84f6ae129bc13fd472c7b8325155857cfd75443f9b82aa12eff2c] nonce too low
-2026-02-13T03:48:19.459257Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.459262Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90112827a6905843b9aca0084517759088301687a945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a05aa245a34f7ac4c969a32a692f05beb7fe36ab1a5b35e80332366802ca333988a07987a54e1518349dcb6d2588a6ebd68ed78940b9da96681c95f756c1cab23139)
-2026-02-13T03:48:19.459270Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.238580Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.238620Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.249962Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.262072Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.272917Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.284545Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:43.295841Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.295977Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.296217Z  INFO node::user: 
+2026-02-13T21:10:43.296223Z  INFO node::user:     Transaction: 0x5936658a877d8876455908920a4e82f2dcb2bf55c6389cdd1b48acb1b6721467
+2026-02-13T21:10:43.296226Z  INFO node::user:     Gas used: 35338
+2026-02-13T21:10:43.296228Z  INFO node::user: 
+2026-02-13T21:10:43.296240Z  INFO node::user:     Block Number: 16
+2026-02-13T21:10:43.296250Z  INFO node::user:     Block Hash: 0xa0c68aeee4b63e0d3a5195b69fa4d6482ca703fc0ff922495bf1f97b317e6363
+2026-02-13T21:10:43.296253Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.459277Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.470980Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.482957Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.494423Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.507746Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.508096Z  WARN backend: [0xc7b844e2b2b84f6ae129bc13fd472c7b8325155857cfd75443f9b82aa12eff2c] nonce too low
-2026-02-13T03:48:19.508110Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.508117Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90112827a6905843b9aca0084517759088301687a945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000010000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a05aa245a34f7ac4c969a32a692f05beb7fe36ab1a5b35e80332366802ca333988a07987a54e1518349dcb6d2588a6ebd68ed78940b9da96681c95f756c1cab23139)
-2026-02-13T03:48:19.508126Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.308530Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.308563Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.309078Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.320494Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.331706Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.343225Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.354709Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:43.354731Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:43.366646Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:43.366667Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.366772Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.366942Z  INFO node::user: 
+2026-02-13T21:10:43.366946Z  INFO node::user:     Transaction: 0x6c14cebbbacb0c8147be5ef75b9baf628ce47e76f15eae5e281453a8cea35c75
+2026-02-13T21:10:43.366948Z  INFO node::user:     Gas used: 58082
+2026-02-13T21:10:43.366950Z  INFO node::user: 
+2026-02-13T21:10:43.366952Z  INFO node::user:     Block Number: 17
+2026-02-13T21:10:43.366954Z  INFO node::user:     Block Hash: 0x70d563b59e4906aa57231befdc5cc9401325f364d584ef000721f9053f4cf420
+2026-02-13T21:10:43.366956Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.508135Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.520672Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:19.520892Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.533294Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.545244Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.556818Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.568704Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.568960Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.569208Z  INFO node::user: 
-2026-02-13T03:48:19.569216Z  INFO node::user:     Transaction: 0x436447d7554a8350dab3e5518c44f6c70518012ebc06ac35297b97b54011f634
-2026-02-13T03:48:19.569221Z  INFO node::user:     Gas used: 92282
-2026-02-13T03:48:19.569225Z  INFO node::user: 
-2026-02-13T03:48:19.569240Z  INFO node::user:     Block Number: 15
-2026-02-13T03:48:19.569265Z  INFO node::user:     Block Hash: 0xb8a56a787a0236954ff5d54d47d80cae91dca04ea9bc8e35473eaf1e916f6609
-2026-02-13T03:48:19.569271Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:48 +0000"
+2026-02-13T21:10:43.379854Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.379872Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.391610Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.402984Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.414444Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.426535Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.426663Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.426779Z  INFO node::user: 
+2026-02-13T21:10:43.426782Z  INFO node::user:     Transaction: 0x8e1b508a1e984463b034aeff893f9cef4da340403a75efa5972d4d14c285b4ed
+2026-02-13T21:10:43.426785Z  INFO node::user:     Gas used: 34468
+2026-02-13T21:10:43.426787Z  INFO node::user: 
+2026-02-13T21:10:43.426789Z  INFO node::user:     Block Number: 18
+2026-02-13T21:10:43.426791Z  INFO node::user:     Block Hash: 0xd1f940056a0bd67f11b236449f62fe83640b1b4de81baa2b9174732f181dcda2
+2026-02-13T21:10:43.426793Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.584145Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.584245Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.595235Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.607542Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.619934Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.630592Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.642109Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.655125Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.655382Z  WARN backend: [0xc1a3aa3abd49486c2f4c18b827a6205ab78b473e46ecf6a2d3637abc1c93b3ff] nonce too low
-2026-02-13T03:48:19.655393Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.655399Z  INFO node::user:     Request: EthSendRawTransaction(0x02f88f827a6906843b9aca00844ebd6d12828a0a945fbdb2315678afecb367f032d93f642f64180aa380a4e5ed1d590000000000000000000000000000000000000000000000000000000000000002c080a02495813df1c819b52a572396af830b5a9639c8d7e70844ebad37577ea2707b4d9fc5b4674a9242995c32bf99b21473901c776c5a5a688aa7c5478b7a610f07cb)
-2026-02-13T03:48:19.655406Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.439151Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.439165Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.450779Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.462781Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.474601Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.485163Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.497751Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.497908Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.498090Z  INFO node::user: 
+2026-02-13T21:10:43.498095Z  INFO node::user:     Transaction: 0x92a5c9a0c58765cbb2aa2567565e62402aecef5c1baeda9e007ef1e8d1adbd54
+2026-02-13T21:10:43.498111Z  INFO node::user:     Gas used: 232865
+2026-02-13T21:10:43.498114Z  INFO node::user: 
+2026-02-13T21:10:43.498117Z  INFO node::user:     Block Number: 19
+2026-02-13T21:10:43.498120Z  INFO node::user:     Block Hash: 0xa8c4d4d619c5aa6010fb647ae3ed410fc4afa6baead49bf04ac48b55baefa949
+2026-02-13T21:10:43.498123Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.655414Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.667433Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.679470Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.691488Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.703073Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:19.703125Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:19.715948Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:19.715994Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.716320Z  WARN backend: [0xc1a3aa3abd49486c2f4c18b827a6205ab78b473e46ecf6a2d3637abc1c93b3ff] nonce too low
-2026-02-13T03:48:19.716331Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.716336Z  INFO node::user:     Request: EthSendRawTransaction(0x02f88f827a6906843b9aca00844ebd6d12828a0a945fbdb2315678afecb367f032d93f642f64180aa380a4e5ed1d590000000000000000000000000000000000000000000000000000000000000002c080a02495813df1c819b52a572396af830b5a9639c8d7e70844ebad37577ea2707b4d9fc5b4674a9242995c32bf99b21473901c776c5a5a688aa7c5478b7a610f07cb)
-2026-02-13T03:48:19.716344Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.510407Z  INFO node::user: eth_call
+2026-02-13T21:10:43.510434Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.511741Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.511756Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.522510Z  INFO node::user: eth_call
+2026-02-13T21:10:43.522545Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.523560Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.523571Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.535229Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.547081Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.558479Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.569519Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:43.581777Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.581947Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.582135Z  INFO node::user: 
+2026-02-13T21:10:43.582143Z  INFO node::user:     Transaction: 0x8db5f313c76073571bde32cfa378b34cc873fd17d567069390706bad2b5980dd
+2026-02-13T21:10:43.582146Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:43.582149Z  INFO node::user: 
+2026-02-13T21:10:43.582152Z  INFO node::user:     Block Number: 20
+2026-02-13T21:10:43.582155Z  INFO node::user:     Block Hash: 0x30b82cc8665935c6d03fe5ef07cc9083d707fabef9fd29eb29ff93c229a69be7
+2026-02-13T21:10:43.582159Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.716352Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.728492Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.740662Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.752373Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.764686Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.765083Z  WARN backend: [0xc1a3aa3abd49486c2f4c18b827a6205ab78b473e46ecf6a2d3637abc1c93b3ff] nonce too low
-2026-02-13T03:48:19.765097Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.765103Z  INFO node::user:     Request: EthSendRawTransaction(0x02f88f827a6906843b9aca00844ebd6d12828a0a945fbdb2315678afecb367f032d93f642f64180aa380a4e5ed1d590000000000000000000000000000000000000000000000000000000000000002c080a02495813df1c819b52a572396af830b5a9639c8d7e70844ebad37577ea2707b4d9fc5b4674a9242995c32bf99b21473901c776c5a5a688aa7c5478b7a610f07cb)
-2026-02-13T03:48:19.765112Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.593904Z  INFO node::user: eth_call
+2026-02-13T21:10:43.593956Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.594895Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.594914Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.606076Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.606096Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.606148Z  INFO node::user: eth_call
+2026-02-13T21:10:43.606164Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.618021Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.629928Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.641581Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.653092Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:43.653141Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:43.665581Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:43.665605Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.665754Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.665958Z  INFO node::user: 
+2026-02-13T21:10:43.665964Z  INFO node::user:     Transaction: 0xfbefe0c226f56f8d26b672cecfe7631c73e98caa20ea55630370bde61cc8bb15
+2026-02-13T21:10:43.665968Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:43.665970Z  INFO node::user: 
+2026-02-13T21:10:43.665973Z  INFO node::user:     Block Number: 21
+2026-02-13T21:10:43.665976Z  INFO node::user:     Block Hash: 0x7497c3ac9c81c915283f5a1fd77adfd58089d78bfb33bb37ba8c8f4e762cffcc
+2026-02-13T21:10:43.665979Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.765125Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.776716Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:19.776798Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.789034Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.801160Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.812784Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.825214Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.825574Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.825871Z  INFO node::user: 
-2026-02-13T03:48:19.825886Z  INFO node::user:     Transaction: 0x5936658a877d8876455908920a4e82f2dcb2bf55c6389cdd1b48acb1b6721467
-2026-02-13T03:48:19.825922Z  INFO node::user:     Gas used: 35338
-2026-02-13T03:48:19.825926Z  INFO node::user: 
-2026-02-13T03:48:19.825933Z  INFO node::user:     Block Number: 16
-2026-02-13T03:48:19.825937Z  INFO node::user:     Block Hash: 0xbae5406622971594ad23b9e39ed00adb714f518c25ce2f028d25121abccb2f5f
-2026-02-13T03:48:19.825943Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:48 +0000"
+2026-02-13T21:10:43.678236Z  INFO node::user: eth_call
+2026-02-13T21:10:43.678267Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.678297Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.678303Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.690215Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.690243Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.690686Z  INFO node::user: eth_call
+2026-02-13T21:10:43.690707Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.702198Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.714008Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.725272Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.737292Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.737512Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.737864Z  INFO node::user: 
+2026-02-13T21:10:43.737885Z  INFO node::user:     Transaction: 0x70eb1f19af0846daf29eaf67280ccd6e36b7ef8741c9be5e2fd1a976ed7f459a
+2026-02-13T21:10:43.737892Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:43.737898Z  INFO node::user: 
+2026-02-13T21:10:43.737904Z  INFO node::user:     Block Number: 22
+2026-02-13T21:10:43.737907Z  INFO node::user:     Block Hash: 0x5d748bf9c3da3efc1128ce2eacf361baa9987a86079a949e3fc58f55979acfc4
+2026-02-13T21:10:43.737914Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.840448Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.840537Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.840672Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.840696Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:19.853530Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.865796Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:19.877356Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.889302Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.901239Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:19.914868Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.915731Z  WARN backend: [0x446c97c202d82fb77569db080225fe8f61b8ea0d41d3b0ad05c6ed363a19c9b3] nonce too low
-2026-02-13T03:48:19.915778Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.915793Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90111827a6907843b9aca00844c5cdd1482e2e2945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a09d361b38b4b3afe839b598407f62643034eaf05fc71e891c8a3b9ddde476baa2a033a137852fa22d8e5929c2a45834fc83d7dbb120137663e839c89c9ccc322e3d)
-2026-02-13T03:48:19.915820Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.749895Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.749947Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.750815Z  INFO node::user: eth_call
+2026-02-13T21:10:43.750836Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.762389Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.762502Z  INFO node::user: eth_call
+2026-02-13T21:10:43.762526Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.774482Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.786104Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.798077Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.798284Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.798501Z  INFO node::user: 
+2026-02-13T21:10:43.798511Z  INFO node::user:     Transaction: 0x49947899b6ba7349a0c2f48e8466c350e287f4686783f5cf142f8fb88bbe4324
+2026-02-13T21:10:43.798514Z  INFO node::user:     Gas used: 232853
+2026-02-13T21:10:43.798517Z  INFO node::user: 
+2026-02-13T21:10:43.798519Z  INFO node::user:     Block Number: 23
+2026-02-13T21:10:43.798521Z  INFO node::user:     Block Hash: 0x50924e13a9acc043b2533c3df00338e50d3fb7608d15f6d74dbf432f2d286a50
+2026-02-13T21:10:43.798524Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.915844Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.928449Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.941272Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.953036Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.963898Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:19.963954Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:19.978500Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:19.978568Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:19.979003Z  WARN backend: [0x446c97c202d82fb77569db080225fe8f61b8ea0d41d3b0ad05c6ed363a19c9b3] nonce too low
-2026-02-13T03:48:19.979020Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:19.979026Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90111827a6907843b9aca00844c5cdd1482e2e2945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a09d361b38b4b3afe839b598407f62643034eaf05fc71e891c8a3b9ddde476baa2a033a137852fa22d8e5929c2a45834fc83d7dbb120137663e839c89c9ccc322e3d)
-2026-02-13T03:48:19.979038Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.810984Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.811014Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.811095Z  INFO node::user: eth_call
+2026-02-13T21:10:43.811109Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.822860Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.822890Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.823141Z  INFO node::user: eth_call
+2026-02-13T21:10:43.823165Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.834631Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.846417Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.857957Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.869665Z  INFO node::user: eth_getBlockByNumber
+2026-02-13T21:10:43.881609Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.881740Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.881880Z  INFO node::user: 
+2026-02-13T21:10:43.881886Z  INFO node::user:     Transaction: 0x079087e3309b9be1d9c9ca1205fc4aab76151596a4b7e4c82ae8443dd9084178
+2026-02-13T21:10:43.881889Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:43.881891Z  INFO node::user: 
+2026-02-13T21:10:43.881893Z  INFO node::user:     Block Number: 24
+2026-02-13T21:10:43.881895Z  INFO node::user:     Block Hash: 0x9bff8847185e568b94cf81eecfbb924fae6dcd70852c9af41a9162acc70f768d
+2026-02-13T21:10:43.881897Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:19.979048Z  INFO node::user: eth_chainId
-2026-02-13T03:48:19.991416Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.004103Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.016126Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.029980Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.030370Z  WARN backend: [0x446c97c202d82fb77569db080225fe8f61b8ea0d41d3b0ad05c6ed363a19c9b3] nonce too low
-2026-02-13T03:48:20.030387Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.030393Z  INFO node::user:     Request: EthSendRawTransaction(0x02f90111827a6907843b9aca00844c5cdd1482e2e2945fbdb2315678afecb367f032d93f642f64180aa380b8a447d84c0f00000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000001000000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000030000000000000000000000000000000000000000000000000000000000000001c001a09d361b38b4b3afe839b598407f62643034eaf05fc71e891c8a3b9ddde476baa2a033a137852fa22d8e5929c2a45834fc83d7dbb120137663e839c89c9ccc322e3d)
-2026-02-13T03:48:20.030426Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:43.893964Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.893987Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.894046Z  INFO node::user: eth_call
+2026-02-13T21:10:43.894062Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.905320Z  INFO node::user: eth_call
+2026-02-13T21:10:43.905351Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.905712Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:43.905733Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.917318Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.928883Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.939390Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.951039Z  INFO node::user: eth_gasPrice
+2026-02-13T21:10:43.951065Z  INFO node::user: eth_maxPriorityFeePerGas
+2026-02-13T21:10:43.963041Z  INFO node::user: eth_blockNumber
+2026-02-13T21:10:43.963060Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:43.963180Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.963362Z  INFO node::user: 
+2026-02-13T21:10:43.963370Z  INFO node::user:     Transaction: 0x40c5d1e0af02a25737775f8426321ab389cf249544ebe355523b4d86e47273da
+2026-02-13T21:10:43.963374Z  INFO node::user:     Gas used: 79097
+2026-02-13T21:10:43.963376Z  INFO node::user: 
+2026-02-13T21:10:43.963379Z  INFO node::user:     Block Number: 25
+2026-02-13T21:10:43.963381Z  INFO node::user:     Block Hash: 0xeff78d462302ed941878bf708c063beefb30e84c037e14414b0cd59a69510467
+2026-02-13T21:10:43.963384Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:13 +0000"
 
-2026-02-13T03:48:20.030438Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.042536Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.042585Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.055177Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.067817Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.079744Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.093823Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.094248Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.094603Z  INFO node::user: 
-2026-02-13T03:48:20.094638Z  INFO node::user:     Transaction: 0x7b9e91fa7e5cf408386d3ccbe8d3398cf59724fe74fdbb2fc19d7e90443d8042
-2026-02-13T03:48:20.094649Z  INFO node::user:     Gas used: 58082
-2026-02-13T03:48:20.094657Z  INFO node::user: 
-2026-02-13T03:48:20.094674Z  INFO node::user:     Block Number: 17
-2026-02-13T03:48:20.094680Z  INFO node::user:     Block Hash: 0xb48d5f460de060d496cb4ef97dddc5488bb9db9a90683053296d08020414995d
-2026-02-13T03:48:20.094690Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
+2026-02-13T21:10:43.975649Z  INFO node::user: eth_call
+2026-02-13T21:10:43.975682Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.976116Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.976127Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:43.987672Z  INFO node::user: eth_call
+2026-02-13T21:10:43.987708Z  INFO node::user: eth_chainId
+2026-02-13T21:10:43.988280Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:43.999411Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.011083Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.023290Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:44.023437Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.023650Z  INFO node::user: 
+2026-02-13T21:10:44.023654Z  INFO node::user:     Transaction: 0x7d78c8db2b13288c6331b436003a5760041d3d746d04226fc736bed5b42f64e6
+2026-02-13T21:10:44.023657Z  INFO node::user:     Gas used: 232805
+2026-02-13T21:10:44.023660Z  INFO node::user: 
+2026-02-13T21:10:44.023663Z  INFO node::user:     Block Number: 26
+2026-02-13T21:10:44.023665Z  INFO node::user:     Block Hash: 0x66a0243ce105db200d93b571183cf6f53fa6ad04b483cb6d20ef2431317f4ada
+2026-02-13T21:10:44.023668Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:14 +0000"
 
-2026-02-13T03:48:20.109231Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.109318Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.121583Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.134343Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.145836Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.157302Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.169217Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:20.182586Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.183006Z  WARN backend: [0x9091fd054e7a3e170a42fb26dab6a69a5910b7c84b9dc4a545ce3a8246ecfbe1] nonce too low
-2026-02-13T03:48:20.183019Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.183024Z  INFO node::user:     Request: EthSendRawTransaction(0x02f890827a6908843b9aca00844a45de1e8286a4945fbdb2315678afecb367f032d93f642f64180aa380a435e257bc0000000000000000000000000000000000000000000000000000000000000003c080a08062f6f4af5f9ea5f10a5c045e04b1643943e14559042258236da69287a6a6eca03bd99a418f5790999bb499fd650a082facbc57eeed2416a2236311a60bb93e30)
-2026-02-13T03:48:20.183033Z  INFO node::user:     Error: Transaction rejected: nonce too low
+2026-02-13T21:10:44.035879Z  INFO node::user: eth_call
+2026-02-13T21:10:44.035915Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.036073Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.036082Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:44.048003Z  INFO node::user: eth_call
+2026-02-13T21:10:44.048032Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.048661Z  INFO node::user: eth_getTransactionCount
+2026-02-13T21:10:44.048675Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.060616Z  INFO node::user: eth_estimateGas
+2026-02-13T21:10:44.071502Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.081558Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.093599Z  INFO node::user: eth_sendRawTransaction
+2026-02-13T21:10:44.093810Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.094165Z  INFO node::user: 
+2026-02-13T21:10:44.094175Z  INFO node::user:     Transaction: 0x4c7eabb17e7e98415f54562c64e2c26368c01c3a9ed9bbc798d105c6f10cd947
+2026-02-13T21:10:44.094179Z  INFO node::user:     Gas used: 96197
+2026-02-13T21:10:44.094182Z  INFO node::user: 
+2026-02-13T21:10:44.094186Z  INFO node::user:     Block Number: 27
+2026-02-13T21:10:44.094190Z  INFO node::user:     Block Hash: 0x486f2803891414b214c19923523d72159efda11119aecf1c1de6b557b5eb8810
+2026-02-13T21:10:44.094193Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 21:20:14 +0000"
 
-2026-02-13T03:48:20.183043Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.195016Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.206435Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.219001Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.230567Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:20.230623Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:20.243845Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:20.243895Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.244615Z  WARN backend: [0x9091fd054e7a3e170a42fb26dab6a69a5910b7c84b9dc4a545ce3a8246ecfbe1] nonce too low
-2026-02-13T03:48:20.244633Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.244643Z  INFO node::user:     Request: EthSendRawTransaction(0x02f890827a6908843b9aca00844a45de1e8286a4945fbdb2315678afecb367f032d93f642f64180aa380a435e257bc0000000000000000000000000000000000000000000000000000000000000003c080a08062f6f4af5f9ea5f10a5c045e04b1643943e14559042258236da69287a6a6eca03bd99a418f5790999bb499fd650a082facbc57eeed2416a2236311a60bb93e30)
-2026-02-13T03:48:20.244657Z  INFO node::user:     Error: Transaction rejected: nonce too low
-
-2026-02-13T03:48:20.244670Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.255854Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.268962Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.280348Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.294377Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.295113Z  WARN backend: [0x9091fd054e7a3e170a42fb26dab6a69a5910b7c84b9dc4a545ce3a8246ecfbe1] nonce too low
-2026-02-13T03:48:20.295139Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.295153Z  INFO node::user:     Request: EthSendRawTransaction(0x02f890827a6908843b9aca00844a45de1e8286a4945fbdb2315678afecb367f032d93f642f64180aa380a435e257bc0000000000000000000000000000000000000000000000000000000000000003c080a08062f6f4af5f9ea5f10a5c045e04b1643943e14559042258236da69287a6a6eca03bd99a418f5790999bb499fd650a082facbc57eeed2416a2236311a60bb93e30)
-2026-02-13T03:48:20.295170Z  INFO node::user:     Error: Transaction rejected: nonce too low
-
-2026-02-13T03:48:20.295188Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.307991Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.308082Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.320533Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.332532Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.344527Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.357310Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.357687Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.358063Z  INFO node::user: 
-2026-02-13T03:48:20.358081Z  INFO node::user:     Transaction: 0x16766cb701880eb37b4415cec051f73b840ec46d20c8d14e95199580225ec431
-2026-02-13T03:48:20.358087Z  INFO node::user:     Gas used: 34468
-2026-02-13T03:48:20.358092Z  INFO node::user: 
-2026-02-13T03:48:20.358098Z  INFO node::user:     Block Number: 18
-2026-02-13T03:48:20.358102Z  INFO node::user:     Block Hash: 0x740ea344ddc0edf56c47b0a65aea1752ed1ace6cb56fc54873cabdbdc67033b9
-2026-02-13T03:48:20.358108Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.372225Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.372295Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.384419Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.396223Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.408110Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.419856Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.430844Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.442152Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:20.455817Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.456181Z  WARN backend: [0x8d01cd345e58f05b6f291d45aceace73303a9a54ca73d0e4b6e43bf0120d492e] nonce too low
-2026-02-13T03:48:20.456197Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.456202Z  INFO node::user:     Request: EthSendRawTransaction(0x02f903d3827a6909843b9aca008448724ce483038da1945fbdb2315678afecb367f032d93f642f64180aa380b903646566ac93000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000698ea84500000000000000000000000000000000000000000000000000000000698eaf4d00000000000000000000000000000000000000000000000000000000000015180000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000000000fa000000000000000000000000000000000000000000000000000000000000007d000000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000000000f446f776e746f776e205761726d757000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007d0000000000000000000000000000000000000000000000000000000000000025800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000004b0000000000000000000000000000000000000000000000000000000000000012cc001a0b81a677a265c8ee5deeaf8abdf611c69c726809bf4d0d8cb8d256909f8df9829a00eef4bdf3ba67833aa2191464a6f9c0feffd67106d6f360da17b3b5392b00e16)
-2026-02-13T03:48:20.456246Z  INFO node::user:     Error: Transaction rejected: nonce too low
-
-2026-02-13T03:48:20.456257Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.468528Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.481902Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.493742Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.505593Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:20.505645Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:20.520642Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:20.520723Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.521116Z  WARN backend: [0x8d01cd345e58f05b6f291d45aceace73303a9a54ca73d0e4b6e43bf0120d492e] nonce too low
-2026-02-13T03:48:20.521185Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.521198Z  INFO node::user:     Request: EthSendRawTransaction(0x02f903d3827a6909843b9aca008448724ce483038da1945fbdb2315678afecb367f032d93f642f64180aa380b903646566ac93000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000698ea84500000000000000000000000000000000000000000000000000000000698eaf4d00000000000000000000000000000000000000000000000000000000000015180000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000000000fa000000000000000000000000000000000000000000000000000000000000007d000000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000000000f446f776e746f776e205761726d757000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007d0000000000000000000000000000000000000000000000000000000000000025800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000004b0000000000000000000000000000000000000000000000000000000000000012cc001a0b81a677a265c8ee5deeaf8abdf611c69c726809bf4d0d8cb8d256909f8df9829a00eef4bdf3ba67833aa2191464a6f9c0feffd67106d6f360da17b3b5392b00e16)
-2026-02-13T03:48:20.521238Z  INFO node::user:     Error: Transaction rejected: nonce too low
-
-2026-02-13T03:48:20.521261Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.533106Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.546337Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.558594Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.572173Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.572609Z  WARN backend: [0x8d01cd345e58f05b6f291d45aceace73303a9a54ca73d0e4b6e43bf0120d492e] nonce too low
-2026-02-13T03:48:20.572629Z  INFO node::user: 
-RPC request failed:
-2026-02-13T03:48:20.572636Z  INFO node::user:     Request: EthSendRawTransaction(0x02f903d3827a6909843b9aca008448724ce483038da1945fbdb2315678afecb367f032d93f642f64180aa380b903646566ac93000000000000000000000000000000000000000000000000000000000000004000000000000000000000000000000000000000000000000000000000000002800000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000002386f26fc100000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000a00000000000000000000000000000000000000000000000000000000698ea84500000000000000000000000000000000000000000000000000000000698eaf4d00000000000000000000000000000000000000000000000000000000000015180000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000002406634fffffffffffffffffffffffffffffffffffffffffffffffffffffffff8b407380000000000000000000000000000000000000000000000000000000000000fa000000000000000000000000000000000000000000000000000000000000007d000000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000003e8000000000000000000000000000000000000000000000000000000000000000f446f776e746f776e205761726d757000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000003000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007d0000000000000000000000000000000000000000000000000000000000000025800000000000000000000000000000000000000000000000000000000000003e800000000000000000000000000000000000000000000000000000000000004b0000000000000000000000000000000000000000000000000000000000000012cc001a0b81a677a265c8ee5deeaf8abdf611c69c726809bf4d0d8cb8d256909f8df9829a00eef4bdf3ba67833aa2191464a6f9c0feffd67106d6f360da17b3b5392b00e16)
-2026-02-13T03:48:20.572684Z  INFO node::user:     Error: Transaction rejected: nonce too low
-
-2026-02-13T03:48:20.572699Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.584424Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.584488Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.598726Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.611856Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.623753Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.638801Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.639209Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.639528Z  INFO node::user: 
-2026-02-13T03:48:20.639545Z  INFO node::user:     Transaction: 0xb4943191bf2e65ce08ab479143c83f05e0279f2a10502c189867c82e1b43fd34
-2026-02-13T03:48:20.639553Z  INFO node::user:     Gas used: 232865
-2026-02-13T03:48:20.639558Z  INFO node::user: 
-2026-02-13T03:48:20.639564Z  INFO node::user:     Block Number: 19
-2026-02-13T03:48:20.639568Z  INFO node::user:     Block Hash: 0x879925a20f55ac6fc9883d4069fb777dd3fee9b8485bc17f99990910af2013c2
-2026-02-13T03:48:20.639573Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.653075Z  INFO node::user: eth_call
-2026-02-13T03:48:20.653154Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.653496Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.653528Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.664816Z  INFO node::user: eth_call
-2026-02-13T03:48:20.664862Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.666771Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.666792Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.678115Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.690225Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.701691Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.712605Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:20.723993Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.724343Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.724680Z  INFO node::user: 
-2026-02-13T03:48:20.724731Z  INFO node::user:     Transaction: 0x8db5f313c76073571bde32cfa378b34cc873fd17d567069390706bad2b5980dd
-2026-02-13T03:48:20.724740Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:20.724746Z  INFO node::user: 
-2026-02-13T03:48:20.724752Z  INFO node::user:     Block Number: 20
-2026-02-13T03:48:20.724757Z  INFO node::user:     Block Hash: 0xc35eaf5d4450251a9f0050978055e2630a41d57da7de0be93564583184b9cfb1
-2026-02-13T03:48:20.724764Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.736962Z  INFO node::user: eth_call
-2026-02-13T03:48:20.737014Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.738714Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.738733Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.749466Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.749478Z  INFO node::user: eth_call
-2026-02-13T03:48:20.749508Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.749522Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.760377Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.771831Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.783950Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.795719Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:20.795760Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:20.808812Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:20.808894Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.809239Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.809576Z  INFO node::user: 
-2026-02-13T03:48:20.809592Z  INFO node::user:     Transaction: 0xfbefe0c226f56f8d26b672cecfe7631c73e98caa20ea55630370bde61cc8bb15
-2026-02-13T03:48:20.809600Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:20.809605Z  INFO node::user: 
-2026-02-13T03:48:20.809612Z  INFO node::user:     Block Number: 21
-2026-02-13T03:48:20.809617Z  INFO node::user:     Block Hash: 0x1ef3d835089a56df9c29680bba2a4bae425bb6eeb2d13828debe01f004681808
-2026-02-13T03:48:20.809623Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.822232Z  INFO node::user: eth_call
-2026-02-13T03:48:20.822298Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.823756Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.823783Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.834702Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.834740Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.835330Z  INFO node::user: eth_call
-2026-02-13T03:48:20.835364Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.845691Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.857751Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.869536Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.882099Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.882460Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.882777Z  INFO node::user: 
-2026-02-13T03:48:20.882795Z  INFO node::user:     Transaction: 0x70eb1f19af0846daf29eaf67280ccd6e36b7ef8741c9be5e2fd1a976ed7f459a
-2026-02-13T03:48:20.882802Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:20.882808Z  INFO node::user: 
-2026-02-13T03:48:20.882815Z  INFO node::user:     Block Number: 22
-2026-02-13T03:48:20.882822Z  INFO node::user:     Block Hash: 0xeeb08ea681d1f1a5d618546ce4aa169ad249e060a4f64c66f8257ceb4b6d12ba
-2026-02-13T03:48:20.882829Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.895466Z  INFO node::user: eth_call
-2026-02-13T03:48:20.895525Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.896557Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.896580Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.908020Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.908059Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.908670Z  INFO node::user: eth_call
-2026-02-13T03:48:20.908700Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.918729Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:20.931480Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.943534Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.955262Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:20.955661Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.956170Z  INFO node::user: 
-2026-02-13T03:48:20.956199Z  INFO node::user:     Transaction: 0xec3a6c000ea6b4ce446a761bbdcbea57c0fbf448d8dad5c7f30bd5061dc66c72
-2026-02-13T03:48:20.956209Z  INFO node::user:     Gas used: 232853
-2026-02-13T03:48:20.956220Z  INFO node::user: 
-2026-02-13T03:48:20.956226Z  INFO node::user:     Block Number: 23
-2026-02-13T03:48:20.956230Z  INFO node::user:     Block Hash: 0x4753fac64a08ec4afdb304683cf0c695dae0d1c2d3cb8164b7e3b338303ff9d3
-2026-02-13T03:48:20.956235Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:49 +0000"
-
-2026-02-13T03:48:20.969793Z  INFO node::user: eth_call
-2026-02-13T03:48:20.969862Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.971739Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.971802Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:20.982864Z  INFO node::user: eth_call
-2026-02-13T03:48:20.982916Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.984599Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:20.984623Z  INFO node::user: eth_chainId
-2026-02-13T03:48:20.995875Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:21.008395Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.019968Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.031991Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:21.045666Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:21.046002Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.046313Z  INFO node::user: 
-2026-02-13T03:48:21.046323Z  INFO node::user:     Transaction: 0x079087e3309b9be1d9c9ca1205fc4aab76151596a4b7e4c82ae8443dd9084178
-2026-02-13T03:48:21.046329Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:21.046333Z  INFO node::user: 
-2026-02-13T03:48:21.046339Z  INFO node::user:     Block Number: 24
-2026-02-13T03:48:21.046344Z  INFO node::user:     Block Hash: 0x894d00bcfec030f269b5a04c2be121213b9305724effe21e8adea96d6fd0ed0e
-2026-02-13T03:48:21.046350Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:50 +0000"
-
-2026-02-13T03:48:21.059704Z  INFO node::user: eth_call
-2026-02-13T03:48:21.059783Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.060662Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.060693Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:21.073128Z  INFO node::user: eth_call
-2026-02-13T03:48:21.073179Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.073227Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:21.073244Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.085498Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:21.097537Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.109405Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.121107Z  INFO node::user: eth_gasPrice
-2026-02-13T03:48:21.121146Z  INFO node::user: eth_maxPriorityFeePerGas
-2026-02-13T03:48:21.132878Z  INFO node::user: eth_blockNumber
-2026-02-13T03:48:21.132922Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:21.133275Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.133669Z  INFO node::user: 
-2026-02-13T03:48:21.133685Z  INFO node::user:     Transaction: 0x40c5d1e0af02a25737775f8426321ab389cf249544ebe355523b4d86e47273da
-2026-02-13T03:48:21.133690Z  INFO node::user:     Gas used: 79097
-2026-02-13T03:48:21.133697Z  INFO node::user: 
-2026-02-13T03:48:21.133703Z  INFO node::user:     Block Number: 25
-2026-02-13T03:48:21.133708Z  INFO node::user:     Block Hash: 0xbe366cc01e71ea01003d95d39fb8d9c6e2b65c6cd211ede6b823e2133f1a24fc
-2026-02-13T03:48:21.133714Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:50 +0000"
-
-2026-02-13T03:48:21.147432Z  INFO node::user: eth_call
-2026-02-13T03:48:21.147599Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.147858Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.147889Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:21.160021Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:21.160071Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.160531Z  INFO node::user: eth_call
-2026-02-13T03:48:21.160555Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.172160Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:21.184713Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.196413Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.209975Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:21.210321Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.210712Z  INFO node::user: 
-2026-02-13T03:48:21.210726Z  INFO node::user:     Transaction: 0x0c1b2a2e3ea93d3e1849ed11586f8766276d5c69890b9a0b83801ab136b80b16
-2026-02-13T03:48:21.210734Z  INFO node::user:     Gas used: 232805
-2026-02-13T03:48:21.210739Z  INFO node::user: 
-2026-02-13T03:48:21.210747Z  INFO node::user:     Block Number: 26
-2026-02-13T03:48:21.210752Z  INFO node::user:     Block Hash: 0xf0c7707747b01ad6cd510eb80d0120a0131452b2cb941354e2dbaf4d299e3dfd
-2026-02-13T03:48:21.210759Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:50 +0000"
-
-2026-02-13T03:48:21.223555Z  INFO node::user: eth_call
-2026-02-13T03:48:21.223625Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.225398Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.225418Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:21.235810Z  INFO node::user: eth_call
-2026-02-13T03:48:21.235838Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.238153Z  INFO node::user: eth_getTransactionCount
-2026-02-13T03:48:21.238170Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.250324Z  INFO node::user: eth_estimateGas
-2026-02-13T03:48:21.262418Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.273138Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.284590Z  INFO node::user: eth_getBlockByNumber
-2026-02-13T03:48:21.297494Z  INFO node::user: eth_sendRawTransaction
-2026-02-13T03:48:21.297887Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.298215Z  INFO node::user: 
-2026-02-13T03:48:21.298235Z  INFO node::user:     Transaction: 0x03967c118bc2609a423ba2049a7f45724475c72c0b99e1ed8b7486e7cd8dd881
-2026-02-13T03:48:21.298243Z  INFO node::user:     Gas used: 96197
-2026-02-13T03:48:21.298249Z  INFO node::user: 
-2026-02-13T03:48:21.298256Z  INFO node::user:     Block Number: 27
-2026-02-13T03:48:21.298260Z  INFO node::user:     Block Hash: 0x5b4fb905c0b2e09c22e55f2566156154e858f65ebf46408782951adca2d556f2
-2026-02-13T03:48:21.298266Z  INFO node::user:     Block Time: "Fri, 13 Feb 2026 03:57:50 +0000"
-
-2026-02-13T03:48:21.311351Z  INFO node::user: eth_call
-2026-02-13T03:48:21.311397Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.312561Z  INFO node::user: eth_chainId
-2026-02-13T03:48:21.312576Z  INFO node::user: eth_getTransactionReceipt
-2026-02-13T03:48:21.324120Z  INFO node::user: eth_call
-2026-02-13T03:48:21.324198Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.106173Z  INFO node::user: eth_call
+2026-02-13T21:10:44.106204Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.107321Z  INFO node::user: eth_chainId
+2026-02-13T21:10:44.107331Z  INFO node::user: eth_getTransactionReceipt
+2026-02-13T21:10:44.118310Z  INFO node::user: eth_call
+2026-02-13T21:10:44.118335Z  INFO node::user: eth_chainId

@@ -5,6 +5,7 @@ import { useGames } from '../../hooks/useGames';
 import { gameUrl } from '../../lib/url';
 import { SkeletonGameCard } from '../ui/Skeleton';
 import type { Game } from '../../types/game';
+import { trackEvent } from '../../lib/analytics';
 
 function PastGameCard({ game }: { game: Game }) {
   const prizePoolBps = game.bps.first + game.bps.second + game.bps.third + game.bps.kills;
@@ -15,7 +16,13 @@ function PastGameCard({ game }: { game: Game }) {
   const hasWinner = game.winner1 !== 0;
 
   return (
-    <Link to={gameUrl(game.id, game.title)} className="game-card__link">
+    <Link
+      to={gameUrl(game.id, game.title)}
+      className="game-card__link"
+      onClick={() => {
+        trackEvent('past_game_open_click', { game_id: game.id, phase: game.phase });
+      }}
+    >
       <div className="past-game-card">
         <div className="past-game-card__header">
           <h3 className="past-game-card__name">{game.title}</h3>

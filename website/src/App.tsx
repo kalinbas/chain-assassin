@@ -4,6 +4,7 @@ import { Header } from './components/layout/Header';
 import { Footer } from './components/layout/Footer';
 import { LandingPage } from './pages/LandingPage';
 import { GamePage } from './pages/GamePage';
+import { LivePage } from './pages/LivePage';
 import { NotFoundPage } from './pages/NotFoundPage';
 
 function ScrollToTop() {
@@ -26,6 +27,7 @@ export function App() {
       <Header />
       <Routes>
         <Route path="/" element={<LandingPage />} />
+        <Route path="/live" element={<LivePage />} />
         <Route path="/game/:id" element={<GamePage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Routes>

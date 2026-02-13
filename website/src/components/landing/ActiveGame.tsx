@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { useActiveGame } from '../../hooks/useActiveGame';
+import { useGames } from '../../hooks/useGames';
+import { trackEvent } from '../../lib/analytics';
 import { gameUrl } from '../../lib/url';
 import type { ActiveGameStatus } from '../../hooks/useActiveGame';
 
@@ -82,6 +84,8 @@ function getBadgeLabel(phase: string): string {
 
 export function ActiveGame() {
   const status = useActiveGame();
+  const { games } = useGames();
+  const liveCount = games.filter((game) => game.phase === 'active').length;
 
   if (!status) {
     return null;
@@ -92,7 +96,27 @@ export function ActiveGame() {
   return (
     <section className="active-game">
       <div className="container">
-        <Link to={gameUrl(status.gameId, status.title)} className={`active-game__card active-game__card--${status.phase}`}>
+        <div className="active-game__header">
+          <h2 className="active-game__heading">Live Now</h2>
+          {liveCount > 1 && (
+            <Link
+              to="/live"
+              className="active-game__all-link"
+              onClick={() => {
+                trackEvent('watch_live_cta_click', { source: 'active_game_section', live_games: liveCount });
+              }}
+            >
+              See all live games
+            </Link>
+          )}
+        </div>
+        <Link
+          to={gameUrl(status.gameId, status.title)}
+          className={`active-game__card active-game__card--${status.phase}`}
+          onClick={() => {
+            trackEvent('active_game_open_click', { game_id: status.gameId, phase: status.phase });
+          }}
+        >
           <div className={`active-game__badge active-game__badge--${status.phase}`}>
             <span className="active-game__dot" />
             {getBadgeLabel(status.phase)}

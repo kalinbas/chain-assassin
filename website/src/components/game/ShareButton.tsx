@@ -1,22 +1,61 @@
 import { useState } from 'react';
 import { ShareIcon } from '../icons/Icons';
-import { gameUrl } from '../../lib/url';
+import { trackEvent } from '../../lib/analytics';
+import { gameShareUrl } from '../../lib/url';
 
 export function ShareButton({ gameId, title }: { gameId: number; title: string }) {
-  const [copied, setCopied] = useState(false);
+  const [status, setStatus] = useState<'idle' | 'copied' | 'shared'>('idle');
 
-  const handleShare = () => {
-    const url = `${window.location.origin}${gameUrl(gameId, title)}`;
-    navigator.clipboard.writeText(url).then(() => {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const resetStatusSoon = () => {
+    window.setTimeout(() => setStatus('idle'), 1800);
+  };
+
+  const handleShare = async () => {
+    const url = gameShareUrl(gameId, title, {
+      source: 'web',
+      medium: 'game_detail_share',
+      campaign: 'spectator',
     });
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${title} — Chain Assassin`,
+          text: 'Watch this game on Chain Assassin.',
+          url,
+        });
+        setStatus('shared');
+        trackEvent('game_share', { game_id: gameId, method: 'web_share', from: 'game_detail' });
+        resetStatusSoon();
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          return;
+        }
+      }
+    }
+
+    if (navigator.clipboard?.writeText) {
+      try {
+        await navigator.clipboard.writeText(url);
+        setStatus('copied');
+        trackEvent('game_share', { game_id: gameId, method: 'clipboard', from: 'game_detail' });
+        resetStatusSoon();
+      } catch {
+        // ignore clipboard errors
+      }
+    }
   };
 
   return (
-    <button className="btn btn--outline game-detail__share" onClick={handleShare}>
+    <button
+      className="btn btn--outline game-detail__share"
+      onClick={() => {
+        void handleShare();
+      }}
+    >
       <ShareIcon />
-      {copied ? 'Copied!' : 'Share Game'}
+      {status === 'copied' ? 'Copied' : status === 'shared' ? 'Shared' : 'Share Game'}
     </button>
   );
 }

@@ -1,0 +1,17 @@
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_01.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_02.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_03.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_04.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_05.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_06.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_07.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_08.png'
+duration 7.5
+file '/Users/kalinbas/Code/cryptohunt/output/frames/frame_08.png'

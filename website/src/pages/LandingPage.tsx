@@ -9,10 +9,18 @@ import { Screenshots } from '../components/landing/Screenshots';
 import { DemoVideo } from '../components/landing/DemoVideo';
 import { HostSection } from '../components/landing/HostSection';
 import { FAQ } from '../components/landing/FAQ';
+import { trackEvent } from '../lib/analytics';
+import { setPageSeo } from '../lib/seo';
 
 export function LandingPage() {
   useEffect(() => {
-    document.title = 'Chain Assassin — Hunt or Be Hunted. On-Chain.';
+    setPageSeo({
+      title: 'Chain Assassin — Hunt or Be Hunted. On-Chain.',
+      description: 'Real-world elimination game with GPS-tracked zones, QR kills, and ETH prizes on Base.',
+      path: '/',
+      type: 'website',
+    });
+    trackEvent('landing_view');
   }, []);
 
   return (

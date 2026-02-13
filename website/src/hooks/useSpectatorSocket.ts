@@ -1,5 +1,6 @@
 import { useEffect, useReducer, useRef, useCallback } from 'react';
 import { SERVER_WS_URL } from '../config/server';
+import { trackEvent } from '../lib/analytics';
 
 export interface SpectatorPlayer {
   playerNumber: number;
@@ -32,6 +33,11 @@ export interface PingCircle {
 
 export interface SpectatorState {
   connected: boolean;
+  connectionState: 'connecting' | 'connected' | 'reconnecting';
+  reconnectAttempt: number;
+  nextRetryAt: number | null;
+  lastMessageAt: number | null;
+  isStale: boolean;
   phase: string | null;
   subPhase: string | null;
   checkinEndsAt: number | null;
@@ -60,6 +66,11 @@ export interface SpectatorState {
 
 const initialState: SpectatorState = {
   connected: false,
+  connectionState: 'connecting',
+  reconnectAttempt: 0,
+  nextRetryAt: null,
+  lastMessageAt: null,
+  isStale: false,
   phase: null,
   subPhase: null,
   checkinEndsAt: null,
@@ -81,8 +92,12 @@ const initialState: SpectatorState = {
 };
 
 type Action =
+  | { type: 'connecting' }
   | { type: 'connected' }
   | { type: 'disconnected' }
+  | { type: 'reconnecting'; payload: { attempt: number; nextRetryAt: number } }
+  | { type: 'message_received' }
+  | { type: 'mark_stale' }
   | { type: 'init'; payload: Record<string, unknown> }
   | { type: 'positions'; payload: Record<string, unknown> }
   | { type: 'kill'; payload: Record<string, unknown> }
@@ -106,11 +121,54 @@ function playerLabel(playerNumber: number): string {
 
 function reducer(state: SpectatorState, action: Action): SpectatorState {
   switch (action.type) {
+    case 'connecting':
+      return {
+        ...state,
+        connectionState: 'connecting',
+        nextRetryAt: null,
+      };
+
     case 'connected':
-      return { ...state, connected: true };
+      return {
+        ...state,
+        connected: true,
+        connectionState: 'connected',
+        reconnectAttempt: 0,
+        nextRetryAt: null,
+        lastMessageAt: Date.now(),
+        isStale: false,
+      };
 
     case 'disconnected':
-      return { ...state, connected: false };
+      return {
+        ...state,
+        connected: false,
+      };
+
+    case 'reconnecting':
+      return {
+        ...state,
+        connected: false,
+        connectionState: 'reconnecting',
+        reconnectAttempt: action.payload.attempt,
+        nextRetryAt: action.payload.nextRetryAt,
+      };
+
+    case 'message_received':
+      return {
+        ...state,
+        lastMessageAt: Date.now(),
+        isStale: false,
+      };
+
+    case 'mark_stale':
+      if (!state.connected || state.isStale) {
+        return state;
+      }
+      return {
+        ...state,
+        isStale: true,
+      };
 
     case 'init': {
       const p = action.payload;
@@ -315,25 +373,39 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
   }
 }
 
-export function useSpectatorSocket(gameId: number): SpectatorState {
+export interface SpectatorSocketState extends SpectatorState {
+  refresh: () => void;
+}
+
+export function useSpectatorSocket(gameId: number): SpectatorSocketState {
   const [state, dispatch] = useReducer(reducer, initialState);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnectDelayRef = useRef(1000);
+  const reconnectAttemptRef = useRef(0);
+  const intentionallyClosedRef = useRef(false);
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return;
+    const readyState = wsRef.current?.readyState;
+    if (readyState === WebSocket.OPEN || readyState === WebSocket.CONNECTING) {
+      return;
+    }
+
+    dispatch({ type: 'connecting' });
 
     const ws = new WebSocket(`${SERVER_WS_URL}/ws`);
     wsRef.current = ws;
 
     ws.onopen = () => {
       reconnectDelayRef.current = 1000;
+      reconnectAttemptRef.current = 0;
       ws.send(JSON.stringify({ type: 'spectate', gameId }));
       dispatch({ type: 'connected' });
+      trackEvent('spectator_socket_connected', { game_id: gameId });
     };
 
     ws.onmessage = (event) => {
+      dispatch({ type: 'message_received' });
       try {
         const msg = JSON.parse(event.data);
         switch (msg.type) {
@@ -377,9 +449,26 @@ export function useSpectatorSocket(gameId: number): SpectatorState {
     };
 
     ws.onclose = () => {
-      dispatch({ type: 'disconnected' });
+      wsRef.current = null;
+
+      if (intentionallyClosedRef.current) {
+        intentionallyClosedRef.current = false;
+        return;
+      }
+
       const delay = Math.min(reconnectDelayRef.current, 30000);
+      reconnectAttemptRef.current += 1;
+      const attempt = reconnectAttemptRef.current;
+      const nextRetryAt = Date.now() + delay;
+      dispatch({ type: 'reconnecting', payload: { attempt, nextRetryAt } });
+      trackEvent('spectator_socket_reconnecting', {
+        game_id: gameId,
+        attempt,
+        retry_delay_ms: delay,
+      });
+
       reconnectTimeoutRef.current = setTimeout(() => {
+        reconnectTimeoutRef.current = null;
         reconnectDelayRef.current *= 2;
         connect();
       }, delay);
@@ -390,19 +479,58 @@ export function useSpectatorSocket(gameId: number): SpectatorState {
     };
   }, [gameId]);
 
+  const refresh = useCallback(() => {
+    trackEvent('spectator_manual_refresh', { game_id: gameId });
+
+    reconnectDelayRef.current = 1000;
+    reconnectAttemptRef.current = 0;
+
+    if (reconnectTimeoutRef.current) {
+      clearTimeout(reconnectTimeoutRef.current);
+      reconnectTimeoutRef.current = null;
+    }
+
+    if (wsRef.current) {
+      intentionallyClosedRef.current = true;
+      wsRef.current.close();
+      wsRef.current = null;
+    }
+
+    connect();
+  }, [connect, gameId]);
+
   useEffect(() => {
     connect();
 
     return () => {
       if (reconnectTimeoutRef.current) {
         clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
       }
       if (wsRef.current) {
+        intentionallyClosedRef.current = true;
         wsRef.current.close();
         wsRef.current = null;
       }
     };
   }, [connect]);
 
-  return state;
+  useEffect(() => {
+    const lastMessageAt = state.lastMessageAt;
+    if (!state.connected || !lastMessageAt) {
+      return;
+    }
+
+    const staleCheckTimer = window.setInterval(() => {
+      if (Date.now() - lastMessageAt > 20_000) {
+        dispatch({ type: 'mark_stale' });
+      }
+    }, 5_000);
+
+    return () => {
+      window.clearInterval(staleCheckTimer);
+    };
+  }, [state.connected, state.lastMessageAt]);
+
+  return { ...state, refresh };
 }

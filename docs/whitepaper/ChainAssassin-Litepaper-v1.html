@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chain Assassin Litepaper</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 18mm 14mm;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+      color: #1b1e2e;
+      background: #fff;
+      line-height: 1.54;
+      font-size: 11.2pt;
+    }
+
+    .cover {
+      min-height: 247mm;
+      border: 1px solid #dfe3ef;
+      border-radius: 16px;
+      padding: 28mm 20mm;
+      background: radial-gradient(circle at top right, rgba(0, 255, 136, 0.08), transparent 45%), #fff;
+      position: relative;
+      page-break-after: always;
+    }
+
+    .logo {
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      letter-spacing: 2px;
+      font-size: 11pt;
+      margin-bottom: 16mm;
+      color: #1e2238;
+    }
+
+    .logo b { color: #00b866; }
+
+    .title {
+      font-size: 30pt;
+      line-height: 1.08;
+      margin: 0;
+      color: #11152a;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin-top: 10mm;
+      color: #444d70;
+      font-size: 12.5pt;
+      max-width: 110mm;
+    }
+
+    .meta {
+      position: absolute;
+      left: 20mm;
+      bottom: 20mm;
+      color: #566084;
+      font-size: 10pt;
+    }
+
+    .pill {
+      display: inline-block;
+      margin-top: 8mm;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #ecfff6;
+      border: 1px solid #b5f0d3;
+      color: #107749;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .content {
+      max-width: 180mm;
+      margin: 0 auto;
+    }
+
+    h1, h2, h3, h4 {
+      color: #131933;
+      line-height: 1.25;
+      margin: 14pt 0 8pt;
+      page-break-after: avoid;
+    }
+
+    h1 { font-size: 21pt; margin-top: 0; }
+    h2 {
+      font-size: 15pt;
+      margin-top: 22pt;
+      padding-top: 8pt;
+      border-top: 1px solid #e3e7f3;
+    }
+    h3 { font-size: 12.8pt; margin-top: 16pt; }
+    h4 { font-size: 11.8pt; margin-top: 13pt; }
+
+    p { margin: 7pt 0; color: #2a314f; }
+
+    ul, ol {
+      margin: 8pt 0 8pt 18pt;
+      padding: 0;
+      color: #2a314f;
+    }
+
+    li { margin: 4pt 0; }
+
+    code {
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      font-size: 9.5pt;
+      background: #eef2ff;
+      border: 1px solid #d6def8;
+      border-radius: 4px;
+      padding: 0.06rem 0.28rem;
+      color: #29315a;
+    }
+
+    .code-block {
+      background: #0f1323;
+      border: 1px solid #212841;
+      border-radius: 10px;
+      color: #e9eeff;
+      padding: 10px 12px;
+      overflow: hidden;
+      white-space: pre-wrap;
+      font-size: 8.8pt;
+      line-height: 1.42;
+      page-break-inside: avoid;
+    }
+
+    a { color: #0c57dd; text-decoration: none; }
+
+    .footer {
+      margin-top: 20pt;
+      border-top: 1px solid #e3e7f3;
+      padding-top: 8pt;
+      color: #69739a;
+      font-size: 8.9pt;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="logo">CHAIN <b>ASSASSIN</b></div>
+    <h1 class="title">Chain Assassin<br />Litepaper</h1>
+    <div class="pill">Fast protocol overview</div>
+    <p class="subtitle">A concise brief of architecture, trust model, economics, and roadmap for the Chain Assassin game protocol.</p>
+    <div class="meta">
+      Version 1.0<br />
+      Generated: 2026-02-13 22:10:46.029 UTC
+    </div>
+  </section>
+
+  <main class="content">
+    <h1>Chain Assassin Litepaper</h1>
+<p>Version 1.0 Date: February 13, 2026</p>
+<h2>TL;DR</h2>
+<p>Chain Assassin is a real-world elimination game with crypto-native settlement rails.</p>
+<ul>
+<li>Players register with ETH on Base.</li>
+<li>Gameplay is enforced off-chain (GPS, BLE, QR logic) for real-time speed.</li>
+<li>Funds are escrowed and settled on-chain for transparency and claim safety.</li>
+<li>The full stack is open-source and rules are publicly auditable.</li>
+</ul>
+<h2>Why This Exists</h2>
+<p>Most prize-based real-world games are opaque and custodial. Chain Assassin replaces opaque custody with on-chain escrow and deterministic payout/refund flows.</p>
+<h2>Core Product</h2>
+<ol>
+<li>Join game with wallet + entry fee.</li>
+<li>Check in physically and survive a shrinking zone.</li>
+<li>Eliminate assigned targets by validated scans.</li>
+<li>Claim prize (or refund if cancelled) directly from contract.</li>
+</ol>
+<h2>Open-source + Moderatorless Execution</h2>
+<p>Chain Assassin is built for no-live-moderator operation.</p>
+<ul>
+<li>No human referee is required to manually run a match.</li>
+<li>Once a game is crowdfunded (meets configured participation/escrow thresholds), progression is automatic.</li>
+<li>Timeline gates (registration/check-in/pregame/active/settlement) are enforced by deterministic server + contract rules.</li>
+</ul>
+<h2>Architecture in One Line</h2>
+<p>Fast game loop off-chain, hard money guarantees on-chain.</p>
+<h2>What Is On-Chain</h2>
+<ul>
+<li>Game configuration and phase state.</li>
+<li>Entry fee escrow and prize/refund claimability.</li>
+<li>Fee accounting (platform + creator).</li>
+<li>Permissionless cancellation/expiry paths.</li>
+</ul>
+<h2>What Is Off-Chain</h2>
+<ul>
+<li>Check-in orchestration.</li>
+<li>Target assignment/reassignment.</li>
+<li>Kill verification (QR + GPS + BLE).</li>
+<li>Zone tracking and elimination rules.</li>
+<li>Real-time WebSocket state fan-out.</li>
+</ul>
+<h2>Security and Trust</h2>
+<p>Chain Assassin is trust-minimized, not fully trustless gameplay.</p>
+<p>Trusted:</p>
+<ul>
+<li>server anti-cheat logic,</li>
+<li>operator role for writing outcomes.</li>
+</ul>
+<p>Moderator model:</p>
+<ul>
+<li>no discretionary live moderator actions are required during normal gameplay.</li>
+</ul>
+<p>Untrusted/permissionless guarantees:</p>
+<ul>
+<li>contract-held funds,</li>
+<li>deterministic payout math,</li>
+<li>user-initiated claims,</li>
+<li>permissionless cancellation triggers after deadline/expiry conditions.</li>
+</ul>
+<h2>Economic Model</h2>
+<p>Per-game escrow = base reward + entry fees.</p>
+<p>BPS split supports:</p>
+<ul>
+<li>1st / 2nd / 3rd place,</li>
+<li>most kills,</li>
+<li>creator fee,</li>
+<li>platform fee.</li>
+</ul>
+<p>No native token is required. ETH on Base is the settlement unit.</p>
+<h2>User Surface Split</h2>
+<p>Mobile app:</p>
+<ul>
+<li>wallet operations,</li>
+<li>registration tx and confirmations,</li>
+<li>live gameplay actions.</li>
+</ul>
+<p>Website:</p>
+<ul>
+<li>game discovery,</li>
+<li>spectator live page,</li>
+<li>historical game pages,</li>
+<li>social sharing funnel.</li>
+</ul>
+<h2>Why It Matters</h2>
+<p>Chain Assassin is a reusable pattern for crypto-native physical competition:</p>
+<ul>
+<li>transparent escrow,</li>
+<li>verifiable settlement,</li>
+<li>practical real-time game UX.</li>
+</ul>
+<h2>Roadmap Summary</h2>
+<ol>
+<li>Reliability hardening and deeper simulation/e2e coverage.</li>
+<li>Organizer tooling and anti-abuse analytics.</li>
+<li>Progressive decentralization (multi-operator governance + attestations).</li>
+</ol>
+<h2>Current Deployment</h2>
+<ul>
+<li>Network: Base Sepolia</li>
+<li>Contract: <code>0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</code></li>
+<li>Explorer: <a href="https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69">https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</a></li>
+</ul>
+    <div class="footer">Chain Assassin Litepaper v1.0</div>
+  </main>
+</body>
+</html>

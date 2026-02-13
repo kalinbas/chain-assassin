@@ -28,6 +28,7 @@ export interface GameEvent {
 export interface Game {
   id: number;
   title: string;
+  gameDateTs: number;
   entryFee: number;
   entryFeeWei: bigint;
   baseReward: number;
@@ -52,6 +53,7 @@ export interface Game {
   pregameEndsAt?: number | null;
   playerCount?: number;
   aliveCount?: number;
+  checkedInCount?: number;
   creator: string;
   createdAt: number;
   winner1: number;  // playerNumber (0 = none)

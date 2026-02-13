@@ -49,6 +49,7 @@ function formatServerGame(data: any): Game {
   return {
     id: data.gameId,
     title: data.title,
+    gameDateTs: gameDate,
     entryFee: weiToEth(data.entryFee),
     entryFeeWei,
     baseReward: weiToEth(data.baseReward),
@@ -83,6 +84,7 @@ function formatServerGame(data: any): Game {
     pregameEndsAt: data.pregameEndsAt ?? undefined,
     playerCount: data.aliveCount != null ? Number(data.playerCount) : undefined,
     aliveCount: data.aliveCount != null ? Number(data.aliveCount) : undefined,
+    checkedInCount: data.checkedInCount != null ? Number(data.checkedInCount) : undefined,
     creator: data.creator,
     createdAt: Number(data.createdAt),
     winner1: Number(data.winner1),

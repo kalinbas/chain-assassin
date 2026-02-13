@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "audit:local": "node scripts/audit-local.mjs"
+    "audit:local": "node scripts/audit-local.mjs",
+    "whitepaper:pdf": "node scripts/build-whitepaper-pdf.mjs",
+    "litepaper:pdf": "node scripts/build-litepaper-pdf.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

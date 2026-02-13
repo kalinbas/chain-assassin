@@ -51,9 +51,6 @@ export function useGame(id: number) {
     if (cached !== undefined) {
       setGame(cached);
       setLoading(false);
-      if (cached) {
-        document.title = `${cached.title} — Chain Assassin`;
-      }
       return;
     }
 
@@ -63,9 +60,6 @@ export function useGame(id: number) {
       .then((gameData) => {
         if (cancelled) return;
         setGame(gameData);
-        if (gameData) {
-          document.title = `${gameData.title} — Chain Assassin`;
-        }
       })
       .catch((err) => {
         if (cancelled) return;

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import type { Game } from '../../types/game';
-import { BackIcon } from '../icons/Icons';
+import { BackIcon, RadarIcon } from '../icons/Icons';
 import { GameStatsGrid } from './GameStatsGrid';
 import { GameMap } from './GameMap';
 import { PrizeBreakdown } from './PrizeBreakdown';
@@ -10,11 +10,71 @@ import { Leaderboard } from './Leaderboard';
 import { PhotoGallery } from './PhotoGallery';
 import { SpectatorView } from './SpectatorView';
 import { SpectatorMap } from './SpectatorMap';
-import { useSpectatorSocket } from '../../hooks/useSpectatorSocket';
+import { useSpectatorSocket, type SpectatorSocketState } from '../../hooks/useSpectatorSocket';
 
 function PhaseBadge({ phase, subPhase }: { phase: string; subPhase?: string }) {
   const label = phase === 'active' && subPhase && subPhase !== 'game' ? subPhase : phase;
   return <span className={`game-detail__badge game-detail__badge--${phase}`}>{label}</span>;
+}
+
+function RetryIn({ retryAt }: { retryAt: number | null }) {
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    if (!retryAt) {
+      return;
+    }
+    const timer = window.setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [retryAt]);
+
+  if (!retryAt) {
+    return null;
+  }
+
+  const seconds = Math.max(0, Math.ceil((retryAt - now) / 1000));
+  return <>{seconds}s</>;
+}
+
+function SpectatorConnectionBanner({ state }: { state: SpectatorSocketState }) {
+  const statusClass = state.connectionState === 'connected'
+    ? state.isStale
+      ? 'spectator-conn--warn'
+      : 'spectator-conn--ok'
+    : 'spectator-conn--warn';
+
+  const text = state.connectionState === 'connected'
+    ? state.isStale
+      ? 'Live feed delayed. Waiting for new updates...'
+      : 'Live feed synced.'
+    : state.connectionState === 'reconnecting'
+      ? `Connection interrupted. Reconnecting (attempt ${state.reconnectAttempt})...`
+      : 'Connecting to live feed...';
+
+  return (
+    <div className={`spectator-conn ${statusClass}`}>
+      <div className="spectator-conn__status">
+        <span className="spectator-conn__dot" />
+        <span>{text}</span>
+        {state.connectionState === 'reconnecting' && (
+          <span className="spectator-conn__retry">
+            Retry in <RetryIn retryAt={state.nextRetryAt} />
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="spectator-conn__refresh"
+        onClick={state.refresh}
+        title="Reconnect and re-sync spectator feed"
+      >
+        <RadarIcon width={14} height={14} />
+        Refresh
+      </button>
+    </div>
+  );
 }
 
 function LiveContent({ game }: { game: Game }) {
@@ -23,8 +83,9 @@ function LiveContent({ game }: { game: Game }) {
   if (!spectator.connected) {
     return (
       <>
-        <p style={{ color: 'var(--text-sec)', textAlign: 'center', padding: '2rem 0' }}>
-          Connecting to live game...
+        <SpectatorConnectionBanner state={spectator} />
+        <p style={{ color: 'var(--text-sec)', textAlign: 'center', padding: '1.25rem 0 2rem' }}>
+          Waiting for live stream data...
         </p>
         {game.zoneShrinks.length > 0 && <GameMap game={game} />}
         <PrizeBreakdown game={game} />
@@ -35,6 +96,7 @@ function LiveContent({ game }: { game: Game }) {
   if (spectator.subPhase === 'checkin') {
     return (
       <div className="game-detail__phase-info">
+        <SpectatorConnectionBanner state={spectator} />
         <div className="game-detail__phase-icon">📍</div>
         <h2>Check-In Phase</h2>
         <p>Players are checking in at the meeting point. The game will begin once check-in ends.</p>
@@ -54,6 +116,7 @@ function LiveContent({ game }: { game: Game }) {
   if (spectator.subPhase === 'pregame') {
     return (
       <div className="game-detail__phase-info">
+        <SpectatorConnectionBanner state={spectator} />
         <div className="game-detail__phase-icon">⏳</div>
         <h2>Pregame Phase</h2>
         <p>Players are spreading out and getting into position. Targets will be assigned when the countdown ends.</p>
@@ -70,7 +133,12 @@ function LiveContent({ game }: { game: Game }) {
     );
   }
 
-  return <SpectatorView state={spectator} />;
+  return (
+    <>
+      <SpectatorConnectionBanner state={spectator} />
+      <SpectatorView state={spectator} />
+    </>
+  );
 }
 
 function CountdownTimer({ endsAt, label }: { endsAt: number; label: string }) {

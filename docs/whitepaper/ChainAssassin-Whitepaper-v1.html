@@ -1,0 +1,531 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Chain Assassin Whitepaper</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 18mm 14mm;
+    }
+
+    :root {
+      --bg: #0a0a0f;
+      --surface: #14141f;
+      --text: #f3f5ff;
+      --muted: #aab0cc;
+      --line: #24263a;
+      --accent: #00ff88;
+      --accent-soft: rgba(0, 255, 136, 0.16);
+      --danger: #ff5959;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      font-family: "Inter", "Segoe UI", Roboto, sans-serif;
+      color: #1b1e2e;
+      background: #fff;
+      line-height: 1.54;
+      font-size: 11.2pt;
+    }
+
+    .cover {
+      min-height: 247mm;
+      border: 1px solid #dfe3ef;
+      border-radius: 16px;
+      padding: 28mm 20mm;
+      background: radial-gradient(circle at top right, rgba(0, 255, 136, 0.08), transparent 45%), #fff;
+      position: relative;
+      page-break-after: always;
+    }
+
+    .logo {
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      letter-spacing: 2px;
+      font-size: 11pt;
+      margin-bottom: 16mm;
+      color: #1e2238;
+    }
+
+    .logo b { color: #00b866; }
+
+    .title {
+      font-size: 30pt;
+      line-height: 1.08;
+      margin: 0;
+      color: #11152a;
+      font-weight: 800;
+    }
+
+    .subtitle {
+      margin-top: 10mm;
+      color: #444d70;
+      font-size: 12.5pt;
+      max-width: 110mm;
+    }
+
+    .meta {
+      position: absolute;
+      left: 20mm;
+      bottom: 20mm;
+      color: #566084;
+      font-size: 10pt;
+    }
+
+    .pill {
+      display: inline-block;
+      margin-top: 8mm;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #ecfff6;
+      border: 1px solid #b5f0d3;
+      color: #107749;
+      font-size: 9pt;
+      font-weight: 700;
+      letter-spacing: 0.3px;
+      text-transform: uppercase;
+    }
+
+    .content {
+      max-width: 180mm;
+      margin: 0 auto;
+    }
+
+    h1, h2, h3, h4 {
+      color: #131933;
+      line-height: 1.25;
+      margin: 14pt 0 8pt;
+      page-break-after: avoid;
+    }
+
+    h1 { font-size: 21pt; margin-top: 0; }
+    h2 {
+      font-size: 15pt;
+      margin-top: 22pt;
+      padding-top: 8pt;
+      border-top: 1px solid #e3e7f3;
+    }
+    h3 { font-size: 12.8pt; margin-top: 16pt; }
+    h4 { font-size: 11.8pt; margin-top: 13pt; }
+
+    p { margin: 7pt 0; color: #2a314f; }
+
+    ul, ol {
+      margin: 8pt 0 8pt 18pt;
+      padding: 0;
+      color: #2a314f;
+    }
+
+    li { margin: 4pt 0; }
+
+    code {
+      font-family: "JetBrains Mono", "SFMono-Regular", Menlo, monospace;
+      font-size: 9.5pt;
+      background: #eef2ff;
+      border: 1px solid #d6def8;
+      border-radius: 4px;
+      padding: 0.06rem 0.28rem;
+      color: #29315a;
+    }
+
+    .code-block {
+      background: #0f1323;
+      border: 1px solid #212841;
+      border-radius: 10px;
+      color: #e9eeff;
+      padding: 10px 12px;
+      overflow: hidden;
+      white-space: pre-wrap;
+      font-size: 8.8pt;
+      line-height: 1.42;
+      page-break-inside: avoid;
+    }
+
+    .language-mermaid {
+      background: #10131f;
+      border-color: #2a3048;
+      color: #b9f8d8;
+      position: relative;
+    }
+
+    .language-mermaid::before {
+      content: "diagram (mermaid source)";
+      display: inline-block;
+      margin-bottom: 7px;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: #1b2237;
+      border: 1px solid #2f3854;
+      color: #8ae9bb;
+      font-size: 7.8pt;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+
+    a { color: #0c57dd; text-decoration: none; }
+
+    .footer {
+      margin-top: 20pt;
+      border-top: 1px solid #e3e7f3;
+      padding-top: 8pt;
+      color: #69739a;
+      font-size: 8.9pt;
+    }
+  </style>
+</head>
+<body>
+  <section class="cover">
+    <div class="logo">CHAIN <b>ASSASSIN</b></div>
+    <h1 class="title">Chain Assassin<br />Whitepaper</h1>
+    <div class="pill">Crypto-native real-world game protocol</div>
+    <p class="subtitle">Hybrid architecture for fast real-time gameplay and on-chain escrowed settlement integrity on Base.</p>
+    <div class="meta">
+      Version 1.1<br />
+      Generated: 2026-02-13 22:10:46.029 UTC
+    </div>
+  </section>
+
+  <main class="content">
+    <h1>Chain Assassin Whitepaper</h1>
+<p>Version 1.1 Date: February 13, 2026</p>
+<h2>1. Abstract</h2>
+<p>Chain Assassin is a crypto-native, real-world elimination game with on-chain escrow and settlement. Players join games by paying ETH, verify presence in-person, and compete inside a shrinking geofence. The server enforces real-time game mechanics (check-in, target assignment, QR kill validation, GPS/BLE constraints), while the smart contract secures funds, enforces payout math, and preserves permissionless exits through cancellation and expiry paths.</p>
+<p>The protocol is open-source and designed for moderatorless operation at runtime: once a game is crowdfunded (meets configured participation/escrow conditions), it advances through scheduled phases automatically without requiring a live human referee.</p>
+<p>The protocol is designed around practical trust minimization:</p>
+<ul>
+<li>Low-latency mechanics off-chain for playability.</li>
+<li>Financial integrity on-chain for transparency and custody safety.</li>
+</ul>
+<h2>2. Problem</h2>
+<p>Most real-world prize games suffer from three trust failures:</p>
+<ol>
+<li>Custody risk: users must trust a private operator to hold prize funds.</li>
+<li>Settlement opacity: payout calculations and outcomes are not publicly auditable.</li>
+<li>Liveness fragility: when infra fails, refunds and closure are often discretionary.</li>
+</ol>
+<h2>3. Design Goals</h2>
+<p>Chain Assassin targets:</p>
+<ol>
+<li>Verifiable settlement integrity.</li>
+<li>User-owned claim paths.</li>
+<li>Real-time gameplay without L1/L2 latency overhead.</li>
+<li>Gradual decentralization without breaking UX.</li>
+<li>Open-source verifiability and moderatorless execution.</li>
+</ol>
+<h3>3.1 Open-source and Moderatorless Principle</h3>
+<p>Chain Assassin is implemented as auditable open-source infrastructure across contract, server, and client surfaces. Anyone can inspect the exact rules that move funds and the exact runtime logic that drives game progression.</p>
+<p>Moderatorless means no live human judge is needed to manually advance stages or approve outcomes during normal operation. Phase transitions and rule enforcement are system-driven.</p>
+<pre class="code-block language-mermaid"><code>
+flowchart LR
+
+    A[&quot;Open-source contract + server rules&quot;] --&gt; B[&quot;Public auditability&quot;]
+
+    C[&quot;Crowdfunded game reaches configured thresholds&quot;] --&gt; D[&quot;Automated timeline and checks&quot;]
+
+    D --&gt; E[&quot;Check-in / pregame / active loop&quot;]
+
+    E --&gt; F[&quot;Deterministic settlement paths&quot;]
+
+    F --&gt; G[&quot;Claims or refunds by users&quot;]
+
+</code></pre>
+<h2>4. System Architecture</h2>
+<p>Chain Assassin is a four-layer stack.</p>
+<ul>
+<li>Smart contract (Base): escrow, phases, claim logic, fee accounting.</li>
+<li>Server: game orchestration, anti-cheat checks, event indexing, state recovery.</li>
+<li>Android app: wallet operations + action-heavy gameplay interactions.</li>
+<li>Web app: spectator + discovery + lightweight management.</li>
+</ul>
+<pre class="code-block language-mermaid"><code>
+flowchart LR
+
+    A[&quot;Android App&quot;] --&gt;|&quot;REST + WebSocket&quot;| B[&quot;Game Server&quot;]
+
+    C[&quot;Web App&quot;] --&gt;|&quot;REST + WebSocket&quot;| B
+
+    B --&gt;|&quot;Read + write tx&quot;| D[&quot;ChainAssassin Contract (Base)&quot;]
+
+    D --&gt;|&quot;Events&quot;| B
+
+    B --&gt;|&quot;Live state&quot;| A
+
+    B --&gt;|&quot;Live state&quot;| C
+
+    E[&quot;SQLite State&quot;] --&gt; B
+
+    B --&gt; E
+
+</code></pre>
+<h2>5. Lifecycle Model</h2>
+<h3>5.1 On-chain phases</h3>
+<p>Game phase enum:</p>
+<ul>
+<li><code>REGISTRATION</code></li>
+<li><code>ACTIVE</code></li>
+<li><code>ENDED</code></li>
+<li><code>CANCELLED</code></li>
+</ul>
+<pre class="code-block language-mermaid"><code>
+stateDiagram-v2
+
+    [*] --&gt; REGISTRATION
+
+    REGISTRATION --&gt; ACTIVE: &quot;startGame() by operator&quot;
+
+    REGISTRATION --&gt; CANCELLED: &quot;triggerCancellation() after deadline + min not met&quot;
+
+    REGISTRATION --&gt; CANCELLED: &quot;triggerExpiry() after gameDate + maxDuration&quot;
+
+    ACTIVE --&gt; ENDED: &quot;endGame() by operator&quot;
+
+    ACTIVE --&gt; CANCELLED: &quot;triggerExpiry() permissionless&quot;
+
+    ENDED --&gt; [*]
+
+    CANCELLED --&gt; [*]
+
+</code></pre>
+<h3>5.2 Operational server flow</h3>
+<ol>
+<li>Index <code>GameCreated</code> and schedule timeline checks.</li>
+<li>Track registrations from on-chain events.</li>
+<li>Run check-in, pregame, and active-game loops.</li>
+<li>Verify kills with QR payload + GPS + BLE constraints.</li>
+<li>Write canonical game outcomes on-chain.</li>
+<li>Recover active/registration timelines from DB after restart.</li>
+</ol>
+<h3>5.3 Autonomous Run After Crowdfunding</h3>
+<p>A game is considered crowdfunded once it has sufficient participation and escrow to satisfy configured start criteria (for example min-player constraints and scheduled start conditions).</p>
+<p>After that point, progression is autonomous:</p>
+<ol>
+<li>Registration closes by time/conditions.</li>
+<li>Check-in and pregame gates are enforced by server logic.</li>
+<li>Active phase runs continuously with zone/kill validation loops.</li>
+<li>End-state is written on-chain, or expiry path is triggered if needed.</li>
+</ol>
+<p>No discretionary live moderator is required for standard game progression.</p>
+<pre class="code-block language-mermaid"><code>
+flowchart TB
+
+    A[&quot;Crowdfunded threshold met&quot;] --&gt; B[&quot;Registration close checks&quot;]
+
+    B --&gt; C[&quot;Check-in gate&quot;]
+
+    C --&gt; D[&quot;Pregame countdown&quot;]
+
+    D --&gt; E[&quot;Active game loop&quot;]
+
+    E --&gt; F[&quot;endGame settlement&quot;]
+
+    E --&gt; G[&quot;expiry cancellation fallback&quot;]
+
+    F --&gt; H[&quot;Prize claims&quot;]
+
+    G --&gt; I[&quot;Refund claims&quot;]
+
+</code></pre>
+<h2>6. Check-in and Match Start Policy</h2>
+<p>Current policy is safety-biased and liveness-aware:</p>
+<ol>
+<li>Check-in stays open until enough players are checked in to satisfy configured prize slots.</li>
+<li>If expiry is reached before enough checked-in players, game is cancelled.</li>
+<li>Cancelled users retain refund claimability on-chain.</li>
+</ol>
+<p>This avoids starting under-participated rounds while preserving user exit guarantees.</p>
+<h2>7. Financial Architecture</h2>
+<h3>7.1 Escrow composition</h3>
+<p>For each game, escrow value is:</p>
+<ul>
+<li>base reward deposit (optional), plus</li>
+<li>sum of exact entry fees.</li>
+</ul>
+<h3>7.2 Distribution model</h3>
+<p>Basis points (<code>BPS_TOTAL = 10_000</code>) are allocated to:</p>
+<ul>
+<li>1st / 2nd / 3rd place</li>
+<li>most kills</li>
+<li>creator fee</li>
+<li>platform fee</li>
+</ul>
+<h3>7.3 Claim model</h3>
+<ul>
+<li>Winners claim with <code>claimPrize()</code>.</li>
+<li>Cancelled-game participants claim with <code>claimRefund()</code>.</li>
+<li>Platform and creators withdraw accrued fees via dedicated withdraw functions.</li>
+</ul>
+<pre class="code-block language-mermaid"><code>
+flowchart TB
+
+    A[&quot;Players register with ETH&quot;] --&gt; B[&quot;Contract Escrow&quot;]
+
+    C[&quot;Creator base reward&quot;] --&gt; B
+
+    B --&gt; D[&quot;Game ended&quot;]
+
+    B --&gt; E[&quot;Game cancelled&quot;]
+
+    D --&gt; F[&quot;Winner claims&quot;]
+
+    D --&gt; G[&quot;Top killer claim&quot;]
+
+    D --&gt; H[&quot;Creator fee withdraw&quot;]
+
+    D --&gt; I[&quot;Platform fee withdraw&quot;]
+
+    E --&gt; J[&quot;Player refunds&quot;]
+
+</code></pre>
+<h2>8. Trust and Security Model</h2>
+<h3>8.1 Explicit trust boundary</h3>
+<p>Chain Assassin is not fully trustless gameplay; it is trust-minimized settlement.</p>
+<p>Trusted components:</p>
+<ul>
+<li>operator role for game result reporting,</li>
+<li>server-side verification engine.</li>
+</ul>
+<p>Runtime governance intent:</p>
+<ul>
+<li>no live moderator interventions are required for normal game flow,</li>
+<li>no manual referee approvals are required per kill/phase transition.</li>
+</ul>
+<p>Trustless/permissionless properties:</p>
+<ul>
+<li>escrow custody in immutable contract state,</li>
+<li>deterministic payout/refund formulas,</li>
+<li>permissionless cancellation paths,</li>
+<li>user-executed pull-claims.</li>
+</ul>
+<pre class="code-block language-mermaid"><code>
+flowchart LR
+
+    A[&quot;User funds&quot;] --&gt; B[&quot;On-chain escrow&quot;]
+
+    B --&gt; C[&quot;Permissionless claims&quot;]
+
+    D[&quot;Server verdicts&quot;] --&gt; E[&quot;Operator tx submission&quot;]
+
+    E --&gt; B
+
+    F[&quot;Public observers&quot;] --&gt;|&quot;Audit events + state&quot;| B
+
+    G[&quot;Any caller&quot;] --&gt;|&quot;triggerCancellation / triggerExpiry&quot;| B
+
+</code></pre>
+<h3>8.2 Contract hardening</h3>
+<ul>
+<li>OpenZeppelin <code>ReentrancyGuard</code> on value transfer paths.</li>
+<li>Strict phase gates and role checks.</li>
+<li>Strong constraints on bps sums, deadlines, winner validity.</li>
+<li>Pull-pattern claims reduce forced-transfer edge cases.</li>
+</ul>
+<h3>8.3 Outage handling</h3>
+<p>If server/operator stalls during <code>ACTIVE</code>, funds are not permanently trapped:</p>
+<ul>
+<li>after <code>gameDate + maxDuration</code>, any address can invoke expiry cancellation,</li>
+<li>users can claim refunds from contract state.</li>
+</ul>
+<h2>9. Anti-Cheat Framework</h2>
+<p>Current anti-cheat controls are multi-signal:</p>
+<ol>
+<li>QR proof validation against assigned target context.</li>
+<li>GPS proximity checks with configurable thresholds.</li>
+<li>BLE nearby-address corroboration for local presence.</li>
+<li>Zone and heartbeat elimination enforcement.</li>
+</ol>
+<p>Known residual risk:</p>
+<ul>
+<li>advanced spoofing remains possible and requires continued detection tuning, penalty policy, and telemetry-driven heuristics.</li>
+</ul>
+<h2>10. Product Surface Split</h2>
+<h3>10.1 Mobile app (action plane)</h3>
+<p>Used for:</p>
+<ul>
+<li>wallet operations,</li>
+<li>registration tx flow,</li>
+<li>check-in and kill scans,</li>
+<li>gameplay map + tactical interactions,</li>
+<li>claim actions.</li>
+</ul>
+<h3>10.2 Website (spectator + growth plane)</h3>
+<p>Used for:</p>
+<ul>
+<li>upcoming game discovery,</li>
+<li>live spectator views,</li>
+<li>historical game pages,</li>
+<li>social sharing and funneling into app actions.</li>
+</ul>
+<h2>11. Economics and Ecosystem</h2>
+<p>Chain Assassin establishes an on-chain game economy where:</p>
+<ul>
+<li>players compete for transparently escrowed rewards,</li>
+<li>organizers can run repeatable templates with deterministic payout rails,</li>
+<li>spectators amplify growth through live-sharing loops.</li>
+</ul>
+<p>The long-term model supports city-level circuits, hosted tournaments, and protocolized organizer tooling.</p>
+<h2>12. Decentralization Roadmap</h2>
+<h3>Phase A: Operational reliability</h3>
+<ul>
+<li>hardened recovery and indexing,</li>
+<li>stronger simulation/e2e coverage,</li>
+<li>richer observability.</li>
+</ul>
+<h3>Phase B: Organizer scale</h3>
+<ul>
+<li>organizer dashboards and templates,</li>
+<li>anti-abuse analytics,</li>
+<li>deeper spectator media stack.</li>
+</ul>
+<h3>Phase C: Trust minimization expansion</h3>
+<ul>
+<li>multi-operator governance structures,</li>
+<li>portable attestation formats,</li>
+<li>optional challenge/dispute layers for contested outcomes.</li>
+</ul>
+<h2>13. Token Position</h2>
+<p>No native token is required today.</p>
+<ul>
+<li>Settlement currency: ETH on Base.</li>
+<li>Revenue rails: creator + platform basis-point shares.</li>
+<li>Treasury discipline: on-chain accrual + explicit withdrawal paths.</li>
+</ul>
+<p>A token should only be introduced when it delivers concrete, non-redundant utility.</p>
+<h2>14. Risk Register</h2>
+<ol>
+<li>Off-chain trust concentration.</li>
+<p>Mitigation: strict settlement boundaries, role controls, progressive decentralization.</p>
+</ol>
+<ol>
+<li>Location/BLE spoofing pressure.</li>
+<p>Mitigation: layered verification and adaptive anti-cheat policy.</p>
+</ol>
+<ol>
+<li>Infrastructure outages.</li>
+<p>Mitigation: startup recovery + permissionless expiry cancellation.</p>
+</ol>
+<ol>
+<li>Jurisdictional game-prize regulation variability.</li>
+<p>Mitigation: geofencing, policy controls, conservative compliance posture.</p>
+</ol>
+<h2>15. Public Deployment (Current)</h2>
+<ul>
+<li>Network: Base Sepolia</li>
+<li>Contract: <code>0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</code></li>
+<li>Explorer: <a href="https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69">https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</a></li>
+</ul>
+<h2>16. Conclusion</h2>
+<p>Chain Assassin demonstrates a practical crypto-native architecture for real-world games:</p>
+<ul>
+<li>real-time rules off-chain for speed,</li>
+<li>value custody and settlement on-chain for integrity,</li>
+<li>permissionless user exits when operations fail.</li>
+</ul>
+<p>This is pragmatic decentralization: protocol-level financial guarantees with production-grade gameplay systems.</p>
+    <div class="footer">Chain Assassin Whitepaper v1.1</div>
+  </main>
+</body>
+</html>
