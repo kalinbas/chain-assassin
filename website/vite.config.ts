@@ -10,7 +10,6 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          ethers: ['ethers'],
           leaflet: ['leaflet', 'react-leaflet'],
         },
       },

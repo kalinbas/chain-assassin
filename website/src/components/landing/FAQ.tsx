@@ -1,13 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { Section } from '../layout/Section';
-import { EXPLORER_URL } from '../../config/constants';
-
-const CONTRACT_ADDRESS = '0x94E2A4cA986b87e7534BFbeeC64bFfDe0528038F';
 
 const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   {
     q: 'What is Chain Assassin?',
-    a: 'Chain Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees are paid in ETH on Base blockchain, and the prize pool is split among the top players.',
+    a: 'Chain Assassin is a real-world elimination game where players hunt each other by scanning QR codes. Games take place in GPS-tracked zones that shrink over time, creating intense close-quarters action. Entry fees and payouts are handled by the game platform.',
   },
   {
     q: 'How do kills work?',
@@ -26,12 +23,12 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
     a: 'Each game has its own prize split configured by the host. The entry fees are divided between 1st, 2nd, and 3rd place, a kill bonus pool, a creator fee, and a platform fee — all defined as basis points (bps) that must total 100%. This means every game can have a unique payout structure. Check the game detail page to see the exact split before joining.',
   },
   {
-    q: 'What blockchain does it use?',
-    a: 'Chain Assassin runs on Base, an Ethereum Layer 2 blockchain. Base offers low transaction fees, fast confirmations, and the full security of Ethereum. All entry fees, prize distributions, and game records are on-chain.',
+    q: 'Does the website use blockchain directly?',
+    a: 'No. The website is API-only. It reads game state from the server REST API and live updates from the server WebSocket.',
   },
   {
-    q: 'Where is the smart contract?',
-    a: (<>The Chain Assassin smart contract is deployed on Base Sepolia (testnet) at address <a href={`${EXPLORER_URL}/address/${CONTRACT_ADDRESS}`} target="_blank" rel="noopener noreferrer" className="faq-contract-link"><code>{CONTRACT_ADDRESS}</code></a>. The contract handles game creation, player registration, entry fee escrow, kill verification, prize distribution, and refunds for cancelled games — all fully on-chain and verifiable.</>),
+    q: 'Does the website connect to wallets or RPC nodes?',
+    a: 'No. Wallet interactions and blockchain operations are handled outside the website. The website communicates only with the game server.',
   },
   {
     q: 'What if a game is cancelled?',
@@ -51,7 +48,7 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'How do I host a game?',
-    a: 'Game creation is fully permissionless. Anyone can create a game by calling the createGame function on the smart contract. You set the location, zone size, entry fee, player limits, duration, zone shrink schedule, and prize split — all on-chain. No approval needed. Once created, the game appears on the website and players can register.',
+    a: 'Use the game host flow in the app or backend tooling. After a game is created, it appears on the website through the server API and players can register.',
   },
 ];
 

@@ -1712,24 +1712,6 @@ ul { list-style: none; }
     line-height: 1.7;
 }
 
-.faq-contract-link {
-    color: var(--accent);
-    text-decoration: none;
-    transition: color 0.2s;
-}
-.faq-contract-link:hover {
-    color: var(--accent-hover);
-    text-decoration: underline;
-}
-.faq-contract-link code {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 0.82em;
-    background: rgba(0, 255, 136, 0.08);
-    padding: 2px 6px;
-    border-radius: 4px;
-    word-break: break-all;
-}
-
 /* ========== FOOTER ========== */
 .footer {
     background: var(--surface);
