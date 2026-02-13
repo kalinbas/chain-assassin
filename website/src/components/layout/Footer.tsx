@@ -10,6 +10,20 @@ export function Footer() {
           <p className="footer__tagline">Hunt or be hunted. On-chain.</p>
         </div>
         <div className="footer__links">
+          <a
+            href="https://github.com/kalinbas/chain-assassin/blob/main/docs/whitepaper/ChainAssassin-Litepaper-v1.pdf"
+            target="_blank"
+            rel="noopener"
+          >
+            Litepaper
+          </a>
+          <a
+            href="https://github.com/kalinbas/chain-assassin/blob/main/docs/whitepaper/ChainAssassin-Whitepaper-v1.pdf"
+            target="_blank"
+            rel="noopener"
+          >
+            Whitepaper
+          </a>
           <a href="https://x.com/assassin_chain" target="_blank" rel="noopener">Twitter / X</a>
           <a href="https://discord.gg/SayMP2cJsp" target="_blank" rel="noopener">Discord</a>
           <a href="https://t.me/chainassassin" target="_blank" rel="noopener">Telegram</a>
