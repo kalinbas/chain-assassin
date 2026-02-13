@@ -2,10 +2,12 @@ package com.cryptohunt.app.domain.wallet
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import com.cryptohunt.app.domain.chain.ChainConfig
 import com.cryptohunt.app.domain.chain.ContractService
+import com.cryptohunt.app.domain.chain.WalletDepositWatcher
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.model.WalletState
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -27,6 +29,7 @@ import javax.inject.Singleton
 class WalletManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val contractService: ContractService,
+    private val depositWatcher: WalletDepositWatcher,
     private val gameEngine: GameEngine
 ) {
 
@@ -98,6 +101,7 @@ class WalletManager @Inject constructor(
             balanceUsd = 0.0,
             chainName = ChainConfig.CHAIN_NAME
         )
+        startDepositMonitoring(credentials!!.address)
     }
 
     private fun setupMockWallet() {
@@ -127,11 +131,7 @@ class WalletManager @Inject constructor(
         if (addr.isEmpty()) return
         try {
             val balanceWei = contractService.getBalance(addr)
-            val balanceEth = Convert.fromWei(BigDecimal(balanceWei), Convert.Unit.ETHER).toDouble()
-            _state.value = _state.value.copy(
-                balanceEth = balanceEth,
-                balanceUsd = balanceEth * 2500.0
-            )
+            applyBalance(balanceWei)
         } catch (e: Exception) {
             // Silently fail — balance stays at previous value
         }
@@ -159,9 +159,32 @@ class WalletManager @Inject constructor(
 
     fun logout() {
         encryptedPrefs.edit().remove("private_key").apply()
+        depositWatcher.stop()
         credentials = null
         _state.value = WalletState()
         gameEngine.reset()
+    }
+
+    private fun startDepositMonitoring(address: String) {
+        if (address.isBlank()) return
+        depositWatcher.start(
+            address = address,
+            onDeposit = { _deltaWei, newBalanceWei ->
+                applyBalance(newBalanceWei)
+                Log.i("WalletManager", "Deposit detected for ${shortenedAddress()}")
+            },
+            onError = { error ->
+                Log.w("WalletManager", error)
+            }
+        )
+    }
+
+    private fun applyBalance(balanceWei: BigInteger) {
+        val balanceEth = Convert.fromWei(BigDecimal(balanceWei), Convert.Unit.ETHER).toDouble()
+        _state.value = _state.value.copy(
+            balanceEth = balanceEth,
+            balanceUsd = balanceEth * 2500.0
+        )
     }
 
     private fun ByteArray.toHex(): String = joinToString("") { "%02x".format(it) }

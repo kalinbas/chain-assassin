@@ -15,10 +15,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.GamePhase
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameHistoryItem
 import com.cryptohunt.app.ui.viewmodel.GameListItem
@@ -106,12 +108,14 @@ fun GameBrowserScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .testTag(TestTags.GAME_BROWSER_SCREEN)
                 .nestedScroll(pullToRefreshState.nestedScrollConnection)
         ) {
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp)
+                    .testTag(TestTags.UPCOMING_GAMES_LIST),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
                 contentPadding = PaddingValues(vertical = 16.dp)
             ) {
@@ -247,6 +251,7 @@ fun GameBrowserScreen(
                     GameCard(
                         game = game,
                         isRegistered = isRegistered,
+                        testTag = "${TestTags.GAME_CARD_PREFIX}${game.config.id}",
                         onClick = {
                             if (isRegistered) {
                                 onRegisteredGameClick(game.config.id)
@@ -288,10 +293,16 @@ fun GameBrowserScreen(
 }
 
 @Composable
-private fun GameCard(game: GameListItem, isRegistered: Boolean = false, onClick: () -> Unit) {
+private fun GameCard(
+    game: GameListItem,
+    isRegistered: Boolean = false,
+    testTag: String,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
+            .testTag(testTag)
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(containerColor = CardBackground),
         shape = MaterialTheme.shapes.medium

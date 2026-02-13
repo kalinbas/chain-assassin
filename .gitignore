@@ -21,3 +21,9 @@ server/data/
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Local dev runtime artifacts
+.dev-stack/
+
+# Foundry local-chain broadcast spam (Anvil / chainId 31337)
+contracts/broadcast/*/31337/run-[0-9]*.json

@@ -1,11 +1,14 @@
 package com.cryptohunt.app.domain.chain
 
+import com.cryptohunt.app.BuildConfig
+
 object ChainConfig {
-    const val CONTRACT_ADDRESS = "0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69"
-    const val RPC_URL = "https://base-sepolia.g.alchemy.com/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX"
-    const val CHAIN_ID = 84532L
-    const val EXPLORER_URL = "https://sepolia.basescan.org"
-    const val CHAIN_NAME = "Base Sepolia"
+    val CONTRACT_ADDRESS: String = BuildConfig.CHAIN_CONTRACT_ADDRESS
+    val RPC_URL: String = BuildConfig.CHAIN_RPC_URL
+    val RPC_WS_URL: String = BuildConfig.CHAIN_RPC_WS_URL
+    val CHAIN_ID: Long = BuildConfig.CHAIN_ID
+    val EXPLORER_URL: String = BuildConfig.CHAIN_EXPLORER_URL
+    val CHAIN_NAME: String = BuildConfig.CHAIN_NAME
 
     const val GAS_LIMIT_REGISTER = 200_000L
     const val GAS_LIMIT_CLAIM = 100_000L

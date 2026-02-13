@@ -42,6 +42,7 @@ import { initializeTargetChain, processKill, removeFromChain, getChainMap } from
 import { ZoneTracker } from "./zoneTracker.js";
 import { verifyKill } from "./killVerifier.js";
 import { getLeaderboard, determineWinners } from "./leaderboard.js";
+import { hasBleMatch, normalizeBluetoothId } from "./ble.js";
 import * as operator from "../blockchain/operator.js";
 import { fetchGameState } from "../blockchain/contract.js";
 import { getHttpProvider } from "../blockchain/client.js";
@@ -198,7 +199,7 @@ function startCheckinMonitor(gameId: number): void {
   clearMapTimer(checkinTimers, gameId, clearInterval);
   const interval = setInterval(() => {
     void evaluateCheckinState(gameId);
-  }, 10_000);
+  }, 2_000);
   checkinTimers.set(gameId, interval);
 }
 
@@ -740,7 +741,8 @@ export function handleCheckin(
   lat: number,
   lng: number,
   qrPayload?: string,
-  bluetoothId?: string
+  bluetoothId?: string,
+  bleNearbyAddresses: string[] = []
 ): { success: boolean; error?: string } {
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
@@ -757,7 +759,6 @@ export function handleCheckin(
 
   const player = getPlayer(gameId, address);
   if (!player) return { success: false, error: "Not registered" };
-  if (player.checkedIn) return { success: false, error: "Already checked in" };
 
   // Verify player is near the meeting point (or zone center as fallback)
   const meetLatDeg = game.meetingLat !== 0
@@ -771,6 +772,15 @@ export function handleCheckin(
   // Allow check-in within 5km of meeting point (generous)
   if (dist > 5000) {
     return { success: false, error: "Too far from meeting point" };
+  }
+
+  const normalizedBluetoothId = normalizeBluetoothId(bluetoothId);
+
+  // Auto-seeded players can finalize their Bluetooth ID without scanning.
+  if (player.checkedIn) {
+    if (!normalizedBluetoothId) return { success: false, error: "Already checked in" };
+    setPlayerCheckedIn(gameId, address, normalizedBluetoothId);
+    return { success: true };
   }
 
   // Viral check-in: scan a checked-in player's QR code (seed players are auto-checked-in by server)
@@ -797,7 +807,23 @@ export function handleCheckin(
     return { success: false, error: "Cannot scan your own QR code" };
   }
 
-  setPlayerCheckedIn(gameId, address, bluetoothId);
+  if (config.bleRequired) {
+    const scannedBluetoothId = normalizeBluetoothId(scannedPlayer.bluetoothId);
+    if (!scannedBluetoothId) {
+      return {
+        success: false,
+        error: "Scanned player must finish Bluetooth check-in first",
+      };
+    }
+    if (!hasBleMatch(scannedBluetoothId, bleNearbyAddresses)) {
+      return {
+        success: false,
+        error: "Scanned player not detected via Bluetooth",
+      };
+    }
+  }
+
+  setPlayerCheckedIn(gameId, address, normalizedBluetoothId ?? undefined);
   const checkedIn = getCheckedInCount(gameId);
   const total = getPlayerCount(gameId);
   const checkedInPlayer = getPlayer(gameId, address);
@@ -1130,8 +1156,13 @@ export function handleHeartbeatScan(
 
   // 9. BLE proximity check
   if (config.bleRequired) {
-    const bleAddresses = bleNearbyAddresses.map((a) => a.toLowerCase());
-    if (!bleAddresses.includes(scannedPlayer.address)) {
+    const scannedBluetoothId = normalizeBluetoothId(scannedPlayer.bluetoothId);
+    if (!scannedBluetoothId) {
+      log.warn(
+        { gameId, scanned: scannedPlayer.address },
+        "Scanned player has no bluetooth_id; skipping heartbeat BLE check"
+      );
+    } else if (!hasBleMatch(scannedBluetoothId, bleNearbyAddresses)) {
       return { success: false, error: "Player not detected via Bluetooth" };
     }
   }

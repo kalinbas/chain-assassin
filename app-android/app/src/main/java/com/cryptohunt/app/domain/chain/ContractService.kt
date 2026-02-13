@@ -4,19 +4,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
 import org.web3j.abi.FunctionEncoder
-import org.web3j.abi.FunctionReturnDecoder
-import org.web3j.abi.TypeReference
-import org.web3j.abi.datatypes.Address
-import org.web3j.abi.datatypes.Bool
 import org.web3j.abi.datatypes.Function
 import org.web3j.abi.datatypes.Type
-import org.web3j.abi.datatypes.generated.Uint16
 import org.web3j.abi.datatypes.generated.Uint256
 import org.web3j.crypto.Credentials
 import org.web3j.tx.RawTransactionManager
 import org.web3j.protocol.Web3j
 import org.web3j.protocol.core.DefaultBlockParameterName
-import org.web3j.protocol.core.methods.request.Transaction
 import org.web3j.protocol.core.methods.response.TransactionReceipt
 import org.web3j.protocol.http.HttpService
 import java.math.BigInteger
@@ -27,40 +21,6 @@ import javax.inject.Singleton
 class ContractService @Inject constructor() {
 
     private val web3j: Web3j = Web3j.build(HttpService(ChainConfig.RPC_URL))
-
-    // ── Read functions ──────────────────────────────────────────────
-
-    suspend fun getPlayerInfo(gameId: Int, address: String): PlayerInfo = withContext(Dispatchers.IO) {
-        val function = Function(
-            "getPlayerInfo",
-            listOf(Uint256(gameId.toLong()), Address(address)),
-            listOf(
-                object : TypeReference<Bool>() {},   // registered
-                object : TypeReference<Bool>() {},   // alive
-                object : TypeReference<Uint16>() {}, // kills
-                object : TypeReference<Bool>() {},   // claimed
-                object : TypeReference<Uint16>() {}, // number
-            )
-        )
-        val r = ethCall(function)
-        PlayerInfo(
-            registered = r[0].value as Boolean,
-            alive = r[1].value as Boolean,
-            kills = (r[2].value as BigInteger).toInt(),
-            claimed = r[3].value as Boolean,
-            number = (r[4].value as BigInteger).toInt()
-        )
-    }
-
-    suspend fun getClaimableAmount(gameId: Int, address: String): BigInteger = withContext(Dispatchers.IO) {
-        val function = Function(
-            "getClaimableAmount",
-            listOf(Uint256(gameId.toLong()), Address(address)),
-            listOf(object : TypeReference<Uint256>() {})
-        )
-        val r = ethCall(function)
-        r[0].value as BigInteger
-    }
 
     suspend fun getBalance(address: String): BigInteger = withContext(Dispatchers.IO) {
         web3j.ethGetBalance(address, DefaultBlockParameterName.LATEST).send().balance
@@ -96,15 +56,6 @@ class ContractService @Inject constructor() {
         )
     }
 
-    suspend fun triggerCancellation(gameId: Int, credentials: Credentials): String {
-        return sendTransaction(
-            credentials = credentials,
-            functionName = "triggerCancellation",
-            inputParams = listOf(Uint256(gameId.toLong())),
-            gasLimit = ChainConfig.GAS_LIMIT_TRIGGER
-        )
-    }
-
     // ── Helpers ──────────────────────────────────────────────────────
 
     suspend fun waitForReceipt(txHash: String, timeoutMs: Long = 60_000): TransactionReceipt? {
@@ -119,18 +70,6 @@ class ContractService @Inject constructor() {
             }
             null
         }
-    }
-
-    private fun ethCall(function: Function): List<Type<*>> {
-        val encoded = FunctionEncoder.encode(function)
-        val response = web3j.ethCall(
-            Transaction.createEthCallTransaction(null, ChainConfig.CONTRACT_ADDRESS, encoded),
-            DefaultBlockParameterName.LATEST
-        ).send()
-        if (response.hasError()) {
-            throw RuntimeException("eth_call failed: ${response.error.message}")
-        }
-        return FunctionReturnDecoder.decode(response.value, function.outputParameters)
     }
 
     private suspend fun sendTransaction(

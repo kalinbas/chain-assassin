@@ -34,6 +34,7 @@ const operator = new ethers.Wallet(operatorKey, provider);
 const contract = new ethers.Contract(contractAddress, abi, operator);
 const playerWallets = ANVIL_KEYS.slice(1).map((k) => new ethers.Wallet(k, provider));
 const playerContracts = playerWallets.map((wallet) => new ethers.Contract(contractAddress, abi, wallet));
+let operatorNonce = null;
 
 function contractCoord(deg) {
   return Math.round(deg * 1_000_000);
@@ -73,7 +74,24 @@ async function sendWalletTx(wallet, send) {
 }
 
 async function sendOperatorTx(send) {
-  return sendWalletTx(operator, send);
+  for (let attempt = 0; attempt < 6; attempt++) {
+    if (operatorNonce == null) {
+      operatorNonce = await provider.getTransactionCount(operator.address, "pending");
+    }
+    try {
+      const tx = await send(operatorNonce);
+      operatorNonce += 1;
+      return tx;
+    } catch (err) {
+      if (isNonceRace(err) && attempt < 5) {
+        operatorNonce = await provider.getTransactionCount(operator.address, "pending");
+        continue;
+      }
+      throw err;
+    }
+  }
+
+  throw new Error("Unable to send operator transaction after nonce retries");
 }
 
 async function createGame(sample, now) {

@@ -3,6 +3,7 @@ package com.cryptohunt.app.domain.game
 import android.util.Log
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.*
+import com.cryptohunt.app.util.QrGenerator
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -76,11 +77,11 @@ class GameEngine @Inject constructor() {
         if (current.phase != GamePhase.CHECK_IN) return CheckInResult.WrongPhase
         if (current.checkInVerified) return CheckInResult.AlreadyVerified
 
-        val parts = scannedPayload.split(":")
-        val scannedPlayerId = if (parts.size >= 3) parts[2] else scannedPayload
+        val scannedPlayerNumber = parseScannedPlayerNumberForCurrentGame(scannedPayload, current)
+            ?: return CheckInResult.UnknownPlayer
 
         // Can't scan yourself
-        if (scannedPlayerId == current.currentPlayer.id) {
+        if (scannedPlayerNumber == current.currentPlayer.number) {
             return CheckInResult.ScanYourself
         }
 
@@ -106,15 +107,13 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return KillResult.NoGame
         val target = current.currentTarget ?: return KillResult.NoTarget
 
-        // Parse payload: "ca:gameId:playerNumber"
-        val parts = scannedPayload.split(":")
-        val scannedPlayerId = if (parts.size >= 3) parts[2] else scannedPayload
-
-        if (scannedPlayerId != target.player.id) {
+        val scannedPlayerNumber = parseScannedPlayerNumberForCurrentGame(scannedPayload, current)
+            ?: return KillResult.WrongTarget
+        if (scannedPlayerNumber != target.player.number) {
             return KillResult.WrongTarget
         }
 
-        // Optimistic: show kill immediately; server will confirm via KillRecorded
+        // Return a validated local result; server acceptance drives authoritative state updates.
         val killEvent = KillEvent(
             id = UUID.randomUUID().toString(),
             hunterNumber = current.currentPlayer.number,
@@ -122,16 +121,6 @@ class GameEngine @Inject constructor() {
             timestamp = System.currentTimeMillis(),
             zone = ""
         )
-        killFeedList.add(0, killEvent)
-
-        _state.value = current.copy(
-            currentPlayer = current.currentPlayer.copy(killCount = current.currentPlayer.killCount + 1),
-            currentTarget = null, // cleared until server assigns new target
-            playersRemaining = current.playersRemaining - 1,
-            killFeed = killFeedList.toList()
-        )
-
-        _events.tryEmit(GameEvent.KillConfirmed(killEvent))
         return KillResult.Confirmed(killEvent)
     }
 
@@ -177,23 +166,33 @@ class GameEngine @Inject constructor() {
         if (current.phase != GamePhase.ACTIVE) return HeartbeatResult.WrongPhase
         if (current.heartbeatDisabled) return HeartbeatResult.HeartbeatDisabled
 
-        val parts = scannedPayload.split(":")
-        val scannedPlayerId = if (parts.size >= 3) parts[2] else scannedPayload
+        val scannedPlayerNumber = parseScannedPlayerNumberForCurrentGame(scannedPayload, current)
+            ?: return HeartbeatResult.UnknownPlayer
 
         // Can't scan yourself
-        if (scannedPlayerId == current.currentPlayer.id) {
+        if (scannedPlayerNumber == current.currentPlayer.number) {
             return HeartbeatResult.ScanYourself
         }
 
         // Can't scan your target
-        if (current.currentTarget != null && scannedPlayerId == current.currentTarget.player.id) {
+        if (current.currentTarget != null && scannedPlayerNumber == current.currentTarget.player.number) {
             return HeartbeatResult.ScanTarget
         }
 
+        // Can't scan your hunter
+        if (current.hunterPlayerNumber != null && scannedPlayerNumber == current.hunterPlayerNumber) {
+            return HeartbeatResult.ScanHunter
+        }
+
+        // If leaderboard is available locally, apply additional local safety checks.
+        if (current.leaderboard.isNotEmpty()) {
+            val scannedEntry = current.leaderboard.find { it.playerNumber == scannedPlayerNumber }
+                ?: return HeartbeatResult.UnknownPlayer
+            if (!scannedEntry.isAlive) return HeartbeatResult.PlayerNotAlive
+        }
+
         // Server will validate and confirm via heartbeat:scan_success or heartbeat:error
-        // Optimistic local success — scanned player number extracted from payload
-        val scannedNumber = scannedPlayerId.removePrefix("player_").toIntOrNull() ?: 0
-        return HeartbeatResult.Success(scannedNumber)
+        return HeartbeatResult.Success(scannedPlayerNumber)
     }
 
     fun cleanup() {
@@ -324,16 +323,22 @@ class GameEngine @Inject constructor() {
             zone = ""
         )
 
-        // Only add to kill feed if this wasn't our own optimistic kill
-        if (msg.hunterNumber != current.currentPlayer.number) {
-            killFeedList.add(0, killEvent)
-            _state.value = current.copy(killFeed = killFeedList.take(50))
-            _events.tryEmit(GameEvent.KillFeedUpdate(killEvent))
-        } else {
-            // Server confirmed our kill — update kill count from server
-            _state.value = current.copy(
-                currentPlayer = current.currentPlayer.copy(killCount = msg.hunterKills)
-            )
+        val isMyKill = msg.hunterNumber == current.currentPlayer.number
+        killFeedList.add(0, killEvent)
+
+        _state.value = current.copy(
+            currentPlayer = if (isMyKill) {
+                current.currentPlayer.copy(killCount = msg.hunterKills)
+            } else {
+                current.currentPlayer
+            },
+            currentTarget = if (isMyKill) null else current.currentTarget,
+            killFeed = killFeedList.take(50)
+        )
+
+        _events.tryEmit(GameEvent.KillFeedUpdate(killEvent))
+        if (isMyKill) {
+            _events.tryEmit(GameEvent.KillConfirmed(killEvent))
         }
     }
 
@@ -468,10 +473,24 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(isInZone = msg.inZone)
     }
 
+    private fun parseScannedPlayerNumberForCurrentGame(
+        scannedPayload: String,
+        current: GameState
+    ): Int? {
+        val parsed = QrGenerator.parsePayload(scannedPayload) ?: return null
+        val scannedGameId = parsed.first.toIntOrNull() ?: return null
+        val scannedPlayerNumber = parsed.second.toIntOrNull() ?: return null
+        val currentGameId = current.config.id.toIntOrNull() ?: return null
+        if (scannedGameId != currentGameId) return null
+        if (scannedPlayerNumber <= 0) return null
+        return scannedPlayerNumber
+    }
+
 }
 
 sealed class KillResult {
     data class Confirmed(val event: KillEvent) : KillResult()
+    data object ServerRejected : KillResult()
     data object WrongTarget : KillResult()
     data object NoTarget : KillResult()
     data object NoGame : KillResult()

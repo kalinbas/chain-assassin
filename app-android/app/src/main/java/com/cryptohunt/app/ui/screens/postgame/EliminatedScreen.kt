@@ -14,11 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.util.TimeUtils
@@ -36,6 +38,7 @@ fun EliminatedScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(TestTags.ELIMINATED_SCREEN)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(
@@ -160,13 +163,13 @@ fun EliminatedScreen(
                 val survived = TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L)
                 val totalPlayers = state?.config?.maxPlayers ?: 100
                 val rank = (state?.playersRemaining ?: 1) + 1
-                val gameName = state?.config?.name ?: "Chain Assassin"
+                val gameName = state?.config?.name ?: "CryptoHunt"
 
                 val shareText = "I was hunted in $gameName!\n" +
                     "Rank: #$rank / $totalPlayers\n" +
                     "Kills: $kills\n" +
                     "Survived: $survived\n" +
-                    "#ChainAssassin"
+                    "#CryptoHunt"
 
                 val sendIntent = Intent().apply {
                     action = Intent.ACTION_SEND
@@ -191,7 +194,9 @@ fun EliminatedScreen(
         // Exit button
         TextButton(
             onClick = onExit,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag(TestTags.ELIMINATED_LEAVE_BUTTON)
         ) {
             Icon(Icons.Default.ExitToApp, null, modifier = Modifier.size(20.dp), tint = TextDim)
             Spacer(Modifier.width(8.dp))

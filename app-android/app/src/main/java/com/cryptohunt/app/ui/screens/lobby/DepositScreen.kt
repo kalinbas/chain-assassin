@@ -62,7 +62,7 @@ fun DepositScreen(
             if (privateKey != null) {
                 try {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
-                        val content = "Chain Assassin Wallet Backup\n" +
+                        val content = "CryptoHunt Wallet Backup\n" +
                             "========================\n" +
                             "Address: ${walletState.address}\n" +
                             "Private Key: $privateKey\n" +
@@ -279,7 +279,7 @@ fun DepositScreen(
 
                     InstructionStep(
                         number = "4",
-                        text = "Tap 'Refresh Balance' to see your updated balance"
+                        text = "Balance updates automatically after new blocks (or tap Refresh)"
                     )
 
                     Spacer(modifier = Modifier.height(16.dp))

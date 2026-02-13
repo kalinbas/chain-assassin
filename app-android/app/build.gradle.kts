@@ -6,6 +6,20 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
 }
 
+fun envOrDefault(name: String, fallback: String): String {
+    val value = System.getenv(name)?.trim()
+    return if (value.isNullOrEmpty()) fallback else value
+}
+
+fun quote(value: String): String {
+    val escaped = value.replace("\\", "\\\\").replace("\"", "\\\"")
+    return "\"$escaped\""
+}
+
+fun envLongOrDefault(name: String, fallback: Long): Long {
+    return System.getenv(name)?.trim()?.toLongOrNull() ?: fallback
+}
+
 android {
     namespace = "com.cryptohunt.app"
     compileSdk = 34
@@ -19,6 +33,37 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
+
+        buildConfigField(
+            "String",
+            "CHAIN_CONTRACT_ADDRESS",
+            quote(envOrDefault("CHAIN_CONTRACT_ADDRESS", "0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69"))
+        )
+        buildConfigField(
+            "String",
+            "CHAIN_RPC_URL",
+            quote(envOrDefault("CHAIN_RPC_URL", "https://base-sepolia.g.alchemy.com/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX"))
+        )
+        buildConfigField(
+            "String",
+            "CHAIN_RPC_WS_URL",
+            quote(envOrDefault("CHAIN_RPC_WS_URL", "wss://base-sepolia.g.alchemy.com/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX"))
+        )
+        buildConfigField(
+            "long",
+            "CHAIN_ID",
+            "${envLongOrDefault("CHAIN_ID", 84532L)}L"
+        )
+        buildConfigField(
+            "String",
+            "CHAIN_EXPLORER_URL",
+            quote(envOrDefault("CHAIN_EXPLORER_URL", "https://sepolia.basescan.org"))
+        )
+        buildConfigField(
+            "String",
+            "CHAIN_NAME",
+            quote(envOrDefault("CHAIN_NAME", "Base Sepolia"))
+        )
     }
 
     buildTypes {
@@ -119,6 +164,15 @@ dependencies {
     // Debug
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
+
+    // Instrumented tests
+    androidTestImplementation(platform("androidx.compose:compose-bom:2024.06.00"))
+    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
+    androidTestImplementation("androidx.test.ext:junit:1.3.0")
+    androidTestImplementation("androidx.test:runner:1.7.0")
+    androidTestImplementation("androidx.test:rules:1.7.0")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
 }
 
 kapt {

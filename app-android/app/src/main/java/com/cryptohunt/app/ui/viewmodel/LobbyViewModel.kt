@@ -9,9 +9,12 @@ import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.GameServerClient
 import com.cryptohunt.app.domain.server.ServerMapper
+import com.cryptohunt.app.domain.server.ServerGame
+import com.cryptohunt.app.domain.server.ServerPlayerInfo
 import com.cryptohunt.app.domain.wallet.WalletManager
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,13 +109,6 @@ class LobbyViewModel @Inject constructor(
             }
         }
 
-        // Forward server messages to GameEngine (so phase transitions reach the UI)
-        viewModelScope.launch {
-            serverClient.serverMessages.collect { msg ->
-                Log.d("LobbyViewModel", "Server: $msg")
-                gameEngine.processServerMessage(msg)
-            }
-        }
     }
 
     fun loadGames() {
@@ -132,16 +128,17 @@ class LobbyViewModel @Inject constructor(
             }
             val address = walletManager.getAddress()
             val items = mutableListOf<GameListItem>()
+            var activeGameRestored = false
 
             for (game in allGames) {
                 try {
                     val appConfig = ServerMapper.toGameConfig(game)
                     val phase = OnChainPhase.fromInt(game.phase)
-                    val totalCollected = java.math.BigInteger(game.totalCollected)
+                    val totalCollected = game.totalCollected.toBigIntegerOrNull() ?: BigInteger.ZERO
 
                     val nowMs = System.currentTimeMillis()
-                    if (phase == OnChainPhase.REGISTRATION && appConfig.registrationDeadline > nowMs) {
-                        // Show REGISTRATION games in the upcoming list
+                    if (phase == OnChainPhase.REGISTRATION && appConfig.gameDate > nowMs) {
+                        // Show all upcoming REGISTRATION games.
                         val playerInfo = if (address.isNotEmpty()) {
                             try { serverClient.fetchPlayerInfo(game.gameId, address) } catch (_: Exception) { null }
                         } else null
@@ -164,7 +161,7 @@ class LobbyViewModel @Inject constructor(
                             serverClient.fetchPlayerInfo(game.gameId, address)
                         } catch (_: Exception) { null }
 
-                        if (playerInfo != null && playerInfo.registered) {
+                        if (playerInfo != null && playerInfo.registered && !activeGameRestored) {
                             // Restore GameEngine state so the lobby shows the active game card
                             val existingState = gameEngine.state.value
                             if (existingState == null || existingState.config.id != appConfig.id) {
@@ -174,7 +171,7 @@ class LobbyViewModel @Inject constructor(
                                 )
                                 // Server connection deferred to when user navigates to the game screen
                             }
-                            break // Player can only be in one active game at a time
+                            activeGameRestored = true
                         }
                     }
                 } catch (_: Exception) {
@@ -209,24 +206,22 @@ class LobbyViewModel @Inject constructor(
                     val isCancelled = phase == OnChainPhase.CANCELLED
                     val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
 
-                    // Check if current player participated
+                    // Only include past games where current wallet participated.
                     val playerInfo = if (address.isNotEmpty()) {
                         try { serverClient.fetchPlayerInfo(game.gameId, address) } catch (_: Exception) { null }
                     } else null
-                    val participated = playerInfo?.registered == true
+                    if (playerInfo?.registered != true) continue
+                    val participated = true
 
-                    // Only fetch claimable if player participated (stays on-chain)
-                    val claimable = if (participated && address.isNotEmpty()) {
-                        try { contractService.getClaimableAmount(game.gameId, address) } catch (_: Exception) { BigInteger.ZERO }
-                    } else BigInteger.ZERO
+                    val claimable = computeClaimableWei(game, playerInfo)
                     val claimableEth = org.web3j.utils.Convert.fromWei(
                         java.math.BigDecimal(claimable),
                         org.web3j.utils.Convert.Unit.ETHER
                     ).toDouble()
 
                     // Determine rank based on winners (only relevant if participated)
-                    val pNum = playerInfo?.playerNumber ?: 0
-                    val rank = if (participated && pNum != 0) {
+                    val pNum = playerInfo.playerNumber
+                    val rank = if (pNum != 0) {
                         when (pNum) {
                             game.winner1 -> 1
                             game.winner2 -> 2
@@ -239,14 +234,14 @@ class LobbyViewModel @Inject constructor(
                         GameHistoryItem(
                             config = appConfig,
                             phase = gamePhase,
-                            kills = playerInfo?.kills ?: 0,
+                            kills = playerInfo.kills,
                             rank = rank,
                             survivalSeconds = 0L,
                             playersTotal = game.playerCount,
                             leaderboard = emptyList(),
                             playedAt = game.gameDate * 1000,
                             prizeEth = claimableEth,
-                            claimed = if (participated) (playerInfo?.claimed == true || claimable == BigInteger.ZERO) else true,
+                            claimed = playerInfo.claimed || claimable == BigInteger.ZERO,
                             claimableWei = claimable,
                             isCancelled = isCancelled,
                             gameId = game.gameId,
@@ -280,7 +275,10 @@ class LobbyViewModel @Inject constructor(
     fun claimPrize(index: Int, onSuccess: () -> Unit = {}, onError: (String) -> Unit = {}) {
         val item = _gameHistory.value.getOrNull(index) ?: return
         if (item.claimed || item.claimableWei == BigInteger.ZERO) return
-        val credentials = walletManager.getCredentials() ?: return
+        val credentials = walletManager.getCredentials() ?: run {
+            onError("Wallet not connected")
+            return
+        }
 
         viewModelScope.launch {
             _txPending.value = true
@@ -290,20 +288,24 @@ class LobbyViewModel @Inject constructor(
                 } else {
                     contractService.claimPrize(item.gameId, credentials)
                 }
-                val receipt = contractService.waitForReceipt(txHash)
-                if (receipt != null && receipt.isStatusOK) {
+                val receipt = contractService.waitForReceipt(txHash, timeoutMs = 120_000)
+                if (receipt == null) {
+                    onError("Transaction sent but confirmation timed out. Check explorer for tx: $txHash")
+                    return@launch
+                }
+                if (receipt.isStatusOK) {
                     // Update local state
                     val history = _gameHistory.value.toMutableList()
-                    history[index] = item.copy(claimed = true, claimableWei = BigInteger.ZERO)
+                    history[index] = item.copy(claimed = true, claimableWei = BigInteger.ZERO, prizeEth = 0.0)
                     _gameHistory.value = history
                     // Refresh balance
                     walletManager.refreshBalance()
                     onSuccess()
                 } else {
-                    onError("Transaction failed")
+                    onError("Transaction reverted on-chain (status ${receipt.status}). Tx: $txHash")
                 }
             } catch (e: Exception) {
-                onError(e.message ?: "Claim failed")
+                onError(mapTxError(e, defaultMessage = "Claim failed"))
             } finally {
                 _txPending.value = false
             }
@@ -321,28 +323,44 @@ class LobbyViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val gameIdInt = gameId.toIntOrNull() ?: return@launch
-                val game = serverClient.fetchGameDetail(gameIdInt) ?: run {
+                val selected = fetchSelectedGameFromServer(gameIdInt) ?: run {
                     _error.value = "Game not found"
                     return@launch
                 }
-                val appConfig = ServerMapper.toGameConfig(game)
-                val phase = OnChainPhase.fromInt(game.phase)
-                val address = walletManager.getAddress()
-                val playerInfo = if (address.isNotEmpty()) {
-                    try { serverClient.fetchPlayerInfo(gameIdInt, address) } catch (_: Exception) { null }
-                } else null
-                _selectedGame.value = GameListItem(
-                    config = appConfig,
-                    currentPlayers = game.playerCount,
-                    locationName = appConfig.name,
-                    startTime = appConfig.gameDate,
-                    onChainPhase = phase,
-                    totalCollected = java.math.BigInteger(game.totalCollected),
-                    isPlayerRegistered = playerInfo?.registered == true,
-                    playerNumber = playerInfo?.playerNumber ?: 0
-                )
+                _selectedGame.value = selected
             } catch (e: Exception) {
                 _error.value = "Failed to load game: ${e.message}"
+            }
+        }
+    }
+
+    /**
+     * Full detail refresh:
+     * 1) Pull latest game snapshot from REST
+     * 2) Restore local registered state from fresh data
+     * 3) Force WS reconnect to receive a fresh auth snapshot
+     */
+    fun refreshRegisteredDetail(
+        gameId: String,
+        onSuccess: () -> Unit = {},
+        onError: (String) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            try {
+                val gameIdInt = gameId.toIntOrNull() ?: run {
+                    onError("Invalid game ID")
+                    return@launch
+                }
+                val selected = fetchSelectedGameFromServer(gameIdInt) ?: run {
+                    onError("Game not found")
+                    return@launch
+                }
+                _selectedGame.value = selected
+                ensureRegisteredState(gameId)
+                serverClient.reconnect(gameIdInt)
+                onSuccess()
+            } catch (e: Exception) {
+                onError("Refresh failed: ${e.message ?: "unknown error"}")
             }
         }
     }
@@ -370,28 +388,47 @@ class LobbyViewModel @Inject constructor(
                     entryFeeWei = game.config.entryFeeWei,
                     credentials = credentials
                 )
-                val receipt = contractService.waitForReceipt(txHash)
-                if (receipt != null && receipt.isStatusOK) {
+                val receipt = contractService.waitForReceipt(txHash, timeoutMs = 120_000)
+                if (receipt == null) {
+                    onError("Transaction sent but confirmation timed out. Check explorer for tx: $txHash")
+                    return@launch
+                }
+                if (receipt.isStatusOK) {
                     // Refresh wallet balance
                     walletManager.refreshBalance()
-                    // Get the on-chain player number
-                    val playerInfo = contractService.getPlayerInfo(gameIdInt, walletManager.getAddress())
+
+                    val address = walletManager.getAddress()
+                    val playerInfo = waitForServerRegistration(gameIdInt, address)
+
+                    val assignedNumber = playerInfo?.playerNumber ?: 0
+                    val currentPlayers = try {
+                        serverClient.fetchGameDetail(gameIdInt)?.playerCount ?: (game.currentPlayers + 1)
+                    } catch (_: Exception) {
+                        game.currentPlayers + 1
+                    }
+
                     // Register in local game engine for gameplay simulation
-                    gameEngine.registerForGame(game.config, walletManager.getAddress(), game.startTime, assignedPlayerNumber = playerInfo.number)
+                    gameEngine.registerForGame(
+                        game.config,
+                        address,
+                        game.startTime,
+                        assignedPlayerNumber = assignedNumber
+                    )
+
                     // Update selected game immediately so UI reflects registration
                     _selectedGame.value = game.copy(
                         isPlayerRegistered = true,
-                        playerNumber = playerInfo.number,
-                        currentPlayers = game.currentPlayers + 1
+                        playerNumber = assignedNumber,
+                        currentPlayers = currentPlayers
                     )
                     // Refresh games list to update player count
                     loadGames()
                     onSuccess()
                 } else {
-                    onError("Transaction failed")
+                    onError("Transaction reverted on-chain (status ${receipt.status}). Tx: $txHash")
                 }
             } catch (e: Exception) {
-                onError(e.message ?: "Registration failed")
+                onError(mapTxError(e, defaultMessage = "Registration failed"))
             } finally {
                 _txPending.value = false
             }
@@ -408,6 +445,22 @@ class LobbyViewModel @Inject constructor(
         serverClient.connect(gameIdInt)
     }
 
+    fun disconnectFromServer() {
+        serverClient.disconnect()
+    }
+
+    /**
+     * Registered detail screen owns the connection only before live phases.
+     * Once check-in/pregame/game starts, downstream screens take over the same WS.
+     */
+    fun disconnectFromRegisteredDetailIfIdle(): Unit {
+        val phase = gameEngine.state.value?.phase
+        if (phase in listOf(GamePhase.CHECK_IN, GamePhase.PREGAME, GamePhase.ACTIVE, GamePhase.ELIMINATED)) {
+            return
+        }
+        serverClient.disconnect()
+    }
+
     fun startLocationTracking() {
         locationTracker.startTracking()
     }
@@ -421,12 +474,11 @@ class LobbyViewModel @Inject constructor(
     }
 
     fun startGame() {
-        // Server drives game start — this is a no-op now.
-        // Kept for UI compatibility (GameLobbyScreen button).
+        // Server drives game start — local trigger intentionally disabled.
     }
 
     /**
-     * Restore local game engine state from on-chain data.
+     * Restore local game engine state from server-indexed data.
      * Called when navigating to RegisteredDetailScreen and no local GameState exists.
      */
     fun ensureRegisteredState(gameId: String) {
@@ -471,6 +523,101 @@ class LobbyViewModel @Inject constructor(
                 _isRefreshing.value = false
             }
         }
+    }
+
+    private suspend fun waitForServerRegistration(
+        gameId: Int,
+        address: String,
+        attempts: Int = 12,
+        delayMs: Long = 1_500
+    ): ServerPlayerInfo? {
+        repeat(attempts) {
+            val playerInfo = try {
+                serverClient.fetchPlayerInfo(gameId, address)
+            } catch (_: Exception) {
+                null
+            }
+            if (playerInfo?.registered == true) return playerInfo
+            delay(delayMs)
+        }
+        return null
+    }
+
+    private suspend fun fetchSelectedGameFromServer(gameId: Int): GameListItem? {
+        val game = serverClient.fetchGameDetail(gameId) ?: return null
+        val appConfig = ServerMapper.toGameConfig(game)
+        val phase = OnChainPhase.fromInt(game.phase)
+        val address = walletManager.getAddress()
+        val playerInfo = if (address.isNotEmpty()) {
+            try { serverClient.fetchPlayerInfo(gameId, address) } catch (_: Exception) { null }
+        } else null
+
+        return GameListItem(
+            config = appConfig,
+            currentPlayers = game.playerCount,
+            locationName = appConfig.name,
+            startTime = appConfig.gameDate,
+            onChainPhase = phase,
+            totalCollected = game.totalCollected.toBigIntegerOrNull() ?: BigInteger.ZERO,
+            isPlayerRegistered = playerInfo?.registered == true,
+            playerNumber = playerInfo?.playerNumber ?: 0
+        )
+    }
+
+    private fun computeClaimableWei(game: ServerGame, playerInfo: ServerPlayerInfo): BigInteger {
+        if (!playerInfo.registered || playerInfo.claimed) return BigInteger.ZERO
+
+        val phase = OnChainPhase.fromInt(game.phase)
+        if (phase == OnChainPhase.CANCELLED) {
+            return game.entryFee.toBigIntegerOrNull() ?: BigInteger.ZERO
+        }
+
+        if (phase != OnChainPhase.ENDED) return BigInteger.ZERO
+
+        val totalCollected = game.totalCollected.toBigIntegerOrNull() ?: BigInteger.ZERO
+        if (totalCollected <= BigInteger.ZERO) return BigInteger.ZERO
+
+        val p = playerInfo.playerNumber
+        if (p <= 0) return BigInteger.ZERO
+
+        var totalBps = 0
+        if (p == game.winner1) totalBps += game.bps1st
+        if (p == game.winner2) totalBps += game.bps2nd
+        if (p == game.winner3) totalBps += game.bps3rd
+        if (p == game.topKiller) totalBps += game.bpsKills
+        if (totalBps <= 0) return BigInteger.ZERO
+
+        return totalCollected
+            .multiply(BigInteger.valueOf(totalBps.toLong()))
+            .divide(BigInteger.valueOf(10_000L))
+    }
+
+    private fun mapTxError(error: Throwable, defaultMessage: String): String {
+        val raw = (error.message ?: defaultMessage).trim()
+        if (raw.isBlank()) return defaultMessage
+
+        val lower = raw.lowercase()
+        return when {
+            "insufficient funds" in lower ->
+                "Insufficient funds for value + gas."
+            "nonce too low" in lower ->
+                "Transaction nonce too low. Please retry."
+            "replacement transaction underpriced" in lower ->
+                "Replacement transaction underpriced. Please retry."
+            "user denied" in lower || "rejected" in lower ->
+                "Transaction was rejected."
+            "execution reverted" in lower ->
+                extractRevertReason(raw)
+            else -> raw
+        }
+    }
+
+    private fun extractRevertReason(raw: String): String {
+        val marker = "execution reverted"
+        val idx = raw.lowercase().indexOf(marker)
+        if (idx < 0) return raw
+        val suffix = raw.substring(idx + marker.length).trimStart(' ', ':')
+        return if (suffix.isBlank()) "Transaction reverted on-chain." else "Transaction reverted: $suffix"
     }
 
     fun clearError() {

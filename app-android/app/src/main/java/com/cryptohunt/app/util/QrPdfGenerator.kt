@@ -52,7 +52,7 @@ object QrPdfGenerator {
             textAlign = Paint.Align.CENTER
         }
         canvas.drawText(
-            "Chain Assassin \u2014 $gameName",
+            "CryptoHunt \u2014 $gameName",
             PAGE_WIDTH / 2f, MARGIN.toFloat() + 14f, titlePaint
         )
 

@@ -16,13 +16,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.LeaderboardEntry
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.components.*
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.ui.viewmodel.UiEvent
@@ -95,6 +98,16 @@ fun MainGameScreen(
         }
     }
 
+    // Fallback navigation based on authoritative phase state.
+    LaunchedEffect(gameState?.phase) {
+        when (gameState?.phase) {
+            GamePhase.ELIMINATED -> onEliminated()
+            GamePhase.ENDED,
+            GamePhase.CANCELLED -> onGameEnd()
+            else -> {}
+        }
+    }
+
     // Handle kill feed updates
     LaunchedEffect(Unit) {
         viewModel.events.collect { event ->
@@ -132,7 +145,11 @@ fun MainGameScreen(
         label = "bgColor"
     )
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .testTag(TestTags.MAIN_GAME_SCREEN)
+    ) {
         Column(
                 modifier = Modifier
                     .fillMaxSize()
@@ -637,4 +654,3 @@ private fun LeaderboardRow(entry: LeaderboardEntry) {
         )
     }
 }
-

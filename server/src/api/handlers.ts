@@ -109,7 +109,7 @@ export function submitLocation(req: Request, res: Response): void {
 
 /**
  * POST /api/games/:gameId/checkin
- * Body: { lat, lng, qrPayload? }
+ * Body: { lat, lng, qrPayload?, bluetoothId?, bleNearbyAddresses? }
  *
  * Players check in by scanning a checked-in player's QR code.
  * Initial seed players are checked in automatically by the server.
@@ -122,13 +122,21 @@ export function submitCheckin(req: Request, res: Response): void {
     return;
   }
 
-  const { lat, lng, qrPayload, bluetoothId } = req.body;
+  const { lat, lng, qrPayload, bluetoothId, bleNearbyAddresses } = req.body;
   if (lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: lat, lng" });
     return;
   }
 
-  const result = handleCheckin(gameId, authReq.playerAddress, lat, lng, qrPayload, bluetoothId);
+  const result = handleCheckin(
+    gameId,
+    authReq.playerAddress,
+    lat,
+    lng,
+    qrPayload,
+    bluetoothId,
+    bleNearbyAddresses || []
+  );
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;

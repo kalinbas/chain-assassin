@@ -18,12 +18,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.WalletViewModel
 
@@ -80,7 +82,7 @@ fun WalletSetupScreen(
             if (privateKey != null) {
                 try {
                     context.contentResolver.openOutputStream(uri)?.use { stream ->
-                        val content = "Chain Assassin Wallet Backup\n" +
+                        val content = "CryptoHunt Wallet Backup\n" +
                             "========================\n" +
                             "Address: ${walletState.address}\n" +
                             "Private Key: $privateKey\n" +
@@ -108,6 +110,7 @@ fun WalletSetupScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(TestTags.WALLET_SETUP_SCREEN)
             .background(Background)
             .systemBarsPadding()
             .padding(32.dp),
@@ -192,7 +195,9 @@ fun WalletSetupScreen(
                     privateKeyInput = it
                     importError = false
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag(TestTags.WALLET_SETUP_PRIVATE_KEY_FIELD),
                 label = { Text("Private Key") },
                 placeholder = { Text("0x...") },
                 isError = importError,
@@ -222,7 +227,8 @@ fun WalletSetupScreen(
                 },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .testTag(TestTags.WALLET_SETUP_IMPORT_KEY_BUTTON),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = Primary
                 ),
@@ -376,7 +382,8 @@ fun WalletSetupScreen(
                     onClick = onComplete,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp),
+                        .height(56.dp)
+                        .testTag(TestTags.WALLET_SETUP_CONTINUE_BUTTON),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = Primary,
                         contentColor = Background

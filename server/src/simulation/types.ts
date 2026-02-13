@@ -20,6 +20,8 @@ export interface DeploySimulationConfig {
   entryFeeWei: string;       // "0" for free games
   baseRewardWei: string;     // "0" for no base reward
   registrationDelaySeconds: number; // how long registration stays open before auto-start
+  gameStartDelaySeconds: number;    // seconds between registration close and game start
+  maxDurationSeconds: number;       // max active duration before expiry cancellation is allowed
 }
 
 export interface SimulationStatus {

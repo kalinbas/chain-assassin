@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.GamePhase
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
 import com.cryptohunt.app.util.QrPdfGenerator
@@ -50,6 +52,8 @@ fun RegisteredDetailScreen(
     val gameState by viewModel.gameState.collectAsState()
     val selectedGame by viewModel.selectedGame.collectAsState()
     val context = LocalContext.current
+    var isRefreshing by remember { mutableStateOf(false) }
+    var refreshError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(gameId) {
         if (gameId.isNotEmpty()) {
@@ -94,6 +98,12 @@ fun RegisteredDetailScreen(
     LaunchedEffect(config.id) {
         viewModel.connectToServer(config.id)
     }
+    // Keep WS open only while this detail screen is visible.
+    DisposableEffect(config.id) {
+        onDispose {
+            viewModel.disconnectFromRegisteredDetailIfIdle()
+        }
+    }
 
     val days = (timeRemainingMs / 86400000).coerceAtLeast(0)
     val hours = ((timeRemainingMs % 86400000) / 3600000).coerceAtLeast(0)
@@ -122,6 +132,7 @@ fun RegisteredDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .testTag(TestTags.REGISTERED_DETAIL_SCREEN)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -147,6 +158,22 @@ fun RegisteredDetailScreen(
                         style = MaterialTheme.typography.titleMedium,
                         color = Primary,
                         fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            if (refreshError != null) {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Danger.copy(alpha = 0.1f)),
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Text(
+                        refreshError ?: "",
+                        modifier = Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Danger
                     )
                 }
             }
@@ -446,11 +473,23 @@ fun RegisteredDetailScreen(
                     Text("PRIZE POOL", style = MaterialTheme.typography.labelMedium, color = TextSecondary)
                     Spacer(Modifier.height(8.dp))
                     val playerCount = maxOf(selectedGame?.currentPlayers ?: 0, config.minPlayers)
-                    val prizePool = (config.entryFee * playerCount + config.baseReward) * 0.9
-                    PrizeRow("Winner (40%)", "%.3f ETH".format(prizePool * 0.4))
-                    PrizeRow("Most Kills (20%)", "%.3f ETH".format(prizePool * 0.2))
-                    PrizeRow("2nd Place (15%)", "%.3f ETH".format(prizePool * 0.15))
-                    PrizeRow("3rd Place (10%)", "%.3f ETH".format(prizePool * 0.1))
+                    val totalPool = (config.entryFee * playerCount) + config.baseReward
+                    PrizeRow(
+                        "Winner (${formatBpsPercent(config.bps1st)})",
+                        "%.3f ETH".format(totalPool * config.bps1st / 10_000.0)
+                    )
+                    PrizeRow(
+                        "Most Kills (${formatBpsPercent(config.bpsKills)})",
+                        "%.3f ETH".format(totalPool * config.bpsKills / 10_000.0)
+                    )
+                    PrizeRow(
+                        "2nd Place (${formatBpsPercent(config.bps2nd)})",
+                        "%.3f ETH".format(totalPool * config.bps2nd / 10_000.0)
+                    )
+                    PrizeRow(
+                        "3rd Place (${formatBpsPercent(config.bps3rd)})",
+                        "%.3f ETH".format(totalPool * config.bps3rd / 10_000.0)
+                    )
                 }
             }
 
@@ -478,6 +517,50 @@ fun RegisteredDetailScreen(
                     )
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+
+            Text(
+                "Troubleshooting",
+                style = MaterialTheme.typography.labelSmall,
+                color = TextDim
+            )
+            TextButton(
+                enabled = !isRefreshing,
+                onClick = {
+                    isRefreshing = true
+                    refreshError = null
+                    viewModel.refreshRegisteredDetail(
+                        gameId = config.id,
+                        onSuccess = {
+                            isRefreshing = false
+                        },
+                        onError = { error ->
+                            refreshError = error
+                            isRefreshing = false
+                        }
+                    )
+                }
+            ) {
+                if (isRefreshing) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(14.dp),
+                        strokeWidth = 2.dp,
+                        color = TextDim
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text("Re-syncing state...", color = TextDim, style = MaterialTheme.typography.labelMedium)
+                } else {
+                    Icon(Icons.Default.Refresh, contentDescription = null, tint = TextDim, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Re-sync live state", color = TextDim, style = MaterialTheme.typography.labelMedium)
+                }
+            }
+            Text(
+                "Use only if live status looks stuck.",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextDim
+            )
 
             Spacer(Modifier.height(32.dp))
         }
@@ -507,5 +590,14 @@ private fun PrizeRow(label: String, value: String) {
     ) {
         Text(label, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
         Text(value, style = MaterialTheme.typography.bodySmall, color = TextPrimary, fontWeight = FontWeight.Medium)
+    }
+}
+
+private fun formatBpsPercent(bps: Int): String {
+    val pct = bps / 100.0
+    return if (pct % 1.0 == 0.0) {
+        "${pct.toInt()}%"
+    } else {
+        "${"%.2f".format(Locale.US, pct)}%"
     }
 }

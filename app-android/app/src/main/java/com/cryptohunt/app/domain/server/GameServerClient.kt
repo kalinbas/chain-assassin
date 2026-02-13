@@ -2,10 +2,12 @@ package com.cryptohunt.app.domain.server
 
 import android.util.Log
 import com.cryptohunt.app.domain.wallet.WalletManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.OkHttpClient
@@ -93,6 +95,14 @@ class GameServerClient @Inject constructor(
     }
 
     /**
+     * Force a clean reconnect for the same game to fetch a fresh auth snapshot.
+     */
+    fun reconnect(gameId: Int) {
+        disconnect()
+        connect(gameId)
+    }
+
+    /**
      * Send a location update to the server.
      */
     fun sendLocation(lat: Double, lng: Double) {
@@ -110,7 +120,13 @@ class GameServerClient @Inject constructor(
      * Submit a kill claim to the server via REST API.
      * Returns true on success, false on failure.
      */
-    fun submitKill(gameId: Int, qrPayload: String, lat: Double, lng: Double): Boolean {
+    fun submitKill(
+        gameId: Int,
+        qrPayload: String,
+        lat: Double,
+        lng: Double,
+        bleAddresses: List<String> = emptyList()
+    ): Boolean {
         val address = walletManager.getAddress()
         val timestamp = System.currentTimeMillis() / 1000
         val message = "${ServerConfig.AUTH_PREFIX}:$timestamp"
@@ -120,6 +136,9 @@ class GameServerClient @Inject constructor(
             put("qrPayload", qrPayload)
             put("hunterLat", lat)
             put("hunterLng", lng)
+            if (bleAddresses.isNotEmpty()) {
+                put("bleNearbyAddresses", JSONArray(bleAddresses))
+            }
         }.toString()
 
         val request = Request.Builder()
@@ -151,7 +170,14 @@ class GameServerClient @Inject constructor(
      * Submit a check-in to the server via REST API.
      * Returns true on success, false on failure.
      */
-    fun submitCheckin(gameId: Int, lat: Double, lng: Double, qrPayload: String? = null, bluetoothId: String? = null): Boolean {
+    fun submitCheckin(
+        gameId: Int,
+        lat: Double,
+        lng: Double,
+        qrPayload: String? = null,
+        bluetoothId: String? = null,
+        bleAddresses: List<String> = emptyList()
+    ): Boolean {
         val address = walletManager.getAddress()
         val timestamp = System.currentTimeMillis() / 1000
         val message = "${ServerConfig.AUTH_PREFIX}:$timestamp"
@@ -165,6 +191,9 @@ class GameServerClient @Inject constructor(
             }
             if (bluetoothId != null) {
                 put("bluetoothId", bluetoothId)
+            }
+            if (bleAddresses.isNotEmpty()) {
+                put("bleNearbyAddresses", JSONArray(bleAddresses))
             }
         }.toString()
 
@@ -287,16 +316,16 @@ class GameServerClient @Inject constructor(
     /**
      * GET /api/games — fetch all games from server.
      */
-    fun fetchAllGames(): List<ServerGame>? {
+    suspend fun fetchAllGames(): List<ServerGame>? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${ServerConfig.SERVER_URL}/api/games")
             .get()
             .build()
-        return try {
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) { response.close(); return null }
-            val body = response.body?.string() ?: return null
-            response.close()
+        try {
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            } ?: return@withContext null
             val array = JSONArray(body)
             val games = mutableListOf<ServerGame>()
             for (i in 0 until array.length()) {
@@ -312,16 +341,16 @@ class GameServerClient @Inject constructor(
     /**
      * GET /api/games/:gameId — fetch single game detail.
      */
-    fun fetchGameDetail(gameId: Int): ServerGame? {
+    suspend fun fetchGameDetail(gameId: Int): ServerGame? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${ServerConfig.SERVER_URL}/api/games/$gameId")
             .get()
             .build()
-        return try {
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) { response.close(); return null }
-            val body = response.body?.string() ?: return null
-            response.close()
+        try {
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            } ?: return@withContext null
             parseServerGame(JSONObject(body))
         } catch (e: Exception) {
             Log.e(TAG, "fetchGameDetail error: ${e.message}")
@@ -332,16 +361,16 @@ class GameServerClient @Inject constructor(
     /**
      * GET /api/games/:gameId/player/:address — fetch player info.
      */
-    fun fetchPlayerInfo(gameId: Int, address: String): ServerPlayerInfo? {
+    suspend fun fetchPlayerInfo(gameId: Int, address: String): ServerPlayerInfo? = withContext(Dispatchers.IO) {
         val request = Request.Builder()
             .url("${ServerConfig.SERVER_URL}/api/games/$gameId/player/$address")
             .get()
             .build()
-        return try {
-            val response = client.newCall(request).execute()
-            if (!response.isSuccessful) { response.close(); return null }
-            val body = response.body?.string() ?: return null
-            response.close()
+        try {
+            val body = client.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return@withContext null
+                response.body?.string()
+            } ?: return@withContext null
             val json = JSONObject(body)
             ServerPlayerInfo(
                 registered = json.optBoolean("registered", false),

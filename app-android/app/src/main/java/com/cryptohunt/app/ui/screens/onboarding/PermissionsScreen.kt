@@ -14,9 +14,11 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -69,6 +71,7 @@ fun PermissionsScreen(onAllGranted: () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(TestTags.PERMISSIONS_SCREEN)
             .background(Background)
             .systemBarsPadding()
             .padding(32.dp),
@@ -85,7 +88,7 @@ fun PermissionsScreen(onAllGranted: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "Chain Assassin needs these permissions to work",
+            text = "CryptoHunt needs these permissions to work",
             style = MaterialTheme.typography.bodyMedium,
             color = TextSecondary,
             textAlign = TextAlign.Center
@@ -125,7 +128,8 @@ fun PermissionsScreen(onAllGranted: () -> Unit) {
                 onClick = { permissionsState.launchMultiplePermissionRequest() },
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .testTag(TestTags.PERMISSIONS_GRANT_BUTTON),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Primary,
                     contentColor = Background

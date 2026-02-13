@@ -42,9 +42,29 @@ Android prototype built with:
 
 **Build:**
 ```bash
-cd app-android
-cp local.properties.example local.properties  # add your MAPS_API_KEY
-./gradlew assembleDebug
+cp app-android/local.properties.example app-android/local.properties  # add your MAPS_API_KEY
+./scripts/android-gradle.sh :app:assembleDebug
+```
+
+**Local automated app flow (emulator + local chain/server):**
+```bash
+# visible emulator by default
+./scripts/run-app-e2e.sh
+
+# optional headless run
+HEADLESS=1 ./scripts/run-app-e2e.sh
+
+# full lifecycle simulation (registration -> checkin -> pregame -> active -> end)
+DEPLOY_SIMULATION=1 \
+TEST_CLASS=com.cryptohunt.app.CompleteGameSimulationFlowTest \
+HEADLESS=1 ./scripts/run-app-e2e.sh
+```
+Use a stable AVD image (API 34/35 recommended) for best instrumentation reliability.
+
+**Create a stable API 35 AVD (helper):**
+```bash
+./scripts/create-avd-api35.sh
+AVD_NAME=ChainAssassin_API_35 ./scripts/run-app-e2e.sh
 ```
 
 Requirements: Android SDK 34, Min SDK 29, Gradle 8.5

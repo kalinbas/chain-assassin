@@ -16,11 +16,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.GamePhase
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
 import org.osmdroid.config.Configuration
@@ -62,7 +64,7 @@ fun GameDetailScreen(
     val config = game?.config
     val context = LocalContext.current
 
-    // Show loading while game data loads from chain
+    // Show loading while game data loads from server
     if (config == null) {
         Scaffold(
             topBar = {
@@ -124,7 +126,8 @@ fun GameDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
-                            .height(56.dp),
+                            .height(56.dp)
+                            .testTag(TestTags.GAME_DETAIL_VIEW_REGISTRATION_BUTTON),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Primary,
                             contentColor = Background
@@ -142,7 +145,8 @@ fun GameDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(16.dp)
-                            .height(56.dp),
+                            .height(56.dp)
+                            .testTag(TestTags.GAME_DETAIL_REGISTER_BUTTON),
                         colors = ButtonDefaults.buttonColors(
                             containerColor = Primary,
                             contentColor = Background
@@ -173,6 +177,7 @@ fun GameDetailScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
+                .testTag(TestTags.GAME_DETAIL_SCREEN)
                 .verticalScroll(rememberScrollState())
                 .padding(16.dp)
         ) {

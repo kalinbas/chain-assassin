@@ -293,6 +293,10 @@ function encodeQr(gameId: number, playerNumber: number): string {
   return String(scrambled);
 }
 
+function playerBleId(playerIdx: number): string {
+  return `ble-player-${playerIdx + 1}`;
+}
+
 /**
  * Get a short name for a player by address.
  */
@@ -414,6 +418,24 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   }
   assert(seedPlayerIdx >= 0, "Auto-seed checked in at least 1 player");
 
+  // 0. Auto-seeded Player1 finalizes bluetooth_id (no QR needed for already checked-in players)
+  const p1Coords = playerCoords(0);
+  const p1FinalizeRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[0],
+    {
+      lat: p1Coords.lat,
+      lng: p1Coords.lng,
+      bluetoothId: playerBleId(0),
+    }
+  );
+  const p1FinalizeData = await p1FinalizeRes.json();
+  assert(
+    p1FinalizeRes.ok && p1FinalizeData.success,
+    "Auto-seeded Player1 finalized bluetooth_id without QR"
+  );
+
   // 1. Player2 tries without QR — should be rejected (only seeds bypass QR)
   const p2Coords = playerCoords(1);
   const p2NoQrRes = await apiCall(
@@ -453,7 +475,13 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
     "POST",
     `/api/games/${gameId}/checkin`,
     playerWallets[1],
-    { lat: p2Coords.lat, lng: p2Coords.lng, qrPayload: p1Qr }
+    {
+      lat: p2Coords.lat,
+      lng: p2Coords.lng,
+      qrPayload: p1Qr,
+      bluetoothId: playerBleId(1),
+      bleNearbyAddresses: [playerBleId(0)],
+    }
   );
   const p2Data = await p2Res.json();
   if (!p2Res.ok || !p2Data.success) {
@@ -461,29 +489,53 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   }
   assert(p2Res.ok && p2Data.success, "Player2 checked in via auto-seeded Player1's QR");
 
-  // 5. Player3 scans Player2 (viral chain) — success
+  // 5. Player3 scans Player2 without BLE evidence — rejected
   const p2Qr = encodeQr(gameId, 2);
   const p3Coords = playerCoords(2);
+  const p3NoBleRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[2],
+    { lat: p3Coords.lat, lng: p3Coords.lng, qrPayload: p2Qr, bleNearbyAddresses: [] }
+  );
+  const p3NoBleData = await p3NoBleRes.json();
+  assert(
+    !p3NoBleRes.ok || !p3NoBleData.success,
+    "Player3 rejected: scanned player not detected via BLE"
+  );
+
+  // 6. Player3 scans Player2 with BLE evidence — success
   const p3Res = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
     playerWallets[2],
-    { lat: p3Coords.lat, lng: p3Coords.lng, qrPayload: p2Qr }
+    {
+      lat: p3Coords.lat,
+      lng: p3Coords.lng,
+      qrPayload: p2Qr,
+      bluetoothId: playerBleId(2),
+      bleNearbyAddresses: [playerBleId(1)],
+    }
   );
   const p3Data = await p3Res.json();
   assert(p3Res.ok && p3Data.success, "Player3 checked in via Player2's QR (viral chain)");
 
-  // 6. Player4 from too far away (with valid QR) — rejected
+  // 7. Player4 from too far away (with valid QR) — rejected
   const farRes = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
     playerWallets[3],
-    { lat: 20.0, lng: -99.0, qrPayload: p1Qr } // ~63km away
+    {
+      lat: 20.0,
+      lng: -99.0,
+      qrPayload: p2Qr,
+      bleNearbyAddresses: [playerBleId(1)],
+    } // ~63km away
   );
   const farData = await farRes.json();
   assert(!farRes.ok || !farData.success, "Check-in from too far away rejected");
 
-  // 7. Player1 double check-in — rejected
+  // 8. Player1 duplicate check-in (without new bluetooth_id) — rejected
   const dupeRes = await apiCall(
     "POST",
     `/api/games/${gameId}/checkin`,
@@ -493,7 +545,7 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
   const dupeData = await dupeRes.json();
   assert(!dupeRes.ok || !dupeData.success, "Double check-in rejected");
 
-  // 8. Check in remaining players (4, 5, 6) quickly so they are included
+  // 9. Check in remaining players (4, 5, 6) quickly so they are included
   // before the periodic checkin monitor closes the phase.
   const remainingResults = await Promise.all(
     Array.from({ length: NUM_PLAYERS - 3 }, async (_, offset) => {
@@ -503,14 +555,20 @@ async function scenarioA_checkin(gameId: number): Promise<void> {
         "POST",
         `/api/games/${gameId}/checkin`,
         playerWallets[i],
-        { lat: coords.lat, lng: coords.lng, qrPayload: p1Qr }
+        {
+          lat: coords.lat,
+          lng: coords.lng,
+          qrPayload: p2Qr,
+          bluetoothId: playerBleId(i),
+          bleNearbyAddresses: [playerBleId(1)],
+        }
       );
       const data = await res.json();
       return { i, res, data };
     })
   );
   for (const { i, res, data } of remainingResults) {
-    assert(res.ok && data.success, `Player${i + 1} checked in via Player1's QR`);
+    assert(res.ok && data.success, `Player${i + 1} checked in via Player2's QR`);
   }
 
   // Verify all players are checked in
@@ -687,6 +745,88 @@ async function scenarioA_waitForGamePhase(
   }
 }
 
+async function scenarioA_testHeartbeatBle(
+  gameId: number,
+  connections: { ws: WebSocket; messages: Record<string, unknown>[] }[]
+): Promise<void> {
+  log("A8b", "Testing heartbeat BLE proximity checks...");
+
+  const scannerIdx = 1; // Player2
+  const scannerStarted = connections[scannerIdx].messages.find(
+    (m) => m.type === "game:started"
+  ) as any;
+  if (!scannerStarted?.target?.playerNumber || typeof scannerStarted.hunterPlayerNumber !== "number") {
+    fail("Player2 did not receive full target/hunter info in game:started");
+  }
+
+  const scannerNumber = scannerIdx + 1;
+  const scannerTargetNumber = scannerStarted.target.playerNumber as number;
+  const scannerHunterNumber = scannerStarted.hunterPlayerNumber as number;
+
+  // Choose a valid heartbeat partner:
+  // - not self
+  // - not scanner's target
+  // - not scanner's hunter
+  // - not Player1 (auto-seeded edge case; may not have bluetooth_id in some runs)
+  let scannedIdx = -1;
+  for (let i = 1; i < NUM_PLAYERS; i++) {
+    const playerNumber = i + 1;
+    if (
+      playerNumber !== scannerNumber &&
+      playerNumber !== scannerTargetNumber &&
+      playerNumber !== scannerHunterNumber
+    ) {
+      scannedIdx = i;
+      break;
+    }
+  }
+  if (scannedIdx < 0) {
+    fail("Could not find a valid heartbeat partner for BLE tests");
+  }
+
+  await refreshLocation(gameId, scannerIdx);
+  await refreshLocation(gameId, scannedIdx);
+
+  const scannerCoords = playerCoords(scannerIdx);
+  const scannedPlayerNumber = scannedIdx + 1;
+  const scannedQr = encodeQr(gameId, scannedPlayerNumber);
+
+  const noBleRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/heartbeat`,
+    playerWallets[scannerIdx],
+    {
+      qrPayload: scannedQr,
+      lat: scannerCoords.lat,
+      lng: scannerCoords.lng,
+      bleNearbyAddresses: [],
+    }
+  );
+  const noBleData = await noBleRes.json();
+  assert(
+    !noBleRes.ok || !noBleData.success,
+    "Heartbeat rejected: player not detected via BLE"
+  );
+
+  const withBleRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/heartbeat`,
+    playerWallets[scannerIdx],
+    {
+      qrPayload: scannedQr,
+      lat: scannerCoords.lat,
+      lng: scannerCoords.lng,
+      bleNearbyAddresses: [playerBleId(scannedIdx)],
+    }
+  );
+  const withBleData = await withBleRes.json();
+  assert(withBleRes.ok && withBleData.success, "Heartbeat accepted with BLE proximity");
+  assert(
+    withBleData.scannedPlayerNumber === scannedPlayerNumber,
+    "Heartbeat success reports scannedPlayerNumber"
+  );
+}
+
 async function scenarioA_testKillRejections(
   gameId: number,
   connections: { ws: WebSocket; messages: Record<string, unknown>[] }[]
@@ -703,6 +843,7 @@ async function scenarioA_testKillRejections(
   const p1TargetNumber = p1GameStarted.target.playerNumber as number;
   const p1TargetIdx = p1TargetNumber - 1; // 0-based
   const p1Target = playerWallets[p1TargetIdx].address.toLowerCase();
+  const p1TargetBle = playerBleId(p1TargetIdx);
 
   // Find a NON-target player (someone Player1 is NOT hunting)
   const wrongTarget = playerWallets.find(
@@ -723,7 +864,7 @@ async function scenarioA_testKillRejections(
       qrPayload: wrongQr,
       hunterLat: 19.4352,
       hunterLng: -99.1281,
-      bleNearbyAddresses: [wrongTarget.address.toLowerCase()],
+      bleNearbyAddresses: [playerBleId(wrongTargetIdx)],
     }
   );
   const wrongData = await wrongRes.json();
@@ -743,7 +884,7 @@ async function scenarioA_testKillRejections(
       qrPayload: correctQr,
       hunterLat: 20.0, // ~63km away
       hunterLng: -99.0,
-      bleNearbyAddresses: [p1Target],
+      bleNearbyAddresses: [p1TargetBle],
     }
   );
   const farData = await farRes.json();
@@ -781,7 +922,7 @@ async function scenarioA_testKillRejections(
       qrPayload: "invalid:qr:data",
       hunterLat: 19.4352,
       hunterLng: -99.1281,
-      bleNearbyAddresses: [p1Target],
+      bleNearbyAddresses: [p1TargetBle],
     }
   );
   const badQrData = await badQrRes.json();
@@ -800,7 +941,7 @@ async function scenarioA_testKillRejections(
       qrPayload: encodeQr(999, p1TargetNumber),
       hunterLat: 19.4352,
       hunterLng: -99.1281,
-      bleNearbyAddresses: [p1Target],
+      bleNearbyAddresses: [p1TargetBle],
     }
   );
   const wrongGameData = await wrongGameRes.json();
@@ -1044,7 +1185,7 @@ async function doKill(
     qrPayload,
     hunterLat: coords.lat,
     hunterLng: coords.lng,
-    bleNearbyAddresses: [targetWallet.address.toLowerCase()],
+    bleNearbyAddresses: [playerBleId(targetIdx)],
   });
 
   const data = await res.json();
@@ -1542,6 +1683,13 @@ async function scenarioA_verifyDatabase(
       )
       .all(gameId) as Record<string, unknown>[];
     assert(players.length === NUM_PLAYERS, `DB: ${NUM_PLAYERS} player rows`);
+    const playersWithBluetoothId = players.filter(
+      (p) => typeof p.bluetooth_id === "string" && (p.bluetooth_id as string).length > 0
+    );
+    assert(
+      playersWithBluetoothId.length >= NUM_PLAYERS - 1,
+      `DB: ${playersWithBluetoothId.length}/${NUM_PLAYERS} players have bluetooth_id`
+    );
 
     // The winner (last alive) should have is_alive = 1 and kills > 0
     const alivePlayers = players.filter((p) => p.is_alive === 1);
@@ -2114,6 +2262,7 @@ async function main() {
   await scenarioA_waitForGamePhase(connections);
   // Refresh locations after game starts (needed for kill proximity checks)
   await scenarioA_sendLocationPings(gameId);
+  await scenarioA_testHeartbeatBle(gameId, connections);
   await scenarioA_testKillRejections(gameId, connections);
 
   const kills = await scenarioA_multiPlayerKills(gameId, connections);

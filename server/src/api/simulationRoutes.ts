@@ -46,7 +46,8 @@ simulationRouter.post("/api/simulation/stop", walletAuth, requireOperator, (_req
  * players, then let the server lifecycle auto-start and simulate.
  *
  * Body: { playerCount?, centerLat?, centerLng?, initialRadiusMeters?,
- *         speedMultiplier?, title?, entryFeeWei?, registrationDelaySeconds? }
+ *         speedMultiplier?, title?, entryFeeWei?, registrationDelaySeconds?,
+ *         gameStartDelaySeconds?, maxDurationSeconds? }
  */
 simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (req: Request, res: Response) => {
   try {
@@ -61,7 +62,9 @@ simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (re
       title: body.title ?? "Simulation Game",
       entryFeeWei: body.entryFeeWei ?? "0",
       baseRewardWei: body.baseRewardWei ?? "0",
-      registrationDelaySeconds: Math.min(600, Math.max(30, body.registrationDelaySeconds ?? 60)),
+      registrationDelaySeconds: Math.min(600, Math.max(5, body.registrationDelaySeconds ?? 30)),
+      gameStartDelaySeconds: Math.min(600, Math.max(2, body.gameStartDelaySeconds ?? 15)),
+      maxDurationSeconds: Math.min(7200, Math.max(60, body.maxDurationSeconds ?? 600)),
     };
 
     const sim = deploySimulation(cfg);

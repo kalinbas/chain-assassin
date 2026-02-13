@@ -13,10 +13,12 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 
 @Composable
@@ -48,6 +50,7 @@ fun WelcomeScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
+            .testTag(TestTags.WELCOME_SCREEN)
             .background(
                 Brush.verticalGradient(
                     colors = listOf(Background, Color(0xFF0D0D18), Background)
@@ -139,7 +142,8 @@ fun WelcomeScreen(
                 onClick = onCreateWallet,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .testTag(TestTags.WELCOME_CREATE_WALLET_BUTTON),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = Primary,
                     contentColor = Background
@@ -160,7 +164,8 @@ fun WelcomeScreen(
                 onClick = onImportWallet,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(56.dp),
+                    .height(56.dp)
+                    .testTag(TestTags.WELCOME_IMPORT_WALLET_BUTTON),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
                 border = ButtonDefaults.outlinedButtonBorder.copy(
                     brush = Brush.linearGradient(listOf(TextDim, TextDim))

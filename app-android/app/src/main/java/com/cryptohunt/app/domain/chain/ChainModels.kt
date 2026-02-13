@@ -11,14 +11,6 @@ enum class OnChainPhase(val value: Int) {
     }
 }
 
-data class PlayerInfo(
-    val registered: Boolean,
-    val alive: Boolean,
-    val kills: Int,
-    val claimed: Boolean,
-    val number: Int = 0
-)
-
 sealed class TransactionState {
     data object Idle : TransactionState()
     data object Sending : TransactionState()

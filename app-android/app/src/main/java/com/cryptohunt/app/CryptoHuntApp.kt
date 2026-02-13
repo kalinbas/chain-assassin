@@ -3,14 +3,20 @@ package com.cryptohunt.app
 import android.app.Application
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import com.cryptohunt.app.domain.server.GameRealtimeSync
 import dagger.hilt.android.HiltAndroidApp
+import javax.inject.Inject
 
 @HiltAndroidApp
 class CryptoHuntApp : Application() {
+    @Inject
+    lateinit var gameRealtimeSync: GameRealtimeSync
 
     override fun onCreate() {
         super.onCreate()
         createNotificationChannels()
+        // Touch singleton so stream bridges are initialized once at app start.
+        gameRealtimeSync.hashCode()
     }
 
     private fun createNotificationChannels() {

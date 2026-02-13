@@ -181,6 +181,9 @@ export interface LocationSubmission {
 export interface CheckinSubmission {
   lat: number;
   lng: number;
+  qrPayload?: string;
+  bluetoothId?: string;
+  bleNearbyAddresses?: string[];
 }
 
 export interface HeartbeatSubmission {

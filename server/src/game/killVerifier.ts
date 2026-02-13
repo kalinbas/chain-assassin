@@ -1,6 +1,7 @@
 import { config } from "../config.js";
 import { haversineDistance } from "../utils/geo.js";
 import { parseKillQrPayload } from "../utils/crypto.js";
+import { hasBleMatch, normalizeBluetoothId } from "./ble.js";
 import {
   getPlayer,
   getPlayerByNumber,
@@ -110,8 +111,16 @@ export function verifyKill(
 
   // 7. Check BLE proximity (if required)
   if (config.bleRequired) {
-    const bleAddresses = bleNearbyAddresses.map((a) => a.toLowerCase());
-    if (!bleAddresses.includes(targetAddress)) {
+    const targetBluetoothId = normalizeBluetoothId(targetPlayer.bluetoothId);
+
+    // Auto-seeded/legacy players may not have a bluetooth_id yet.
+    // In that case we cannot enforce BLE reliably for this target.
+    if (!targetBluetoothId) {
+      log.warn(
+        { gameId, target: targetAddress },
+        "Target has no bluetooth_id; skipping BLE check"
+      );
+    } else if (!hasBleMatch(targetBluetoothId, bleNearbyAddresses)) {
       return {
         valid: false,
         error: "Target not detected via Bluetooth",

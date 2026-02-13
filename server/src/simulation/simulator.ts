@@ -10,6 +10,7 @@ import {
   getGame,
   getPlayerByNumber,
   getPlayers,
+  setPlayerCheckedIn,
   updateLastHeartbeat,
 } from "../db/queries.js";
 import {
@@ -44,8 +45,9 @@ const SIM_WALLET_KEYS = [
 // Singleton — only one simulation at a time
 let currentSimulation: GameSimulator | null = null;
 
-const KILL_PROBABILITY_PER_TICK = 0.03;
+const KILL_PROBABILITY_PER_TICK = 0.08;
 const BASE_SPEED_MPS = 1.5; // meters per second walking speed
+const CHECKIN_SPREAD_DELAY_MS = 6000;
 
 export function getSimulation(): GameSimulator | null {
   return currentSimulation;
@@ -130,7 +132,17 @@ export class GameSimulator {
    *   simulator auto-checks-in and simulates movement/kills once active
    */
   async deployAndSimulate(cfg: DeploySimulationConfig): Promise<void> {
-    log.info({ playerCount: cfg.playerCount, speed: cfg.speedMultiplier, title: cfg.title }, "Deploying simulation game");
+    log.info(
+      {
+        playerCount: cfg.playerCount,
+        speed: cfg.speedMultiplier,
+        title: cfg.title,
+        registrationDelaySeconds: cfg.registrationDelaySeconds,
+        gameStartDelaySeconds: cfg.gameStartDelaySeconds,
+        maxDurationSeconds: cfg.maxDurationSeconds,
+      },
+      "Deploying simulation game"
+    );
 
     // --- Setup: use hardcoded wallets (saves testnet ETH across runs) ---
     this.phase = "setup";
@@ -141,7 +153,10 @@ export class GameSimulator {
 
     // --- Create game on-chain ---
     this.phase = "registration";
-    const now = Math.floor(Date.now() / 1000);
+    const wallNow = Math.floor(Date.now() / 1000);
+    const latestBlock = await getHttpProvider().getBlock("latest");
+    const chainNow = Number(latestBlock?.timestamp ?? wallNow);
+    const now = Math.max(chainNow, wallNow);
     const registrationDeadline = now + cfg.registrationDelaySeconds;
     const entryFee = BigInt(cfg.entryFeeWei || "0");
 
@@ -158,8 +173,8 @@ export class GameSimulator {
       minPlayers: cfg.playerCount,
       maxPlayers: Math.max(cfg.playerCount, 50), // allow real players to also join
       registrationDeadline,
-      gameDate: registrationDeadline + 60, // 1 minute after registration closes
-      maxDuration: 7200, // 2 hours max
+      gameDate: registrationDeadline + cfg.gameStartDelaySeconds,
+      maxDuration: cfg.maxDurationSeconds,
       centerLat: degreesToContractCoord(cfg.centerLat),
       centerLng: degreesToContractCoord(cfg.centerLng),
       meetingLat: degreesToContractCoord(cfg.centerLat),
@@ -272,37 +287,106 @@ export class GameSimulator {
 
     // --- Auto-check-in simulated players during checkin phase ---
     log.info("Auto-checking in simulated players...");
-    scatterPlayers(this.players, cfg.centerLat, cfg.centerLng, cfg.initialRadiusMeters);
+    const scatterRadius = Math.min(cfg.initialRadiusMeters, 80);
+    scatterPlayers(this.players, cfg.centerLat, cfg.centerLng, scatterRadius);
+    for (const p of this.players) {
+      handleLocationUpdate(this.gameId, p.address, p.lat, p.lng);
+    }
 
     const simBluetoothIds = this.players.map(() => {
       const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
       return `SIM:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
     });
 
-    // Server auto-seeds some players at checkin start. Find who's already checked in.
-    const dbPlayersNow = getPlayers(this.gameId);
-    const checkedInAddresses = new Set(
-      dbPlayersNow.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
-    );
+    // Keep retrying until all simulated players are checked in (or checkin ends).
+    const checkinWallDeadline = Date.now() + 180_000;
+    let bootstrapSeeded = false;
+    let bootstrapSeededAtMs: number | null = null;
+    while (Date.now() < checkinWallDeadline) {
+      const dbGame = getGame(this.gameId);
+      if (!dbGame) { this.abort("Game deleted during checkin"); return; }
+      if (dbGame.phase === GamePhase.CANCELLED) { this.abort("Game cancelled during checkin"); return; }
+      if (dbGame.phase === GamePhase.ENDED) { this.phase = "ended"; this.cleanup(); return; }
+      if (!(dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "checkin")) {
+        break;
+      }
 
-    for (let i = 0; i < this.players.length; i++) {
-      const p = this.players[i];
-      const bleId = simBluetoothIds[i];
-      if (checkedInAddresses.has(p.address.toLowerCase())) {
-        // Already auto-seeded by server, skip
-        log.info({ address: p.address.slice(0, 10) }, "Already auto-seeded, skipping checkin");
+      const dbPlayersNow = getPlayers(this.gameId);
+      const checkedInAddresses = new Set(
+        dbPlayersNow.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
+      );
+      const simCheckedInCount = this.players.filter((p) => checkedInAddresses.has(p.address)).length;
+      if (simCheckedInCount >= this.players.length) {
+        break;
+      }
+
+      let progress = false;
+
+      // Bootstrap check-in chain when no seed exists yet (equivalent to server auto-seed).
+      if (checkedInAddresses.size === 0 && !bootstrapSeeded && this.players.length > 0) {
+        const seedPlayer = this.players[0];
+        const seedBleId = simBluetoothIds[0];
+        setPlayerCheckedIn(this.gameId, seedPlayer.address, seedBleId);
+        const updatedPlayers = getPlayers(this.gameId);
+        const checkedInCount = updatedPlayers.filter((p) => p.checkedIn).length;
+        broadcastToGame(this.gameId, {
+          type: "checkin:update",
+          checkedInCount,
+          totalPlayers: updatedPlayers.length,
+          playerNumber: seedPlayer.playerNumber,
+        });
+        checkedInAddresses.add(seedPlayer.address);
+        bootstrapSeeded = true;
+        bootstrapSeededAtMs = Date.now();
+        progress = true;
+        log.info({ gameId: this.gameId, address: seedPlayer.address.slice(0, 10) }, "Bootstrapped simulation check-in seed");
+      }
+
+      const allowBulkCheckin =
+        !bootstrapSeeded ||
+        bootstrapSeededAtMs == null ||
+        Date.now() - bootstrapSeededAtMs >= CHECKIN_SPREAD_DELAY_MS;
+      if (!allowBulkCheckin) {
+        await sleep(500);
         continue;
       }
-      // Find a checked-in player to scan (could be auto-seeded or previously checked in)
-      const checkedInPlayer = dbPlayersNow.find((db) => db.checkedIn);
-      if (!checkedInPlayer) {
-        log.warn({ address: p.address.slice(0, 10) }, "No checked-in player to scan, skipping");
-        continue;
+
+      for (let i = 0; i < this.players.length; i++) {
+        const p = this.players[i];
+        const bleId = simBluetoothIds[i];
+        const dbPlayer = dbPlayersNow.find((db) => db.address.toLowerCase() === p.address);
+        if (!dbPlayer) continue;
+
+        if (checkedInAddresses.has(p.address)) {
+          // If this player was auto-seeded without bluetooth_id, finalize it.
+          if (!dbPlayer.bluetoothId) {
+            handleCheckin(this.gameId, p.address, p.lat, p.lng, undefined, bleId, []);
+            progress = true;
+          }
+          continue;
+        }
+
+        const checkedInPlayer = dbPlayersNow.find(
+          (db) => db.checkedIn && db.address.toLowerCase() !== p.address
+        );
+        if (!checkedInPlayer) continue;
+
+        const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
+        const nearbyBle = checkedInPlayer.bluetoothId ? [checkedInPlayer.bluetoothId] : [];
+        const result = handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId, nearbyBle);
+        if (result.success) progress = true;
       }
-      const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
-      handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId);
+
+      if (!progress) {
+        await sleep(1000);
+      }
     }
-    log.info({ count: this.players.length }, "Simulated players checked in");
+
+    const finalCheckedInCount = this.players.filter((p) => {
+      const dbPlayer = getPlayers(this.gameId).find((db) => db.address.toLowerCase() === p.address);
+      return Boolean(dbPlayer?.checkedIn);
+    }).length;
+    log.info({ count: finalCheckedInCount, total: this.players.length }, "Simulated players checked in");
 
     // --- Wait for active gameplay (subPhase === "game") ---
     this.phase = "pregame";
@@ -388,6 +472,11 @@ export class GameSimulator {
       handleLocationUpdate(this.gameId, player.address, player.lat, player.lng);
     }
 
+    const elapsedActiveSeconds = this.startedAtWall > 0
+      ? Math.floor(Date.now() / 1000) - this.startedAtWall
+      : 0;
+    const forceResolve = elapsedActiveSeconds >= 20;
+
     // Attempt kills
     for (const hunter of alive) {
       if (!hunter.isAlive) continue; // might have been killed earlier this tick
@@ -398,7 +487,7 @@ export class GameSimulator {
       const target = this.players.find((p) => p.address === assignment.targetAddress);
       if (!target || !target.isAlive) continue;
 
-      if (shouldAttemptKill(
+      if (forceResolve || shouldAttemptKill(
         hunter.lat,
         hunter.lng,
         target.lat,
@@ -411,7 +500,15 @@ export class GameSimulator {
         const targetPlayer = getPlayerByNumber(this.gameId, target.playerNumber);
         if (!targetPlayer) continue;
 
+        // Force convergence for deterministic test completion in long-running rounds.
+        if (forceResolve) {
+          target.lat = hunter.lat;
+          target.lng = hunter.lng;
+          handleLocationUpdate(this.gameId, target.address, target.lat, target.lng);
+        }
+
         const qrPayload = encodeKillQrPayload(this.gameId, target.playerNumber);
+        const nearbyBle = targetPlayer.bluetoothId ? [targetPlayer.bluetoothId] : [];
 
         try {
           const result = await handleKillSubmission(
@@ -420,7 +517,7 @@ export class GameSimulator {
             qrPayload,
             hunter.lat,
             hunter.lng,
-            [target.address] // BLE nearby addresses
+            nearbyBle
           );
 
           if (result.success) {
