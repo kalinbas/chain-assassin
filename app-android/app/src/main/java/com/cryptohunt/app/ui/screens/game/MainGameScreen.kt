@@ -307,9 +307,9 @@ fun MainGameScreen(
                     }
 
                     // Heartbeat timer (tap opens scan screen)
-                    if (!state.heartbeatDisabled && state.lastHeartbeatAt > 0) {
+                    if (!state.heartbeatDisabled && state.heartbeatDeadline > 0) {
                         val now = System.currentTimeMillis() / 1000
-                        val deadline = state.lastHeartbeatAt + state.heartbeatIntervalSeconds
+                        val deadline = state.heartbeatDeadline
                         val remaining = (deadline - now).coerceAtLeast(0)
                         val minutes = remaining / 60
                         val seconds = remaining % 60

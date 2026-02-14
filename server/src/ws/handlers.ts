@@ -75,6 +75,12 @@ function handleAuth(
   const hunterAddress = findHunterOf(gameId, address.toLowerCase());
   const hunterPlayer = hunterAddress ? getPlayer(gameId, hunterAddress) : null;
   const game = getGame(gameId);
+  const aliveCount = getAlivePlayerCount(gameId);
+  const heartbeatDeadline = player.lastHeartbeatAt != null
+    ? player.lastHeartbeatAt + config.heartbeatIntervalSeconds
+    : null;
+  const heartbeatDisabled =
+    game?.subPhase === "game" ? aliveCount <= config.heartbeatDisableThreshold : false;
   const pregameEndsAt = game?.subPhase === "pregame" && game.subPhaseStartedAt != null
     ? game.subPhaseStartedAt + config.pregameDurationSeconds
     : null;
@@ -96,6 +102,10 @@ function handleAuth(
         : null,
       hunterPlayerNumber: hunterPlayer?.playerNumber ?? null,
       lastHeartbeatAt: player.lastHeartbeatAt,
+      heartbeatDeadline,
+      heartbeatIntervalSeconds: config.heartbeatIntervalSeconds,
+      heartbeatDisableThreshold: config.heartbeatDisableThreshold,
+      heartbeatDisabled,
       subPhase: game?.subPhase ?? null,
       checkinEndsAt: game?.subPhase === "checkin"
         ? game.expiryDeadline

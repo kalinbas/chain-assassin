@@ -86,8 +86,9 @@ data class GameState(
     val checkedInPlayerNumbers: Set<Int> = emptySet(),
     val bluetoothId: String? = null,
     // Heartbeat (anti-QR-hiding fairplay) — server-driven
-    val lastHeartbeatAt: Long = 0L,
+    val heartbeatDeadline: Long = 0L,
     val heartbeatIntervalSeconds: Int = 600,
+    val heartbeatDisableThreshold: Int = 4,
     val heartbeatDisabled: Boolean = false
 )
 

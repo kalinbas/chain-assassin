@@ -158,9 +158,19 @@ export function submitHeartbeat(req: Request, res: Response): void {
   }
 
   const { qrPayload, lat, lng, bleNearbyAddresses } = req.body;
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
 
   if (!qrPayload || lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: qrPayload, lat, lng" });
+    return;
+  }
+  if (!Number.isFinite(latNum) || latNum < -90 || latNum > 90) {
+    res.status(400).json({ error: "Invalid latitude" });
+    return;
+  }
+  if (!Number.isFinite(lngNum) || lngNum < -180 || lngNum > 180) {
+    res.status(400).json({ error: "Invalid longitude" });
     return;
   }
 
@@ -168,8 +178,8 @@ export function submitHeartbeat(req: Request, res: Response): void {
     gameId,
     authReq.playerAddress,
     qrPayload,
-    lat,
-    lng,
+    latNum,
+    lngNum,
     bleNearbyAddresses || []
   );
 

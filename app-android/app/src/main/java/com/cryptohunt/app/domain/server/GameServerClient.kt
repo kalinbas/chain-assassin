@@ -26,6 +26,12 @@ import javax.inject.Singleton
 
 private const val TAG = "GameServerClient"
 
+data class HeartbeatSubmitResult(
+    val success: Boolean,
+    val scannedPlayerNumber: Int? = null,
+    val error: String? = null
+)
+
 @Singleton
 class GameServerClient @Inject constructor(
     private val walletManager: WalletManager
@@ -224,9 +230,15 @@ class GameServerClient @Inject constructor(
 
     /**
      * Submit a heartbeat scan to the server via REST API.
-     * Returns true on success, false on failure.
+     * Returns the submission result with optional scanned player number or error.
      */
-    fun submitHeartbeat(gameId: Int, qrPayload: String, lat: Double, lng: Double, bleAddresses: List<String> = emptyList()): Boolean {
+    fun submitHeartbeat(
+        gameId: Int,
+        qrPayload: String,
+        lat: Double,
+        lng: Double,
+        bleAddresses: List<String> = emptyList()
+    ): HeartbeatSubmitResult {
         val address = walletManager.getAddress()
         val timestamp = System.currentTimeMillis() / 1000
         val message = "${ServerConfig.AUTH_PREFIX}:$timestamp"
@@ -251,18 +263,35 @@ class GameServerClient @Inject constructor(
             .build()
 
         return try {
-            val response = client.newCall(request).execute()
-            val success = response.isSuccessful
-            if (!success) {
-                Log.e(TAG, "Heartbeat failed: ${response.code} ${response.body?.string()}")
-            } else {
+            client.newCall(request).execute().use { response ->
+                val responseBody = response.body?.string()
+                if (!response.isSuccessful) {
+                    val errorMsg = try {
+                        if (responseBody.isNullOrBlank()) "Heartbeat rejected by server"
+                        else JSONObject(responseBody).optString("error", "Heartbeat rejected by server")
+                    } catch (_: Exception) {
+                        responseBody ?: "Heartbeat rejected by server"
+                    }
+                    Log.e(TAG, "Heartbeat failed: ${response.code} $errorMsg")
+                    return HeartbeatSubmitResult(success = false, error = errorMsg)
+                }
+
+                val scannedPlayerNumber = try {
+                    if (responseBody.isNullOrBlank()) null
+                    else JSONObject(responseBody).optInt("scannedPlayerNumber", 0).takeIf { it > 0 }
+                } catch (_: Exception) {
+                    null
+                }
+
                 Log.i(TAG, "Heartbeat submitted for game $gameId")
+                HeartbeatSubmitResult(
+                    success = true,
+                    scannedPlayerNumber = scannedPlayerNumber
+                )
             }
-            response.close()
-            success
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat error: ${e.message}")
-            false
+            HeartbeatSubmitResult(success = false, error = "Network error while submitting heartbeat")
         }
     }
 

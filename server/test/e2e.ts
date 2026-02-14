@@ -791,6 +791,22 @@ async function scenarioA_testHeartbeatBle(
   const scannedPlayerNumber = scannedIdx + 1;
   const scannedQr = encodeQr(gameId, scannedPlayerNumber);
 
+  const dbPath = resolve(__dirname, "../data/e2e-test.db");
+  const db = new Database(dbPath, { readonly: true });
+  const scannerAddress = playerWallets[scannerIdx].address.toLowerCase();
+  const scannedAddress = playerWallets[scannedIdx].address.toLowerCase();
+  const readLastHeartbeat = (address: string): number | null => {
+    const row = db
+      .prepare(
+        "SELECT last_heartbeat_at FROM players WHERE game_id = ? AND address = ?"
+      )
+      .get(gameId, address) as { last_heartbeat_at: number | null } | undefined;
+    return row?.last_heartbeat_at ?? null;
+  };
+
+  const scannerBefore = readLastHeartbeat(scannerAddress);
+  const scannedBefore = readLastHeartbeat(scannedAddress);
+
   const noBleRes = await apiCall(
     "POST",
     `/api/games/${gameId}/heartbeat`,
@@ -807,6 +823,26 @@ async function scenarioA_testHeartbeatBle(
     !noBleRes.ok || !noBleData.success,
     "Heartbeat rejected: player not detected via BLE"
   );
+
+  const badLatRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/heartbeat`,
+    playerWallets[scannerIdx],
+    {
+      qrPayload: scannedQr,
+      lat: "not-a-number",
+      lng: scannerCoords.lng,
+      bleNearbyAddresses: [playerBleId(scannedIdx)],
+    }
+  );
+  const badLatData = await badLatRes.json();
+  assert(!badLatRes.ok, "Heartbeat rejected: invalid latitude payload");
+  assert(
+    typeof badLatData.error === "string" && badLatData.error.includes("latitude"),
+    "Heartbeat invalid latitude returns explicit error"
+  );
+
+  await sleep(1100);
 
   const withBleRes = await apiCall(
     "POST",
@@ -825,6 +861,15 @@ async function scenarioA_testHeartbeatBle(
     withBleData.scannedPlayerNumber === scannedPlayerNumber,
     "Heartbeat success reports scannedPlayerNumber"
   );
+
+  const scannerAfter = readLastHeartbeat(scannerAddress);
+  const scannedAfter = readLastHeartbeat(scannedAddress);
+  db.close();
+
+  assert(scannerBefore !== null && scannerAfter !== null, "Heartbeat DB values exist for scanner");
+  assert(scannedBefore !== null && scannedAfter !== null, "Heartbeat DB values exist for scanned player");
+  assert(scannerAfter === scannerBefore, "Scanner heartbeat timestamp remains unchanged");
+  assert(scannedAfter > (scannedBefore ?? 0), "Scanned player's heartbeat timestamp is refreshed");
 }
 
 async function scenarioA_testKillRejections(

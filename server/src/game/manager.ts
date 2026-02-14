@@ -521,6 +521,8 @@ export function completePregame(gameId: number): void {
       hunterPlayerNumber: hunterOfHunterPlayer?.playerNumber ?? 0,
       heartbeatDeadline: now + config.heartbeatIntervalSeconds,
       heartbeatIntervalSeconds: config.heartbeatIntervalSeconds,
+      heartbeatDisableThreshold: config.heartbeatDisableThreshold,
+      heartbeatDisabled: addresses.length <= config.heartbeatDisableThreshold,
       zone: zoneTrackerFull.getZoneState(),
     });
   }
@@ -1090,6 +1092,13 @@ export function handleHeartbeatScan(
   lng: number,
   bleNearbyAddresses: string[]
 ): { success: boolean; error?: string; scannedPlayerNumber?: number } {
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return { success: false, error: "Invalid latitude" };
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return { success: false, error: "Invalid longitude" };
+  }
+
   // 1. Verify game is active and in 'game' sub-phase
   const game = getGame(gameId);
   if (!game || game.phase !== GamePhase.ACTIVE) {
@@ -1146,23 +1155,22 @@ export function handleHeartbeatScan(
 
   // 8. GPS proximity check
   const scannedPing = getLatestLocationPing(gameId, scannedPlayer.address);
-  let distanceMeters: number | null = null;
-  if (scannedPing) {
-    distanceMeters = haversineDistance(lat, lng, scannedPing.lat, scannedPing.lng);
-    if (distanceMeters > config.heartbeatProximityMeters) {
-      return { success: false, error: `Too far from player (${Math.round(distanceMeters)}m, max ${config.heartbeatProximityMeters}m)` };
-    }
+  if (!scannedPing) {
+    return { success: false, error: "Scanned player location unavailable" };
+  }
+
+  const distanceMeters = haversineDistance(lat, lng, scannedPing.lat, scannedPing.lng);
+  if (distanceMeters > config.heartbeatProximityMeters) {
+    return { success: false, error: `Too far from player (${Math.round(distanceMeters)}m, max ${config.heartbeatProximityMeters}m)` };
   }
 
   // 9. BLE proximity check
   if (config.bleRequired) {
     const scannedBluetoothId = normalizeBluetoothId(scannedPlayer.bluetoothId);
     if (!scannedBluetoothId) {
-      log.warn(
-        { gameId, scanned: scannedPlayer.address },
-        "Scanned player has no bluetooth_id; skipping heartbeat BLE check"
-      );
-    } else if (!hasBleMatch(scannedBluetoothId, bleNearbyAddresses)) {
+      return { success: false, error: "Scanned player has no Bluetooth ID" };
+    }
+    if (!hasBleMatch(scannedBluetoothId, bleNearbyAddresses)) {
       return { success: false, error: "Player not detected via Bluetooth" };
     }
   }

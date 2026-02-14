@@ -12,7 +12,7 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
   },
   {
     q: 'What is the heartbeat system?',
-    a: "The heartbeat is a fairplay mechanic that prevents players from hiding their QR code and camping. Every 10 minutes, you must scan any nearby player's QR code (not your target or hunter) to prove you're actively playing. If you miss the deadline, you're automatically eliminated. The heartbeat is disabled in the endgame when 4 or fewer players remain, so the final showdown is pure hunting.",
+    a: "The heartbeat is a fairplay mechanic that prevents players from hiding their QR code and camping. Every 10 minutes, your heartbeat must be renewed by another nearby player scanning your QR code (not your target or hunter). In practice, players usually do a quick mutual scan so both heartbeats are renewed. If you miss the deadline, you're automatically eliminated. The heartbeat is disabled in the endgame when 4 or fewer players remain, so the final showdown is pure hunting.",
   },
   {
     q: 'What happens when the zone shrinks?',

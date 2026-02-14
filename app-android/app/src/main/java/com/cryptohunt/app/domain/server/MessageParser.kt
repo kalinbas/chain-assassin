@@ -23,6 +23,10 @@ fun parseServerMessage(json: String): ServerMessage? {
                 target = obj.optJSONObject("target")?.let { parseTargetInfo(it) },
                 hunterPlayerNumber = obj.optIntOrNull("hunterPlayerNumber"),
                 lastHeartbeatAt = obj.optLongOrNull("lastHeartbeatAt"),
+                heartbeatDeadline = obj.optLongOrNull("heartbeatDeadline"),
+                heartbeatIntervalSeconds = obj.optIntOrNull("heartbeatIntervalSeconds"),
+                heartbeatDisableThreshold = obj.optIntOrNull("heartbeatDisableThreshold"),
+                heartbeatDisabled = obj.optBooleanOrNull("heartbeatDisabled"),
                 subPhase = obj.optStringOrNull("subPhase"),
                 checkinEndsAt = obj.optLongOrNull("checkinEndsAt"),
                 pregameEndsAt = obj.optLongOrNull("pregameEndsAt")
@@ -86,6 +90,8 @@ fun parseServerMessage(json: String): ServerMessage? {
                 hunterPlayerNumber = obj.optInt("hunterPlayerNumber", 0),
                 heartbeatDeadline = obj.optLong("heartbeatDeadline", 0),
                 heartbeatIntervalSeconds = obj.optInt("heartbeatIntervalSeconds", 600),
+                heartbeatDisableThreshold = obj.optInt("heartbeatDisableThreshold", 4),
+                heartbeatDisabled = obj.optBoolean("heartbeatDisabled", false),
                 zone = obj.optJSONObject("zone")?.let { parseZoneState(it) }
             )
 
@@ -172,6 +178,9 @@ private fun JSONObject.optIntOrNull(key: String): Int? =
 
 private fun JSONObject.optLongOrNull(key: String): Long? =
     if (isNull(key)) null else optLong(key)
+
+private fun JSONObject.optBooleanOrNull(key: String): Boolean? =
+    if (isNull(key)) null else optBoolean(key)
 
 private fun JSONObject.optDoubleOrNull(key: String): Double? =
     if (isNull(key)) null else optDouble(key)

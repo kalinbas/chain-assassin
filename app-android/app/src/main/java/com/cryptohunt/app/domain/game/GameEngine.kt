@@ -224,7 +224,10 @@ class GameEngine @Inject constructor() {
             is ServerMessage.CheckinUpdate -> handleCheckinUpdate(msg)
             is ServerMessage.CheckinStarted -> handleCheckinStarted(msg)
             is ServerMessage.PlayerRegistered -> handlePlayerRegistered(msg)
-            is ServerMessage.HeartbeatError -> Log.w(TAG, "Heartbeat error: ${msg.error}")
+            is ServerMessage.HeartbeatError -> {
+                Log.w(TAG, "Heartbeat error: ${msg.error}")
+                _events.tryEmit(GameEvent.HeartbeatError(msg.error))
+            }
             is ServerMessage.ZoneWarning -> handleZoneWarning(msg)
             is ServerMessage.Error -> Log.e(TAG, "Server error: ${msg.error}")
         }
@@ -250,6 +253,11 @@ class GameEngine @Inject constructor() {
                 assignedAt = System.currentTimeMillis()
             )
         }
+        val heartbeatIntervalSeconds = msg.heartbeatIntervalSeconds ?: current.heartbeatIntervalSeconds
+        val heartbeatDisableThreshold = msg.heartbeatDisableThreshold ?: current.heartbeatDisableThreshold
+        val heartbeatDeadline = msg.heartbeatDeadline
+            ?: msg.lastHeartbeatAt?.let { it + heartbeatIntervalSeconds }
+            ?: current.heartbeatDeadline
 
         // Determine phase from server subPhase
         val phase = when (msg.subPhase) {
@@ -265,7 +273,11 @@ class GameEngine @Inject constructor() {
             currentPlayer = player,
             currentTarget = target,
             hunterPlayerNumber = msg.hunterPlayerNumber,
-            lastHeartbeatAt = msg.lastHeartbeatAt ?: 0L,
+            heartbeatDeadline = heartbeatDeadline,
+            heartbeatIntervalSeconds = heartbeatIntervalSeconds,
+            heartbeatDisableThreshold = heartbeatDisableThreshold,
+            heartbeatDisabled = msg.heartbeatDisabled
+                ?: (phase == GamePhase.ACTIVE && current.playersRemaining <= heartbeatDisableThreshold),
             phase = phase,
             checkinEndsAt = msg.checkinEndsAt ?: current.checkinEndsAt,
             pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt
@@ -306,8 +318,10 @@ class GameEngine @Inject constructor() {
             }
         } else {
             // Another player eliminated — decrement count
+            val aliveAfterElimination = (current.playersRemaining - 1).coerceAtLeast(1)
             _state.value = current.copy(
-                playersRemaining = (current.playersRemaining - 1).coerceAtLeast(1)
+                playersRemaining = aliveAfterElimination,
+                heartbeatDisabled = aliveAfterElimination <= current.heartbeatDisableThreshold
             )
         }
     }
@@ -362,15 +376,17 @@ class GameEngine @Inject constructor() {
                 isCurrentPlayer = entry.playerNumber == current.currentPlayer.number
             )
         }
+        val aliveCount = entries.count { it.isAlive }
         _state.value = current.copy(
             leaderboard = entries,
-            playersRemaining = entries.count { it.isAlive }
+            playersRemaining = aliveCount,
+            heartbeatDisabled = aliveCount <= current.heartbeatDisableThreshold
         )
     }
 
     private fun handleHeartbeatRefreshed(msg: ServerMessage.HeartbeatRefreshed) {
         val current = _state.value ?: return
-        _state.value = current.copy(lastHeartbeatAt = msg.refreshedUntil)
+        _state.value = current.copy(heartbeatDeadline = msg.refreshedUntil)
     }
 
     private fun handleHeartbeatScanSuccess(msg: ServerMessage.HeartbeatScanSuccess) {
@@ -391,9 +407,10 @@ class GameEngine @Inject constructor() {
             phase = GamePhase.ACTIVE,
             currentTarget = Target(targetPlayer, now),
             hunterPlayerNumber = msg.hunterPlayerNumber,
-            lastHeartbeatAt = msg.heartbeatDeadline,
+            heartbeatDeadline = msg.heartbeatDeadline,
             heartbeatIntervalSeconds = msg.heartbeatIntervalSeconds,
-            heartbeatDisabled = false,
+            heartbeatDisableThreshold = msg.heartbeatDisableThreshold,
+            heartbeatDisabled = msg.heartbeatDisabled,
             currentZoneRadius = msg.zone?.currentRadiusMeters ?: current.currentZoneRadius,
             nextShrinkAt = msg.zone?.nextShrinkAt,
             gameStartTime = System.currentTimeMillis() / 1000
@@ -415,7 +432,10 @@ class GameEngine @Inject constructor() {
 
     private fun handleGameStartedBroadcast(msg: ServerMessage.GameStartedBroadcast) {
         val current = _state.value ?: return
-        _state.value = current.copy(playersRemaining = msg.playerCount)
+        _state.value = current.copy(
+            playersRemaining = msg.playerCount,
+            heartbeatDisabled = msg.playerCount <= current.heartbeatDisableThreshold
+        )
     }
 
     private fun handleCheckinUpdate(msg: ServerMessage.CheckinUpdate) {
@@ -513,5 +533,6 @@ sealed class GameEvent {
     data object GameCancelled : GameEvent()
     data object NoCheckInEliminated : GameEvent()
     data class HeartbeatRefreshed(val scannedPlayerNumber: Int) : GameEvent()
+    data class HeartbeatError(val message: String) : GameEvent()
     data object HeartbeatEliminated : GameEvent()
 }

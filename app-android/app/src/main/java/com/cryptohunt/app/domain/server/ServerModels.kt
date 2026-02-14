@@ -112,6 +112,10 @@ sealed class ServerMessage {
         val target: TargetInfo?,
         val hunterPlayerNumber: Int?,
         val lastHeartbeatAt: Long?,
+        val heartbeatDeadline: Long?,
+        val heartbeatIntervalSeconds: Int?,
+        val heartbeatDisableThreshold: Int?,
+        val heartbeatDisabled: Boolean?,
         val subPhase: String?,
         val checkinEndsAt: Long?,
         val pregameEndsAt: Long?
@@ -187,6 +191,8 @@ sealed class ServerMessage {
         val hunterPlayerNumber: Int,
         val heartbeatDeadline: Long,
         val heartbeatIntervalSeconds: Int,
+        val heartbeatDisableThreshold: Int,
+        val heartbeatDisabled: Boolean,
         val zone: ZoneState?
     ) : ServerMessage()
 

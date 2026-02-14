@@ -34,6 +34,8 @@ class GameViewModel @Inject constructor(
 
     private val _uiEvents = MutableSharedFlow<UiEvent>(extraBufferCapacity = 20)
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
+    private val _heartbeatSubmissionErrors = MutableSharedFlow<String>(extraBufferCapacity = 10)
+    val heartbeatSubmissionErrors: SharedFlow<String> = _heartbeatSubmissionErrors.asSharedFlow()
 
     init {
         // Forward game events to UI events
@@ -139,7 +141,10 @@ class GameViewModel @Inject constructor(
             val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
             val bleAddresses = getNearbyBleAddresses()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                serverClient.submitHeartbeat(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
+                val submitResult = serverClient.submitHeartbeat(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
+                if (!submitResult.success) {
+                    _heartbeatSubmissionErrors.emit(submitResult.error ?: "Heartbeat rejected by server")
+                }
             }
         }
         return result
