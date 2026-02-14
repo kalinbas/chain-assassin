@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { createLogger } from "../utils/logger.js";
-import { degreesToContractCoord } from "../utils/geo.js";
+import { contractCoordToDegrees, degreesToContractCoord } from "../utils/geo.js";
 import { encodeKillQrPayload } from "../utils/crypto.js";
 import { config } from "../config.js";
 import {
@@ -12,6 +12,7 @@ import {
   getPlayers,
   setPlayerCheckedIn,
   updateLastHeartbeat,
+  getZoneShrinks,
 } from "../db/queries.js";
 import {
   handleLocationUpdate,
@@ -20,6 +21,7 @@ import {
   addHybridSimulatedGame,
   removeSimulatedGame,
   broadcastToGame,
+  getSimulatedGameIds,
 } from "../game/manager.js";
 import { getHttpProvider } from "../blockchain/client.js";
 import { getAbi } from "../blockchain/contract.js";
@@ -47,7 +49,8 @@ let currentSimulation: GameSimulator | null = null;
 
 const KILL_PROBABILITY_PER_TICK = 0.08;
 const BASE_SPEED_MPS = 1.5; // meters per second walking speed
-const CHECKIN_SPREAD_DELAY_MS = 6000;
+// Keep check-in phase visible for manual testing before bulk simulated check-ins complete.
+const CHECKIN_SPREAD_DELAY_MS = 60_000;
 
 export function getSimulation(): GameSimulator | null {
   return currentSimulation;
@@ -88,6 +91,75 @@ export function deploySimulation(cfg: DeploySimulationConfig): GameSimulator {
   });
 
   return sim;
+}
+
+/**
+ * Recover an in-progress simulation after a server restart.
+ *
+ * The game lifecycle (timers/subphases) is recovered by game manager.
+ * This function restores the simulator loop (movement + simulated kills/items).
+ */
+export function recoverSimulation(): void {
+  if (currentSimulation && currentSimulation.phase !== "ended" && currentSimulation.phase !== "aborted") {
+    return;
+  }
+
+  const candidateIds = getSimulatedGameIds().sort((a, b) => b - a);
+  const candidateGameId = candidateIds.find((id) => {
+    const game = getGame(id);
+    return Boolean(game && (game.phase === GamePhase.REGISTRATION || game.phase === GamePhase.ACTIVE));
+  });
+
+  if (!candidateGameId) {
+    return;
+  }
+
+  const game = getGame(candidateGameId);
+  if (!game) {
+    return;
+  }
+
+  const centerLat = contractCoordToDegrees(game.centerLat);
+  const centerLng = contractCoordToDegrees(game.centerLng);
+  const shrinks = getZoneShrinks(candidateGameId);
+  const initialRadius = shrinks[0]?.radiusMeters ?? 500;
+  const dbPlayers = getPlayers(candidateGameId);
+  const baseCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
+
+  const simConfig: SimulationConfig = {
+    playerCount: dbPlayers.length,
+    centerLat,
+    centerLng,
+    initialRadiusMeters: initialRadius,
+    speedMultiplier: 1,
+    minActiveDurationSeconds: 60,
+    title: game.title,
+    entryFeeWei: game.entryFee.toString(),
+  };
+
+  const sim = new GameSimulator(simConfig);
+  sim.gameId = candidateGameId;
+  sim.setZoneShrinks(shrinks);
+  sim.players = dbPlayers.map((p) => {
+    const ping = getLatestLocationPing(candidateGameId, p.address);
+    return {
+      address: p.address.toLowerCase(),
+      playerNumber: p.playerNumber,
+      lat: ping?.lat ?? centerLat,
+      lng: ping?.lng ?? centerLng,
+      isAlive: p.isAlive,
+      aggressiveness: 0.5 + Math.random() * 1.5,
+      state: "wandering" as const,
+      itemCooldowns: { ...baseCooldowns },
+    };
+  });
+
+  currentSimulation = sim;
+
+  void sim.resumeAfterRestart().catch((err) => {
+    log.error({ gameId: candidateGameId, error: (err as Error).message }, "Failed to resume simulation after restart");
+    sim.abort((err as Error).message);
+  });
 }
 
 export class GameSimulator {
@@ -172,7 +244,7 @@ export class GameSimulator {
     const createGameParams: operator.CreateGameParams = {
       title: cfg.title,
       entryFee,
-      minPlayers: cfg.playerCount,
+      minPlayers: cfg.minPlayers,
       maxPlayers: Math.max(cfg.playerCount, 50), // allow real players to also join
       registrationDeadline,
       gameDate: registrationDeadline + cfg.gameStartDelaySeconds,
@@ -215,34 +287,72 @@ export class GameSimulator {
     const abi = getAbi();
     const gasBuffer = ethers.parseEther("0.001");
 
-    for (let i = 0; i < wallets.length; i++) {
-      const wallet = wallets[i];
-      try {
-        const needed = entryFee + gasBuffer;
-        const balance = await provider.getBalance(wallet.address);
-        if (balance < needed) {
-          const topUp = needed - balance;
-          log.info({ i: i + 1, total: wallets.length, address: wallet.address.slice(0, 10), topUp: ethers.formatEther(topUp) }, "Funding + registering wallet");
-          await operator.fundWallet(wallet.address, topUp);
-        } else {
-          log.info({ i: i + 1, total: wallets.length, address: wallet.address.slice(0, 10) }, "Wallet already funded, registering");
+    const pendingWallets = [...wallets];
+    const registeredWallets = new Set<string>();
+    const registrationCutoffMs = registrationDeadline * 1000 - 2_000;
+    let registrationRound = 0;
+
+    while (pendingWallets.length > 0 && Date.now() < registrationCutoffMs) {
+      registrationRound += 1;
+      log.info(
+        { gameId: this.gameId, round: registrationRound, pending: pendingWallets.length },
+        "Simulation registration round"
+      );
+
+      for (let i = pendingWallets.length - 1; i >= 0; i--) {
+        const wallet = pendingWallets[i];
+        try {
+          const needed = entryFee + gasBuffer;
+          const balance = await provider.getBalance(wallet.address);
+          if (balance < needed) {
+            const topUp = needed - balance;
+            log.info(
+              { address: wallet.address.slice(0, 10), topUp: ethers.formatEther(topUp) },
+              "Funding simulation wallet"
+            );
+            await operator.fundWallet(wallet.address, topUp);
+          }
+
+          // Register on-chain from the funded wallet
+          const signer = wallet.connect(provider);
+          const contract = new ethers.Contract(config.contractAddress, abi, signer);
+          const regTx = await contract.register(this.gameId, { value: entryFee });
+          await regTx.wait();
+
+          registeredWallets.add(wallet.address.toLowerCase());
+          pendingWallets.splice(i, 1);
+          log.info(
+            { gameId: this.gameId, address: wallet.address.slice(0, 10), remaining: pendingWallets.length },
+            "Simulation wallet registered"
+          );
+        } catch (err) {
+          log.warn(
+            {
+              gameId: this.gameId,
+              address: wallet.address.slice(0, 10),
+              error: (err as Error).message,
+              pending: pendingWallets.length,
+            },
+            "Simulation wallet registration attempt failed; will retry while registration is open"
+          );
         }
-
-        // Register on-chain from the funded wallet
-        const signer = wallet.connect(provider);
-        const contract = new ethers.Contract(config.contractAddress, abi, signer);
-        const regTx = await contract.register(this.gameId, { value: entryFee });
-        await regTx.wait();
-
-        log.info({ i: i + 1, address: wallet.address.slice(0, 10) }, "Registered successfully");
-      } catch (err) {
-        log.error({ i: i + 1, address: wallet.address.slice(0, 10), error: (err as Error).message }, "Failed to register wallet");
       }
+
+      if (pendingWallets.length > 0 && Date.now() < registrationCutoffMs) {
+        await sleep(1_500);
+      }
+    }
+
+    if (pendingWallets.length > 0) {
+      log.warn(
+        { gameId: this.gameId, missed: pendingWallets.length, registered: registeredWallets.size, minPlayers: cfg.minPlayers },
+        "Registration window ended before all simulation wallets registered"
+      );
     }
 
     // Wait for blockchain listener to process PlayerRegistered events
     log.info("Waiting for PlayerRegistered events to be processed...");
-    const expectedCount = wallets.length;
+    const expectedCount = registeredWallets.size;
     for (let attempt = 0; attempt < 120; attempt++) {
       await sleep(500);
       const dbPlayers = getPlayers(this.gameId);
@@ -277,12 +387,15 @@ export class GameSimulator {
     log.info({ simPlayers: this.players.length, gameId: this.gameId }, "Simulated players ready, waiting for gameDate...");
 
     // --- Wait for startGame → checkin subPhase ---
-    this.phase = "checkin";
+    this.phase = "registration";
     while (true) {
       const dbGame = getGame(this.gameId);
       if (!dbGame) { this.abort("Game deleted"); return; }
       if (dbGame.phase === GamePhase.CANCELLED) { this.abort("Game cancelled"); return; }
-      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "checkin") break;
+      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "checkin") {
+        this.phase = "checkin";
+        break;
+      }
       if (dbGame.phase === GamePhase.ENDED) { this.phase = "ended"; this.cleanup(); return; }
       await sleep(1000);
     }
@@ -317,8 +430,7 @@ export class GameSimulator {
       const checkedInAddresses = new Set(
         dbPlayersNow.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
       );
-      const simCheckedInCount = this.players.filter((p) => checkedInAddresses.has(p.address)).length;
-      if (simCheckedInCount >= this.players.length) {
+      if (checkedInAddresses.size >= dbPlayersNow.length && dbPlayersNow.length > 0) {
         break;
       }
 
@@ -379,25 +491,43 @@ export class GameSimulator {
         if (result.success) progress = true;
       }
 
+      // Simulation mode fallback: ensure every registered player gets checked in.
+      // This avoids real-device testers being eliminated in hybrid rounds where most
+      // other participants are simulated and no practical scan partner exists.
+      for (const player of dbPlayersNow) {
+        if (player.checkedIn) continue;
+        const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
+        setPlayerCheckedIn(this.gameId, player.address, autoBle);
+        checkedInAddresses.add(player.address.toLowerCase());
+        progress = true;
+        broadcastToGame(this.gameId, {
+          type: "checkin:update",
+          checkedInCount: checkedInAddresses.size,
+          totalPlayers: dbPlayersNow.length,
+          playerNumber: player.playerNumber,
+        });
+      }
+
       if (!progress) {
         await sleep(1000);
       }
     }
 
-    const finalCheckedInCount = this.players.filter((p) => {
-      const dbPlayer = getPlayers(this.gameId).find((db) => db.address.toLowerCase() === p.address);
-      return Boolean(dbPlayer?.checkedIn);
-    }).length;
-    log.info({ count: finalCheckedInCount, total: this.players.length }, "Simulated players checked in");
+    const finalPlayers = getPlayers(this.gameId);
+    const finalCheckedInCount = finalPlayers.filter((p) => p.checkedIn).length;
+    log.info({ checkedIn: finalCheckedInCount, totalPlayers: finalPlayers.length }, "Check-in status before pregame");
 
     // --- Wait for active gameplay (subPhase === "game") ---
-    this.phase = "pregame";
+    this.phase = "checkin";
     log.info("Waiting for active gameplay...");
     while (true) {
       const dbGame = getGame(this.gameId);
       if (!dbGame) { this.abort("Game deleted"); return; }
       if (dbGame.phase === GamePhase.CANCELLED) { this.abort("Game cancelled"); return; }
       if (dbGame.phase === GamePhase.ENDED) { this.phase = "ended"; this.cleanup(); return; }
+      if (dbGame.subPhase === "pregame") {
+        this.phase = "pregame";
+      }
       if (dbGame.subPhase === "game") break;
       await sleep(500);
     }
@@ -417,6 +547,100 @@ export class GameSimulator {
     const tickMs = Math.max(50, Math.round(1000 / this.config.speedMultiplier));
     this.tickTimer = setInterval(() => this.simulationTick(), tickMs);
     log.info({ gameId: this.gameId, tickMs }, "Deploy simulation active");
+  }
+
+  async resumeAfterRestart(): Promise<void> {
+    log.info({ gameId: this.gameId }, "Resuming simulation after restart");
+
+    while (true) {
+      const dbGame = getGame(this.gameId);
+      if (!dbGame) {
+        this.abort("Recovered simulation game not found");
+        return;
+      }
+
+      this.refreshPlayersFromDb();
+
+      if (dbGame.phase === GamePhase.CANCELLED || dbGame.phase === GamePhase.ENDED) {
+        this.phase = "ended";
+        this.cleanup();
+        removeSimulatedGame(this.gameId);
+        log.info({ gameId: this.gameId, phase: dbGame.phase }, "Recovered simulation already ended");
+        return;
+      }
+
+      if (dbGame.phase === GamePhase.REGISTRATION) {
+        this.phase = "registration";
+        await sleep(1_000);
+        continue;
+      }
+
+      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "checkin") {
+        this.phase = "checkin";
+        this.autoCheckinAllRegisteredPlayers();
+        await sleep(1_000);
+        continue;
+      }
+
+      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "pregame") {
+        this.phase = "pregame";
+        await sleep(500);
+        continue;
+      }
+
+      if (dbGame.phase === GamePhase.ACTIVE && dbGame.subPhase === "game") {
+        this.phase = "active";
+        this.startedAtWall = dbGame.subPhaseStartedAt ?? Math.floor(Date.now() / 1000);
+
+        if (!this.tickTimer) {
+          const tickMs = Math.max(50, Math.round(1000 / this.config.speedMultiplier));
+          this.tickTimer = setInterval(() => this.simulationTick(), tickMs);
+          log.info({ gameId: this.gameId, tickMs }, "Recovered simulation active loop started");
+        }
+        return;
+      }
+
+      await sleep(1_000);
+    }
+  }
+
+  private refreshPlayersFromDb(): void {
+    const dbPlayers = getPlayers(this.gameId);
+    const existing = new Map(this.players.map((p) => [p.address.toLowerCase(), p]));
+    const baseCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
+
+    this.players = dbPlayers.map((dbPlayer) => {
+      const addr = dbPlayer.address.toLowerCase();
+      const prev = existing.get(addr);
+      const ping = getLatestLocationPing(this.gameId, addr);
+      return {
+        address: addr,
+        playerNumber: dbPlayer.playerNumber,
+        lat: ping?.lat ?? prev?.lat ?? this.config.centerLat,
+        lng: ping?.lng ?? prev?.lng ?? this.config.centerLng,
+        isAlive: dbPlayer.isAlive,
+        aggressiveness: prev?.aggressiveness ?? (0.5 + Math.random() * 1.5),
+        state: prev?.state ?? "wandering",
+        itemCooldowns: prev?.itemCooldowns ?? { ...baseCooldowns },
+      };
+    });
+  }
+
+  private autoCheckinAllRegisteredPlayers(): void {
+    const dbPlayers = getPlayers(this.gameId);
+    let checkedInCount = dbPlayers.filter((p) => p.checkedIn).length;
+    for (const player of dbPlayers) {
+      if (player.checkedIn) continue;
+      const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
+      setPlayerCheckedIn(this.gameId, player.address, autoBle);
+      checkedInCount += 1;
+      broadcastToGame(this.gameId, {
+        type: "checkin:update",
+        checkedInCount,
+        totalPlayers: dbPlayers.length,
+        playerNumber: player.playerNumber,
+      });
+    }
   }
 
   private async simulationTick(): Promise<void> {

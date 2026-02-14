@@ -45,27 +45,33 @@ simulationRouter.post("/api/simulation/stop", walletAuth, requireOperator, (_req
  * POST /api/simulation/deploy — unified: create game on-chain, register simulated
  * players, then let the server lifecycle auto-start and simulate.
  *
- * Body: { playerCount?, centerLat?, centerLng?, initialRadiusMeters?,
- *         speedMultiplier?, minActiveDurationSeconds?, title?, entryFeeWei?, registrationDelaySeconds?,
- *         gameStartDelaySeconds?, maxDurationSeconds? }
+ * Body: {
+ *   playerCount?, minPlayers?, centerLat?, centerLng?, initialRadiusMeters?,
+ *   speedMultiplier?, minActiveDurationSeconds?, title?, entryFeeWei?, baseRewardWei?,
+ *   registrationDelaySeconds?, gameStartDelaySeconds?, maxDurationSeconds?
+ * }
  */
 simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (req: Request, res: Response) => {
   try {
     const body = req.body as Partial<DeploySimulationConfig>;
+    const playerCount = Math.min(5, Math.max(3, body.playerCount ?? 4));
+    const minPlayers = Math.min(playerCount, Math.max(3, body.minPlayers ?? 3));
 
     const cfg: DeploySimulationConfig = {
-      playerCount: Math.min(5, Math.max(3, body.playerCount ?? 5)),
+      playerCount,
+      minPlayers,
       centerLat: body.centerLat ?? 19.4357,
       centerLng: body.centerLng ?? -99.1299,
       initialRadiusMeters: body.initialRadiusMeters ?? 500,
       speedMultiplier: Math.min(50, Math.max(1, body.speedMultiplier ?? 1)),
       minActiveDurationSeconds: Math.max(60, body.minActiveDurationSeconds ?? 60),
       title: body.title ?? "Simulation Game",
-      entryFeeWei: body.entryFeeWei ?? "0",
+      // Small non-zero default fee so refund scenarios are testable.
+      entryFeeWei: body.entryFeeWei ?? "1000000000000",
       baseRewardWei: body.baseRewardWei ?? "0",
-      registrationDelaySeconds: Math.min(600, Math.max(5, body.registrationDelaySeconds ?? 30)),
-      gameStartDelaySeconds: Math.min(600, Math.max(2, body.gameStartDelaySeconds ?? 15)),
-      maxDurationSeconds: Math.min(7200, Math.max(60, body.maxDurationSeconds ?? 600)),
+      registrationDelaySeconds: Math.min(600, Math.max(30, body.registrationDelaySeconds ?? 60)),
+      gameStartDelaySeconds: Math.min(600, Math.max(10, body.gameStartDelaySeconds ?? 60)),
+      maxDurationSeconds: Math.min(7200, Math.max(180, body.maxDurationSeconds ?? 300)),
     };
 
     const sim = deploySimulation(cfg);

@@ -169,6 +169,18 @@ function CountdownTimer({ endsAt, label }: { endsAt: number; label: string }) {
   );
 }
 
+function cancelledMessage(game: Game): string {
+  const cancelledAfterStart =
+    (game.subPhase != null && game.subPhase !== undefined) ||
+    game.activity.some((event) => event.type === 'start');
+
+  if (cancelledAfterStart) {
+    return "Game was not finished before expiry date. Entry fees have been refunded.";
+  }
+
+  return `Game was cancelled — not enough players registered (${game.players}/${game.minPlayers} minimum). Entry fees have been refunded.`;
+}
+
 export function GameDetailPage({ game }: { game: Game }) {
   const [currentGame, setCurrentGame] = useState(game);
   const wsEnabled = currentGame.phase === 'registration' || currentGame.phase === 'active';
@@ -300,7 +312,7 @@ export function GameDetailPage({ game }: { game: Game }) {
 
         {currentGame.phase === 'cancelled' && (
           <div className="game-detail__cancelled">
-            Game was cancelled — not enough players registered ({currentGame.players}/{currentGame.minPlayers} minimum). Entry fees have been refunded.
+            {cancelledMessage(currentGame)}
           </div>
         )}
 

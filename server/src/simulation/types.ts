@@ -13,13 +13,14 @@ export interface SimulationConfig {
 
 export interface DeploySimulationConfig {
   playerCount: number;
+  minPlayers: number;         // minimum registrations needed to start
   centerLat: number;         // degrees
   centerLng: number;         // degrees
   initialRadiusMeters: number;
   speedMultiplier: number;
   minActiveDurationSeconds: number; // guaranteed minimum active runtime before kill-resolve
   title: string;
-  entryFeeWei: string;       // "0" for free games
+  entryFeeWei: string;       // tiny non-zero by default for refund-path testing
   baseRewardWei: string;     // "0" for no base reward
   registrationDelaySeconds: number; // how long registration stays open before auto-start
   gameStartDelaySeconds: number;    // seconds between registration close and game start

@@ -777,6 +777,18 @@ export function setSyncState(key: string, value: string): void {
     .run(key, value);
 }
 
+export function deleteSyncState(key: string): void {
+  getDb()
+    .prepare("DELETE FROM sync_state WHERE key = ?")
+    .run(key);
+}
+
+export function listSyncState(prefix: string): Array<{ key: string; value: string }> {
+  return getDb()
+    .prepare("SELECT key, value FROM sync_state WHERE key LIKE ?")
+    .all(`${prefix}%`) as Array<{ key: string; value: string }>;
+}
+
 // ============ Heartbeat ============
 
 export function initPlayersHeartbeat(gameId: number, timestamp: number): void {

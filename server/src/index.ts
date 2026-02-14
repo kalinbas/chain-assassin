@@ -9,6 +9,7 @@ import { initWebSocketServer } from "./ws/server.js";
 import { router } from "./api/routes.js";
 import { startEventListener, backfillEvents, rebuildFromChain, stopEventListener } from "./blockchain/listener.js";
 import { recoverGames, cleanupAll } from "./game/manager.js";
+import { recoverSimulation } from "./simulation/simulator.js";
 import { closeProviders } from "./blockchain/client.js";
 
 const log = createLogger("main");
@@ -56,6 +57,7 @@ async function main(): Promise<void> {
   // 7. Recover games from DB (active + registration-phase) after backfill,
   // so in-memory timers/loops start from the freshest on-chain-synced state.
   recoverGames();
+  recoverSimulation();
 
   // 8. Start live event listener
   try {

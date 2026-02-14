@@ -11,7 +11,7 @@ import {
   getPlayerCount,
   getCheckedInCount,
 } from "../db/queries.js";
-import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../game/manager.js";
+import { handleLocationUpdate, handleHeartbeatScan, getGameStatus, getPregameDurationSeconds } from "../game/manager.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
@@ -102,7 +102,7 @@ function handleAuth(
   const heartbeatDisabled =
     authSubPhase === "game" ? aliveCount <= config.heartbeatDisableThreshold : false;
   const pregameEndsAt = authSubPhase === "pregame" && game?.subPhaseStartedAt != null
-    ? game.subPhaseStartedAt + config.pregameDurationSeconds
+    ? game.subPhaseStartedAt + getPregameDurationSeconds(gameId)
     : null;
 
   ws.send(

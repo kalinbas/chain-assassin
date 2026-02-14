@@ -3,7 +3,7 @@ import { randomUUID } from "crypto";
 import { extname } from "path";
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "./middleware.js";
-import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAllRegistrationGames } from "../game/manager.js";
+import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAllRegistrationGames, getPregameDurationSeconds } from "../game/manager.js";
 import { getOperatorWallet } from "../blockchain/client.js";
 import { getPlayer, insertPhoto, getGamePhotos, getAllGames, getGame, getZoneShrinks, getGameActivity, getPlayers } from "../db/queries.js";
 import { getLeaderboard } from "../game/leaderboard.js";
@@ -361,7 +361,7 @@ export function gameDetail(req: Request, res: Response): void {
 
   const checkinEndsAt = game.subPhase === "checkin" ? game.expiryDeadline : null;
   const pregameEndsAt = game.subPhase === "pregame" && game.subPhaseStartedAt != null
-    ? game.subPhaseStartedAt + config.pregameDurationSeconds
+    ? game.subPhaseStartedAt + getPregameDurationSeconds(gameId)
     : null;
 
   // Zone state: use initial radius from shrinks if game is active
