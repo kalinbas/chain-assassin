@@ -1,10 +1,21 @@
 import { WebSocket } from "ws";
 import { verifySignature, validateAuthMessage } from "../utils/crypto.js";
-import { getPlayer, getGame, getTargetAssignment, findHunterOf, getAlivePlayers, getAlivePlayerCount, getLatestLocationPing } from "../db/queries.js";
+import {
+  getPlayer,
+  getGame,
+  getTargetAssignment,
+  findHunterOf,
+  getAlivePlayers,
+  getAlivePlayerCount,
+  getLatestLocationPing,
+  getPlayerCount,
+  getCheckedInCount,
+} from "../db/queries.js";
 import { handleLocationUpdate, handleHeartbeatScan, getGameStatus } from "../game/manager.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import type { WsClientMessage } from "../utils/types.js";
+import { GamePhase } from "../utils/types.js";
 import { config } from "../config.js";
 
 const log = createLogger("wsHandlers");
@@ -75,13 +86,22 @@ function handleAuth(
   const hunterAddress = findHunterOf(gameId, address.toLowerCase());
   const hunterPlayer = hunterAddress ? getPlayer(gameId, hunterAddress) : null;
   const game = getGame(gameId);
+  const playerCount = getPlayerCount(gameId);
+  const checkedInCount = getCheckedInCount(gameId);
   const aliveCount = getAlivePlayerCount(gameId);
+  const authSubPhase = game?.phase === GamePhase.ACTIVE
+    ? game.subPhase
+    : game?.phase === GamePhase.ENDED
+      ? "ended"
+      : game?.phase === GamePhase.CANCELLED
+        ? "cancelled"
+        : null;
   const heartbeatDeadline = player.lastHeartbeatAt != null
     ? player.lastHeartbeatAt + config.heartbeatIntervalSeconds
     : null;
   const heartbeatDisabled =
-    game?.subPhase === "game" ? aliveCount <= config.heartbeatDisableThreshold : false;
-  const pregameEndsAt = game?.subPhase === "pregame" && game.subPhaseStartedAt != null
+    authSubPhase === "game" ? aliveCount <= config.heartbeatDisableThreshold : false;
+  const pregameEndsAt = authSubPhase === "pregame" && game?.subPhaseStartedAt != null
     ? game.subPhaseStartedAt + config.pregameDurationSeconds
     : null;
 
@@ -106,11 +126,14 @@ function handleAuth(
       heartbeatIntervalSeconds: config.heartbeatIntervalSeconds,
       heartbeatDisableThreshold: config.heartbeatDisableThreshold,
       heartbeatDisabled,
-      subPhase: game?.subPhase ?? null,
-      checkinEndsAt: game?.subPhase === "checkin"
-        ? game.expiryDeadline
+      subPhase: authSubPhase,
+      checkinEndsAt: authSubPhase === "checkin"
+        ? (game?.expiryDeadline ?? null)
         : null,
       pregameEndsAt,
+      playerCount,
+      checkedInCount,
+      aliveCount,
     })
   );
 

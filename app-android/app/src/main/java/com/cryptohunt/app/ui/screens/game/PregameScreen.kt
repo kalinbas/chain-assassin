@@ -49,6 +49,7 @@ fun PregameScreen(
     LaunchedEffect(state.phase) {
         when (state.phase) {
             GamePhase.ACTIVE -> onGameStart()
+            GamePhase.ENDED -> onGameStart()
             GamePhase.ELIMINATED -> onEliminated()
             GamePhase.CANCELLED -> onBack()
             else -> {}

@@ -70,6 +70,7 @@ fun CheckInScreen(
         when (state.phase) {
             GamePhase.PREGAME -> onPregame()
             GamePhase.ACTIVE -> onGameStart()
+            GamePhase.ENDED -> onGameStart()
             GamePhase.CANCELLED -> onBack()
             GamePhase.ELIMINATED -> onEliminated()
             else -> {}

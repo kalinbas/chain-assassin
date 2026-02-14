@@ -98,6 +98,10 @@ fun RegisteredDetailScreen(
             GamePhase.PREGAME -> onPregameStart(config.id)
             GamePhase.ACTIVE -> onGameStart()
             GamePhase.ELIMINATED -> onEliminated()
+            GamePhase.CANCELLED -> {
+                viewModel.refresh()
+                onBack()
+            }
             else -> {}
         }
     }

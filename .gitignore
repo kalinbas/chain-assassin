@@ -24,6 +24,8 @@ server/data/
 
 # Local dev runtime artifacts
 .dev-stack/
+.claude/
+output/
 
 # Foundry local-chain broadcast spam (Anvil / chainId 31337)
 contracts/broadcast/*/31337/run-[0-9]*.json

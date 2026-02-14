@@ -104,9 +104,12 @@ type Action =
   | { type: 'eliminated'; payload: Record<string, unknown> }
   | { type: 'zone_shrink'; payload: Record<string, unknown> }
   | { type: 'leaderboard'; payload: Record<string, unknown> }
+  | { type: 'player_registered'; payload: Record<string, unknown> }
+  | { type: 'checkin_started'; payload: Record<string, unknown> }
   | { type: 'pregame_started'; payload: Record<string, unknown> }
   | { type: 'game_started'; payload: Record<string, unknown> }
   | { type: 'game_ended'; payload: Record<string, unknown> }
+  | { type: 'game_cancelled'; payload: Record<string, unknown> }
   | { type: 'item_used'; payload: Record<string, unknown> }
   | { type: 'checkin_update'; payload: Record<string, unknown> };
 
@@ -308,11 +311,34 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       };
     }
 
+    case 'player_registered': {
+      const p = action.payload;
+      const nextPlayerCount = (p.playerCount as number) ?? state.playerCount;
+      return {
+        ...state,
+        playerCount: nextPlayerCount,
+        aliveCount: Math.max(state.aliveCount, nextPlayerCount),
+      };
+    }
+
     case 'checkin_update': {
       const p = action.payload;
       return {
         ...state,
         checkedInCount: (p.checkedInCount as number) ?? state.checkedInCount,
+        playerCount: (p.totalPlayers as number) ?? state.playerCount,
+      };
+    }
+
+    case 'checkin_started': {
+      const p = action.payload;
+      return {
+        ...state,
+        phase: 'active',
+        subPhase: 'checkin',
+        checkinEndsAt: (p.checkinEndsAt as number | null) ?? state.checkinEndsAt,
+        pregameEndsAt: null,
+        events: addEvent(state.events, 'Check-in started — verify your presence!', 'start'),
       };
     }
 
@@ -362,6 +388,17 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       };
     }
 
+    case 'game_cancelled': {
+      return {
+        ...state,
+        phase: 'cancelled',
+        subPhase: null,
+        checkinEndsAt: null,
+        pregameEndsAt: null,
+        events: addEvent(state.events, 'Game cancelled', 'end'),
+      };
+    }
+
     case 'item_used': {
       const p = action.payload;
       const num = p.playerNumber as number;
@@ -401,7 +438,7 @@ export interface SpectatorSocketState extends SpectatorState {
   refresh: () => void;
 }
 
-export function useSpectatorSocket(gameId: number): SpectatorSocketState {
+export function useSpectatorSocket(gameId: number, enabled = true): SpectatorSocketState {
   const [state, dispatch] = useReducer(reducer, initialState);
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -436,6 +473,9 @@ export function useSpectatorSocket(gameId: number): SpectatorSocketState {
           case 'spectate:init':
             dispatch({ type: 'init', payload: msg });
             break;
+          case 'player:registered':
+            dispatch({ type: 'player_registered', payload: msg });
+            break;
           case 'spectator:positions':
             dispatch({ type: 'positions', payload: msg });
             break;
@@ -454,6 +494,9 @@ export function useSpectatorSocket(gameId: number): SpectatorSocketState {
           case 'checkin:update':
             dispatch({ type: 'checkin_update', payload: msg });
             break;
+          case 'game:checkin_started':
+            dispatch({ type: 'checkin_started', payload: msg });
+            break;
           case 'game:pregame_started':
             dispatch({ type: 'pregame_started', payload: msg });
             break;
@@ -462,6 +505,9 @@ export function useSpectatorSocket(gameId: number): SpectatorSocketState {
             break;
           case 'game:ended':
             dispatch({ type: 'game_ended', payload: msg });
+            break;
+          case 'game:cancelled':
+            dispatch({ type: 'game_cancelled', payload: msg });
             break;
           case 'item:used':
             dispatch({ type: 'item_used', payload: msg });
@@ -524,6 +570,20 @@ export function useSpectatorSocket(gameId: number): SpectatorSocketState {
   }, [connect, gameId]);
 
   useEffect(() => {
+    if (!enabled) {
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current);
+        reconnectTimeoutRef.current = null;
+      }
+      if (wsRef.current) {
+        intentionallyClosedRef.current = true;
+        wsRef.current.close();
+        wsRef.current = null;
+      }
+      dispatch({ type: 'disconnected' });
+      return;
+    }
+
     connect();
 
     return () => {
@@ -537,7 +597,7 @@ export function useSpectatorSocket(gameId: number): SpectatorSocketState {
         wsRef.current = null;
       }
     };
-  }, [connect]);
+  }, [connect, enabled]);
 
   useEffect(() => {
     const lastMessageAt = state.lastMessageAt;

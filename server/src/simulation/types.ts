@@ -6,6 +6,7 @@ export interface SimulationConfig {
   centerLng: number;
   initialRadiusMeters: number;
   speedMultiplier: number;
+  minActiveDurationSeconds: number;
   title: string;
   entryFeeWei: string;
 }
@@ -16,6 +17,7 @@ export interface DeploySimulationConfig {
   centerLng: number;         // degrees
   initialRadiusMeters: number;
   speedMultiplier: number;
+  minActiveDurationSeconds: number; // guaranteed minimum active runtime before kill-resolve
   title: string;
   entryFeeWei: string;       // "0" for free games
   baseRewardWei: string;     // "0" for no base reward
@@ -33,6 +35,7 @@ export interface SimulationStatus {
   killCount: number;
   elapsedSeconds: number;
   speedMultiplier: number;
+  minActiveDurationSeconds: number;
 }
 
 export type PlayerAgentState = "wandering" | "hunting" | "fleeing_zone";

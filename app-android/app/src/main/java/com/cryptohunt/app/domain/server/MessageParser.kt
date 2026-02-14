@@ -29,7 +29,10 @@ fun parseServerMessage(json: String): ServerMessage? {
                 heartbeatDisabled = obj.optBooleanOrNull("heartbeatDisabled"),
                 subPhase = obj.optStringOrNull("subPhase"),
                 checkinEndsAt = obj.optLongOrNull("checkinEndsAt"),
-                pregameEndsAt = obj.optLongOrNull("pregameEndsAt")
+                pregameEndsAt = obj.optLongOrNull("pregameEndsAt"),
+                playerCount = obj.optIntOrNull("playerCount"),
+                checkedInCount = obj.optIntOrNull("checkedInCount"),
+                aliveCount = obj.optIntOrNull("aliveCount")
             )
 
             "kill:recorded" -> ServerMessage.KillRecorded(

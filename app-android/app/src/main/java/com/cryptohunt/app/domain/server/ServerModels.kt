@@ -118,7 +118,10 @@ sealed class ServerMessage {
         val heartbeatDisabled: Boolean?,
         val subPhase: String?,
         val checkinEndsAt: Long?,
-        val pregameEndsAt: Long?
+        val pregameEndsAt: Long?,
+        val playerCount: Int?,
+        val checkedInCount: Int?,
+        val aliveCount: Int?
     ) : ServerMessage()
 
     /** A kill was recorded. */

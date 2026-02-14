@@ -1639,6 +1639,7 @@ export function cleanupAll(): void {
 export function getGameStatus(gameId: number) {
   const game = getGame(gameId);
   if (!game) return null;
+  const subPhase = game.phase === GamePhase.ACTIVE ? game.subPhase : null;
 
   const players = getPlayers(gameId);
   const leaderboard = getLeaderboard(gameId);
@@ -1659,11 +1660,11 @@ export function getGameStatus(gameId: number) {
   return {
     gameId,
     phase: game.phase,
-    subPhase: game.subPhase,
-    checkinEndsAt: game.subPhase === "checkin"
+    subPhase,
+    checkinEndsAt: subPhase === "checkin"
       ? game.expiryDeadline
       : null,
-    pregameEndsAt: game.subPhase === "pregame"
+    pregameEndsAt: subPhase === "pregame"
       ? getPregameEndsAt(game.subPhaseStartedAt)
       : null,
     playerCount: players.length,

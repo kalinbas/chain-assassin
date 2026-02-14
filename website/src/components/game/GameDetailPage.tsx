@@ -79,18 +79,11 @@ function SpectatorConnectionBanner({ state, onRefresh }: { state: SpectatorSocke
   );
 }
 
-function LiveContent({ game, onRefreshGame }: { game: Game; onRefreshGame: () => void }) {
-  const spectator = useSpectatorSocket(game.id);
+function LiveContent({ game, onRefreshGame, spectator }: { game: Game; onRefreshGame: () => void; spectator: SpectatorSocketState }) {
   const handleRefresh = useCallback(() => {
     spectator.refresh();
     onRefreshGame();
   }, [onRefreshGame, spectator]);
-
-  useEffect(() => {
-    if (spectator.phase === 'ended' || spectator.phase === 'cancelled') {
-      onRefreshGame();
-    }
-  }, [onRefreshGame, spectator.phase]);
 
   if (!spectator.connected) {
     return (
@@ -178,6 +171,8 @@ function CountdownTimer({ endsAt, label }: { endsAt: number; label: string }) {
 
 export function GameDetailPage({ game }: { game: Game }) {
   const [currentGame, setCurrentGame] = useState(game);
+  const wsEnabled = currentGame.phase === 'registration' || currentGame.phase === 'active';
+  const spectator = useSpectatorSocket(currentGame.id, wsEnabled);
 
   useEffect(() => {
     setCurrentGame(game);
@@ -194,6 +189,96 @@ export function GameDetailPage({ game }: { game: Game }) {
         // Keep current snapshot; WebSocket reconnect still runs.
       });
   }, [currentGame.id]);
+
+  useEffect(() => {
+    if (!spectator.phase) {
+      return;
+    }
+
+    setCurrentGame((prev) => {
+      let changed = false;
+      let next = prev;
+
+      const nextPhase = spectator.phase as Game['phase'];
+      if (next.phase !== nextPhase) {
+        next = { ...next, phase: nextPhase };
+        changed = true;
+      }
+
+      const nextSubPhase = nextPhase === 'active'
+        ? ((spectator.subPhase as Game['subPhase'] | null) ?? undefined)
+        : undefined;
+      if (next.subPhase !== nextSubPhase) {
+        next = { ...next, subPhase: nextSubPhase };
+        changed = true;
+      }
+
+      const nextCheckinEndsAt = spectator.checkinEndsAt ?? undefined;
+      if (next.checkinEndsAt !== nextCheckinEndsAt) {
+        next = { ...next, checkinEndsAt: nextCheckinEndsAt };
+        changed = true;
+      }
+
+      const nextPregameEndsAt = spectator.pregameEndsAt ?? undefined;
+      if (next.pregameEndsAt !== nextPregameEndsAt) {
+        next = { ...next, pregameEndsAt: nextPregameEndsAt };
+        changed = true;
+      }
+
+      if (next.players !== spectator.playerCount) {
+        next = { ...next, players: spectator.playerCount };
+        changed = true;
+      }
+
+      if (next.playerCount !== spectator.playerCount) {
+        next = { ...next, playerCount: spectator.playerCount };
+        changed = true;
+      }
+
+      if (next.aliveCount !== spectator.aliveCount) {
+        next = { ...next, aliveCount: spectator.aliveCount };
+        changed = true;
+      }
+
+      if (next.checkedInCount !== spectator.checkedInCount) {
+        next = { ...next, checkedInCount: spectator.checkedInCount };
+        changed = true;
+      }
+
+      return changed ? next : prev;
+    });
+  }, [
+    spectator.phase,
+    spectator.subPhase,
+    spectator.checkinEndsAt,
+    spectator.pregameEndsAt,
+    spectator.playerCount,
+    spectator.aliveCount,
+    spectator.checkedInCount,
+  ]);
+
+  useEffect(() => {
+    if (spectator.phase === 'ended' || spectator.phase === 'cancelled') {
+      refreshGameSnapshot();
+    }
+  }, [refreshGameSnapshot, spectator.phase]);
+
+  useEffect(() => {
+    if (currentGame.phase !== 'registration') {
+      return;
+    }
+    if (spectator.connected || spectator.connectionState === 'connecting' || spectator.connectionState === 'reconnecting') {
+      return;
+    }
+    // Fallback if registration socket cannot be established.
+    const nowMs = Date.now();
+    const deadlineMs = currentGame.registrationDeadlineTs * 1000;
+    const waitMs = Math.max(0, deadlineMs - nowMs) + 1500;
+    const timer = window.setTimeout(() => {
+      refreshGameSnapshot();
+    }, waitMs);
+    return () => window.clearTimeout(timer);
+  }, [currentGame.phase, currentGame.registrationDeadlineTs, refreshGameSnapshot, spectator.connected, spectator.connectionState]);
 
   const backLink = currentGame.phase === 'ended' || currentGame.phase === 'cancelled'
     ? '/#past-games'
@@ -219,8 +304,18 @@ export function GameDetailPage({ game }: { game: Game }) {
           </div>
         )}
 
+        {currentGame.phase === 'registration' && (
+          <SpectatorConnectionBanner
+            state={spectator}
+            onRefresh={() => {
+              spectator.refresh();
+              refreshGameSnapshot();
+            }}
+          />
+        )}
+
         {isActive ? (
-          <LiveContent game={currentGame} onRefreshGame={refreshGameSnapshot} />
+          <LiveContent game={currentGame} onRefreshGame={refreshGameSnapshot} spectator={spectator} />
         ) : (
           <>
             <GameStatsGrid game={currentGame} />

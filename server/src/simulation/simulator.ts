@@ -74,6 +74,7 @@ export function deploySimulation(cfg: DeploySimulationConfig): GameSimulator {
     centerLng: cfg.centerLng,
     initialRadiusMeters: cfg.initialRadiusMeters,
     speedMultiplier: cfg.speedMultiplier,
+    minActiveDurationSeconds: cfg.minActiveDurationSeconds,
     title: cfg.title,
     entryFeeWei: cfg.entryFeeWei,
   };
@@ -136,6 +137,7 @@ export class GameSimulator {
       {
         playerCount: cfg.playerCount,
         speed: cfg.speedMultiplier,
+        minActiveDurationSeconds: cfg.minActiveDurationSeconds,
         title: cfg.title,
         registrationDelaySeconds: cfg.registrationDelaySeconds,
         gameStartDelaySeconds: cfg.gameStartDelaySeconds,
@@ -475,7 +477,21 @@ export class GameSimulator {
     const elapsedActiveSeconds = this.startedAtWall > 0
       ? Math.floor(Date.now() / 1000) - this.startedAtWall
       : 0;
-    const forceResolve = elapsedActiveSeconds >= 20;
+    if (elapsedActiveSeconds < this.config.minActiveDurationSeconds) {
+      // Keep the round alive for spectator/app transition testing before resolving kills.
+      this.tickCount++;
+      if (this.tickCount % 100 === 0) {
+        const hbNow = Math.floor(Date.now() / 1000);
+        for (const p of this.players) {
+          if (p.isAlive) {
+            updateLastHeartbeat(this.gameId, p.address, hbNow);
+          }
+        }
+      }
+      this.simulateItems();
+      return;
+    }
+    const forceResolve = elapsedActiveSeconds >= this.config.minActiveDurationSeconds;
 
     // Attempt kills
     for (const hunter of alive) {
@@ -663,6 +679,7 @@ export class GameSimulator {
       killCount: this.killCount,
       elapsedSeconds: elapsed,
       speedMultiplier: this.config.speedMultiplier,
+      minActiveDurationSeconds: this.config.minActiveDurationSeconds,
     };
   }
 }

@@ -268,6 +268,18 @@ class GameEngine @Inject constructor() {
             "cancelled" -> GamePhase.CANCELLED
             else -> if (!msg.isAlive) GamePhase.ELIMINATED else current.phase
         }
+        val syncedPlayersRemaining = when (phase) {
+            GamePhase.CHECK_IN -> msg.playerCount
+                ?: current.playersRemaining
+            GamePhase.PREGAME,
+            GamePhase.ACTIVE,
+            GamePhase.ELIMINATED,
+            GamePhase.ENDED -> msg.aliveCount
+                ?: msg.checkedInCount
+                ?: msg.playerCount
+                ?: current.playersRemaining
+            else -> msg.playerCount ?: current.playersRemaining
+        }
 
         _state.value = current.copy(
             currentPlayer = player,
@@ -277,10 +289,12 @@ class GameEngine @Inject constructor() {
             heartbeatIntervalSeconds = heartbeatIntervalSeconds,
             heartbeatDisableThreshold = heartbeatDisableThreshold,
             heartbeatDisabled = msg.heartbeatDisabled
-                ?: (phase == GamePhase.ACTIVE && current.playersRemaining <= heartbeatDisableThreshold),
+                ?: (phase == GamePhase.ACTIVE && syncedPlayersRemaining <= heartbeatDisableThreshold),
             phase = phase,
             checkinEndsAt = msg.checkinEndsAt ?: current.checkinEndsAt,
-            pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt
+            pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt,
+            playersRemaining = syncedPlayersRemaining,
+            checkedInCount = msg.checkedInCount ?: current.checkedInCount
         )
     }
 

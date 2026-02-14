@@ -188,4 +188,21 @@ describe("game recovery", () => {
     expect(playerOne?.isAlive).toBe(false);
     expect(queries.getAlivePlayerCount(1)).toBe(2);
   });
+
+  it("does not expose stale subPhase for ended games in status", () => {
+    const nowSec = Math.floor(Date.now() / 1000);
+    seedPregameActiveGame(nowSec - 30);
+
+    queries.updateGamePhase(1, types.GamePhase.ENDED, {
+      endedAt: nowSec,
+      subPhase: "pregame",
+      subPhaseStartedAt: nowSec - 20,
+    });
+
+    const status = manager.getGameStatus(1);
+    expect(status?.phase).toBe(types.GamePhase.ENDED);
+    expect(status?.subPhase).toBeNull();
+    expect(status?.pregameEndsAt).toBeNull();
+    expect(status?.checkinEndsAt).toBeNull();
+  });
 });

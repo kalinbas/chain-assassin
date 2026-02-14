@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.chain.OnChainPhase
 import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
@@ -34,6 +35,7 @@ import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,6 +65,18 @@ fun GameDetailScreen(
 
     val config = game?.config
     val context = LocalContext.current
+
+    LaunchedEffect(game?.config?.id, game?.onChainPhase, game?.config?.registrationDeadline) {
+        val selected = game ?: return@LaunchedEffect
+        if (selected.onChainPhase != OnChainPhase.REGISTRATION) return@LaunchedEffect
+        val deadlineMs = selected.config.registrationDeadline
+        val waitMs = (deadlineMs - System.currentTimeMillis()).coerceAtLeast(0L) + 1500L
+        delay(waitMs)
+        if (viewModel.selectedGame.value?.onChainPhase == OnChainPhase.REGISTRATION) {
+            viewModel.refresh()
+            viewModel.selectGame(selected.config.id)
+        }
+    }
 
     // Show loading while game data loads from server
     if (config == null) {
@@ -120,6 +134,7 @@ fun GameDetailScreen(
                 tonalElevation = 8.dp
             ) {
                 val canAfford = walletState.balanceEth >= config.entryFee
+                val isRegistrationOpen = game?.onChainPhase == OnChainPhase.REGISTRATION
                 if (alreadyRegistered) {
                     Button(
                         onClick = { onViewRegistration(config.id) },
@@ -151,7 +166,7 @@ fun GameDetailScreen(
                             containerColor = Primary,
                             contentColor = Background
                         ),
-                        enabled = canAfford && !txPending
+                        enabled = isRegistrationOpen && canAfford && !txPending
                     ) {
                         if (txPending) {
                             Text(
@@ -161,7 +176,8 @@ fun GameDetailScreen(
                             )
                         } else {
                             Text(
-                                if (canAfford) "Register \u2014 ${config.entryFee} ETH"
+                                if (!isRegistrationOpen) "Registration Closed"
+                                else if (canAfford) "Register \u2014 ${config.entryFee} ETH"
                                 else "Insufficient Balance",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold

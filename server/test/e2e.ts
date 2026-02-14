@@ -1274,6 +1274,11 @@ async function scenarioA_verifyWsMessages(
     assert(typeof msg.playerNumber === "number" && msg.playerNumber >= 1, `Player${i + 1} auth:success has playerNumber`);
     assert(typeof msg.address === "string", `Player${i + 1} auth:success has address`);
     assert(typeof msg.subPhase === "string", `Player${i + 1} auth:success has subPhase`);
+    assert(typeof msg.playerCount === "number" && msg.playerCount >= 1, `Player${i + 1} auth:success has playerCount`);
+    assert(typeof msg.checkedInCount === "number" && msg.checkedInCount >= 0, `Player${i + 1} auth:success has checkedInCount`);
+    assert(typeof msg.aliveCount === "number" && msg.aliveCount >= 1, `Player${i + 1} auth:success has aliveCount`);
+    assert(msg.checkedInCount <= msg.playerCount, `Player${i + 1} auth:success checkedInCount <= playerCount`);
+    assert(msg.aliveCount <= msg.playerCount, `Player${i + 1} auth:success aliveCount <= playerCount`);
   }
 
   // ── game:pregame_started ────────────────────────────────────
