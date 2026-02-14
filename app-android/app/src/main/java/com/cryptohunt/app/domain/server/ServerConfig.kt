@@ -1,11 +1,38 @@
 package com.cryptohunt.app.domain.server
 
+import android.os.Build
 import com.cryptohunt.app.BuildConfig
 
 object ServerConfig {
-    // Emulator uses 10.0.2.2 to reach host machine's localhost
-    val SERVER_URL: String = if (BuildConfig.DEBUG) "http://10.0.2.2:3000" else "https://chain-assassin.fly.dev"
-    val SERVER_WS_URL: String = if (BuildConfig.DEBUG) "ws://10.0.2.2:3000/ws" else "wss://chain-assassin.fly.dev/ws"
+    private const val PROD_SERVER_URL = "https://chain-assassin.fly.dev"
+    private const val PROD_SERVER_WS_URL = "wss://chain-assassin.fly.dev/ws"
+    private const val DEV_EMULATOR_SERVER_URL = "http://10.0.2.2:3000"
+    private const val DEV_EMULATOR_SERVER_WS_URL = "ws://10.0.2.2:3000/ws"
+
+    private fun isEmulator(): Boolean {
+        return Build.FINGERPRINT.startsWith("generic")
+            || Build.FINGERPRINT.startsWith("unknown")
+            || Build.MODEL.contains("google_sdk")
+            || Build.MODEL.contains("Emulator")
+            || Build.MODEL.contains("Android SDK built for x86")
+            || Build.MANUFACTURER.contains("Genymotion")
+            || Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
+            || "google_sdk" == Build.PRODUCT
+    }
+
+    // Use local server only for debug builds running on an emulator.
+    // Debug builds on physical phones should talk to the deployed server.
+    val SERVER_URL: String = if (BuildConfig.DEBUG && isEmulator()) {
+        DEV_EMULATOR_SERVER_URL
+    } else {
+        PROD_SERVER_URL
+    }
+
+    val SERVER_WS_URL: String = if (BuildConfig.DEBUG && isEmulator()) {
+        DEV_EMULATOR_SERVER_WS_URL
+    } else {
+        PROD_SERVER_WS_URL
+    }
 
     // Auth message prefix (must match server's crypto.ts validateAuthMessage)
     const val AUTH_PREFIX = "chain-assassin"

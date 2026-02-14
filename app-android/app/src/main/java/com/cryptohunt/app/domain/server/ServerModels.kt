@@ -74,7 +74,8 @@ data class ServerGame(
     val winner2: Int,
     val winner3: Int,
     val topKiller: Int,
-    val zoneShrinks: List<ServerZoneShrink>
+    val zoneShrinks: List<ServerZoneShrink>,
+    val leaderboard: List<ServerLeaderboardEntry> = emptyList()
 )
 
 data class ServerZoneShrink(

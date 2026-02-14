@@ -222,8 +222,8 @@ curl -X POST http://localhost:3000/api/simulation/deploy \
   -H "Content-Type: application/json" \
   -d '{
     "playerCount": 10,
-    "centerLat": 37.7749,
-    "centerLng": -122.4194,
+    "centerLat": 19.4357,
+    "centerLng": -99.1299,
     "initialRadiusMeters": 500,
     "speedMultiplier": 1,
     "title": "Test Game",
@@ -235,8 +235,8 @@ curl -X POST http://localhost:3000/api/simulation/deploy \
 | Parameter | Default | Description |
 |-----------|---------|-------------|
 | `playerCount` | 10 | Number of simulated players (3-50) |
-| `centerLat` | 37.7749 | Game zone center latitude |
-| `centerLng` | -122.4194 | Game zone center longitude |
+| `centerLat` | 19.4357 | Game zone center latitude |
+| `centerLng` | -99.1299 | Game zone center longitude |
 | `initialRadiusMeters` | 500 | Initial zone radius |
 | `speedMultiplier` | 1 | Simulation speed (1 = real-time, up to 50) |
 | `title` | "Simulation Game" | Game title |

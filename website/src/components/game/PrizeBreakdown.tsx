@@ -1,6 +1,11 @@
 import type { Game } from '../../types/game';
 
-export function PrizeBreakdown({ game }: { game: Game }) {
+interface PrizeBreakdownProps {
+  game: Game;
+  title?: string;
+}
+
+export function PrizeBreakdown({ game, title = 'Prize Breakdown' }: PrizeBreakdownProps) {
   const playerCount = Math.max(game.players, game.minPlayers);
   const totalPool = playerCount * game.entryFee + game.baseReward;
   const calc = (bps: number) => (totalPool * bps / 10000).toFixed(4);
@@ -51,7 +56,7 @@ export function PrizeBreakdown({ game }: { game: Game }) {
 
   return (
     <div className="prize-breakdown">
-      <h3 className="game-detail__section-title">Prize Breakdown</h3>
+      <h3 className="game-detail__section-title">{title}</h3>
 
       <div className="prize-pool">
         <span className="prize-pool__label">Total Pool</span>

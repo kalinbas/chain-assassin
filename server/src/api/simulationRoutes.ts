@@ -55,8 +55,8 @@ simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (re
 
     const cfg: DeploySimulationConfig = {
       playerCount: Math.min(5, Math.max(3, body.playerCount ?? 5)),
-      centerLat: body.centerLat ?? 19.43527887514233,
-      centerLng: body.centerLng ?? -99.12806514424551,
+      centerLat: body.centerLat ?? 19.4357,
+      centerLng: body.centerLng ?? -99.1299,
       initialRadiusMeters: body.initialRadiusMeters ?? 500,
       speedMultiplier: Math.min(50, Math.max(1, body.speedMultiplier ?? 1)),
       title: body.title ?? "Simulation Game",
