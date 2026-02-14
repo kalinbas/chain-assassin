@@ -25,6 +25,14 @@ export interface GameEvent {
   timestamp: number;
 }
 
+export interface GameLeaderboardEntry {
+  playerNumber: number;
+  address: string;
+  kills: number;
+  isAlive: boolean;
+  eliminatedAt: number | null;
+}
+
 export interface Game {
   id: number;
   title: string;
@@ -61,4 +69,5 @@ export interface Game {
   winner3: number;
   topKiller: number;
   activity: GameEvent[];
+  leaderboard: GameLeaderboardEntry[];
 }

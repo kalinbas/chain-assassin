@@ -1029,6 +1029,114 @@ ul { list-style: none; }
     white-space: nowrap;
 }
 
+/* ========== PAST GAME LEADERBOARD ========== */
+.past-leaderboard {
+    margin-bottom: 32px;
+}
+
+.past-leaderboard__sub {
+    margin: -8px 0 14px;
+    color: var(--text-sec);
+    font-size: 0.82rem;
+}
+
+.past-leaderboard__table {
+    border: 1px solid var(--divider);
+    border-radius: var(--radius);
+    overflow: hidden;
+    background: var(--surface);
+}
+
+.past-leaderboard__head,
+.past-leaderboard__row {
+    display: grid;
+    grid-template-columns: 36px 58px minmax(120px, 1fr) 52px 96px 108px;
+    align-items: center;
+    gap: 10px;
+    padding: 11px 14px;
+}
+
+.past-leaderboard__head {
+    background: rgba(20, 28, 54, 0.65);
+    border-bottom: 1px solid var(--divider);
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.past-leaderboard__row {
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 0.86rem;
+}
+
+.past-leaderboard__row:first-of-type {
+    border-top: none;
+}
+
+.past-leaderboard__row--alive {
+    background: rgba(0, 255, 136, 0.08);
+}
+
+.past-leaderboard__rank {
+    color: var(--warning);
+    font-family: var(--font-mono);
+    font-weight: 700;
+}
+
+.past-leaderboard__player {
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-weight: 600;
+}
+
+.past-leaderboard__addr {
+    color: var(--text-sec);
+    font-family: var(--font-mono);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.past-leaderboard__kills,
+.past-leaderboard__survival {
+    font-family: var(--font-mono);
+    color: var(--text);
+}
+
+.past-leaderboard__status {
+    justify-self: end;
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+}
+
+.past-leaderboard__status--alive {
+    color: var(--primary);
+    border-color: rgba(0, 255, 136, 0.35);
+    background: rgba(0, 255, 136, 0.12);
+}
+
+.past-leaderboard__status--dead {
+    color: var(--danger);
+    border-color: rgba(255, 59, 59, 0.35);
+    background: rgba(255, 59, 59, 0.08);
+}
+
+.past-leaderboard__status-time {
+    margin-top: 1px;
+    font-size: 0.6rem;
+    font-family: var(--font-mono);
+    letter-spacing: 0.02em;
+}
+
 /* ========== CANCELLED GAME NOTICE ========== */
 .game-detail__cancelled {
     background: rgba(136, 136, 170, 0.08);
@@ -1685,6 +1793,26 @@ ul { list-style: none; }
     .game-detail__share {
         width: 100%;
         justify-content: center;
+    }
+
+    .past-leaderboard__head,
+    .past-leaderboard__row {
+        grid-template-columns: 28px 46px minmax(78px, 1fr) 42px 72px 86px;
+        gap: 7px;
+        padding: 10px 10px;
+    }
+
+    .past-leaderboard__head {
+        font-size: 0.64rem;
+    }
+
+    .past-leaderboard__row {
+        font-size: 0.76rem;
+    }
+
+    .past-leaderboard__status {
+        font-size: 0.62rem;
+        padding: 3px 6px;
     }
 }
 

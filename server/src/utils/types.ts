@@ -196,6 +196,7 @@ export interface HeartbeatSubmission {
 // ============ Leaderboard Types ============
 
 export interface LeaderboardEntry {
+  address: string;
   playerNumber: number;
   kills: number;
   isAlive: boolean;

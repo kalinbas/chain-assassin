@@ -847,6 +847,7 @@ export function getLeaderboard(gameId: number): LeaderboardEntry[] {
     )
     .all(gameId) as Record<string, unknown>[];
   return rows.map((r) => ({
+    address: r.address as string,
     playerNumber: r.player_number as number,
     kills: r.kills as number,
     isAlive: (r.is_alive as number) === 1,

@@ -7,6 +7,7 @@ import { GameMap } from './GameMap';
 import { PrizeBreakdown } from './PrizeBreakdown';
 import { ShareButton } from './ShareButton';
 import { Leaderboard } from './Leaderboard';
+import { PastGameLeaderboard } from './PastGameLeaderboard';
 import { PhotoGallery } from './PhotoGallery';
 import { SpectatorView } from './SpectatorView';
 import { SpectatorMap } from './SpectatorMap';
@@ -195,6 +196,7 @@ export function GameDetailPage({ game }: { game: Game }) {
           <>
             <GameStatsGrid game={game} />
             {game.phase === 'ended' && <Leaderboard game={game} />}
+            {game.phase === 'ended' && <PastGameLeaderboard game={game} />}
             {game.phase === 'ended' && <PhotoGallery gameId={game.id} />}
 
             {game.zoneShrinks.length > 0 && <GameMap game={game} />}

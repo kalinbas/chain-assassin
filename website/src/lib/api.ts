@@ -92,6 +92,19 @@ function formatServerGame(data: any): Game {
     winner3: Number(data.winner3),
     topKiller: Number(data.topKiller),
     activity: [],
+    leaderboard: (data.leaderboard || []).map((entry: {
+      playerNumber: number;
+      address: string;
+      kills: number;
+      isAlive: boolean;
+      eliminatedAt: number | null;
+    }) => ({
+      playerNumber: Number(entry.playerNumber),
+      address: String(entry.address),
+      kills: Number(entry.kills),
+      isAlive: Boolean(entry.isAlive),
+      eliminatedAt: entry.eliminatedAt == null ? null : Number(entry.eliminatedAt),
+    })),
   };
 }
 
@@ -120,5 +133,18 @@ export async function loadGame(gameId: number): Promise<Game | null> {
   const data = await res.json();
   const game = formatServerGame(data);
   game.activity = (data.activity || []).map(formatActivity);
+  game.leaderboard = (data.leaderboard || []).map((entry: {
+    playerNumber: number;
+    address: string;
+    kills: number;
+    isAlive: boolean;
+    eliminatedAt: number | null;
+  }) => ({
+    playerNumber: Number(entry.playerNumber),
+    address: String(entry.address),
+    kills: Number(entry.kills),
+    isAlive: Boolean(entry.isAlive),
+    eliminatedAt: entry.eliminatedAt == null ? null : Number(entry.eliminatedAt),
+  }));
   return game;
 }
