@@ -46,6 +46,9 @@ import java.util.Locale
 fun RegisteredDetailScreen(
     gameId: String = "",
     onCheckInStart: (String) -> Unit,
+    onPregameStart: (String) -> Unit,
+    onGameStart: () -> Unit,
+    onEliminated: () -> Unit,
     onBack: () -> Unit,
     viewModel: LobbyViewModel = hiltViewModel()
 ) {
@@ -86,11 +89,16 @@ fun RegisteredDetailScreen(
         }
     }
 
-    // Navigate to check-in when server changes phase (via WebSocket message)
+    // Navigate when server changes phase (via WebSocket message).
+    // This handles late-entry cases where we reconnect directly into pregame/game.
     val currentPhase = gameState?.phase
     LaunchedEffect(currentPhase) {
-        if (currentPhase == GamePhase.CHECK_IN) {
-            onCheckInStart(config.id)
+        when (currentPhase) {
+            GamePhase.CHECK_IN -> onCheckInStart(config.id)
+            GamePhase.PREGAME -> onPregameStart(config.id)
+            GamePhase.ACTIVE -> onGameStart()
+            GamePhase.ELIMINATED -> onEliminated()
+            else -> {}
         }
     }
 

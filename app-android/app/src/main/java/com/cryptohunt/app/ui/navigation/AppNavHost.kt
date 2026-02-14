@@ -185,6 +185,21 @@ fun AppNavHost(
                         popUpTo(NavRoutes.GameBrowser.route)
                     }
                 },
+                onPregameStart = { id ->
+                    navController.navigate(NavRoutes.Pregame.withId(id)) {
+                        popUpTo(NavRoutes.GameBrowser.route)
+                    }
+                },
+                onGameStart = {
+                    navController.navigate(NavRoutes.MainGame.route) {
+                        popUpTo(NavRoutes.GameBrowser.route) { inclusive = true }
+                    }
+                },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.GameBrowser.route)
+                    }
+                },
                 onBack = { navController.popBackStack() }
             )
         }

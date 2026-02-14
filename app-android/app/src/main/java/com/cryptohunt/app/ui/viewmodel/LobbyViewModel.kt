@@ -8,6 +8,7 @@ import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.GameServerClient
+import com.cryptohunt.app.domain.server.ServerConfig
 import com.cryptohunt.app.domain.server.ServerMapper
 import com.cryptohunt.app.domain.server.ServerGame
 import com.cryptohunt.app.domain.server.ServerPlayerInfo
@@ -123,7 +124,7 @@ class LobbyViewModel @Inject constructor(
         _error.value = null
         try {
             val allGames = serverClient.fetchAllGames() ?: run {
-                _error.value = "Failed to load games from server"
+                _error.value = "Failed to load games from ${ServerConfig.SERVER_URL}"
                 return
             }
             val address = walletManager.getAddress()

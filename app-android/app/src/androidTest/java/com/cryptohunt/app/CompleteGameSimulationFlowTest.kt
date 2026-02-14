@@ -75,6 +75,7 @@ class CompleteGameSimulationFlowTest {
         var sawPregame = false
         var sawMainGame = false
         var sawTerminal = false
+        val pollMs = 100L
 
         val deadline = SystemClock.elapsedRealtime() + 180_000L
         while (SystemClock.elapsedRealtime() < deadline) {
@@ -86,7 +87,7 @@ class CompleteGameSimulationFlowTest {
                 sawTerminal = true
                 break
             }
-            SystemClock.sleep(1000)
+            SystemClock.sleep(pollMs)
         }
 
         assertTrue("Expected to observe CHECK-IN phase", sawCheckin)

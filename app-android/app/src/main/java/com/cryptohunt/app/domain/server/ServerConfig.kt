@@ -26,22 +26,36 @@ object ServerConfig {
             || Build.DEVICE.contains("emulator")
     }
 
+    private fun isLocalEndpoint(url: String): Boolean {
+        val normalized = url.trim().lowercase()
+        if (normalized.isEmpty()) return false
+        return normalized.contains("10.0.2.2")
+            || normalized.contains("127.0.0.1")
+            || normalized.contains("localhost")
+    }
+
+    private val runningOnEmulator = isEmulator()
+    private val useLocalStack = BuildConfig.USE_LOCAL_STACK
     private val compileTimeServerUrl = BuildConfig.SERVER_URL.trim()
     private val compileTimeServerWsUrl = BuildConfig.SERVER_WS_URL.trim()
+    private val shouldUseCompileServerOverride =
+        compileTimeServerUrl.isNotEmpty() && (useLocalStack || !isLocalEndpoint(compileTimeServerUrl))
+    private val shouldUseCompileWsOverride =
+        compileTimeServerWsUrl.isNotEmpty() && (useLocalStack || !isLocalEndpoint(compileTimeServerWsUrl))
 
     // Priority:
     // 1) Compile-time override (used by local e2e tooling)
     // 2) Debug emulator default
     // 3) Production
     val SERVER_URL: String = when {
-        compileTimeServerUrl.isNotEmpty() -> compileTimeServerUrl
-        BuildConfig.DEBUG && isEmulator() -> DEV_EMULATOR_SERVER_URL
+        shouldUseCompileServerOverride -> compileTimeServerUrl
+        BuildConfig.DEBUG && runningOnEmulator -> DEV_EMULATOR_SERVER_URL
         else -> PROD_SERVER_URL
     }
 
     val SERVER_WS_URL: String = when {
-        compileTimeServerWsUrl.isNotEmpty() -> compileTimeServerWsUrl
-        BuildConfig.DEBUG && isEmulator() -> DEV_EMULATOR_SERVER_WS_URL
+        shouldUseCompileWsOverride -> compileTimeServerWsUrl
+        BuildConfig.DEBUG && runningOnEmulator -> DEV_EMULATOR_SERVER_WS_URL
         else -> PROD_SERVER_WS_URL
     }
 

@@ -20,6 +20,15 @@ fun envLongOrDefault(name: String, fallback: Long): Long {
     return System.getenv(name)?.trim()?.toLongOrNull() ?: fallback
 }
 
+fun envBoolOrDefault(name: String, fallback: Boolean): Boolean {
+    val raw = System.getenv(name)?.trim()?.lowercase() ?: return fallback
+    return when (raw) {
+        "1", "true", "yes", "on" -> true
+        "0", "false", "no", "off" -> false
+        else -> fallback
+    }
+}
+
 android {
     namespace = "com.cryptohunt.app"
     compileSdk = 34
@@ -73,6 +82,11 @@ android {
             "String",
             "SERVER_WS_URL",
             quote(envOrDefault("SERVER_WS_URL", ""))
+        )
+        buildConfigField(
+            "boolean",
+            "USE_LOCAL_STACK",
+            envBoolOrDefault("USE_LOCAL_STACK", false).toString()
         )
     }
 
