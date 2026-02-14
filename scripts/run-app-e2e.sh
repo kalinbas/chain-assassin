@@ -469,6 +469,8 @@ CHAIN_RPC_WS_URL="$RPC_WS_URL_ANDROID" \
 CHAIN_ID=31337 \
 CHAIN_EXPLORER_URL="$RPC_URL_ANDROID" \
 CHAIN_NAME="Local Anvil" \
+SERVER_URL="http://10.0.2.2:${SERVER_PORT}" \
+SERVER_WS_URL="ws://10.0.2.2:${SERVER_PORT}/ws" \
 ANDROID_SERIAL="$DEVICE_SERIAL" \
 "$ROOT_DIR/scripts/android-gradle.sh" :app:installDebug :app:installDebugAndroidTest
 

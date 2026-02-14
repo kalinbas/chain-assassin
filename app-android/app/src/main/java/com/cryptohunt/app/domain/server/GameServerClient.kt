@@ -84,6 +84,7 @@ class GameServerClient @Inject constructor(
         currentGameId = gameId
         shouldReconnect = true
         reconnectAttempts = 0
+        Log.i(TAG, "Connecting to game $gameId via ${ServerConfig.SERVER_WS_URL} (api=${ServerConfig.SERVER_URL})")
         doConnect()
     }
 

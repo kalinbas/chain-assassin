@@ -64,6 +64,16 @@ android {
             "CHAIN_NAME",
             quote(envOrDefault("CHAIN_NAME", "Base Sepolia"))
         )
+        buildConfigField(
+            "String",
+            "SERVER_URL",
+            quote(envOrDefault("SERVER_URL", ""))
+        )
+        buildConfigField(
+            "String",
+            "SERVER_WS_URL",
+            quote(envOrDefault("SERVER_WS_URL", ""))
+        )
     }
 
     buildTypes {

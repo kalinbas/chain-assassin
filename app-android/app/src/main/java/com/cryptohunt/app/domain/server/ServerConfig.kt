@@ -18,20 +18,31 @@ object ServerConfig {
             || Build.MANUFACTURER.contains("Genymotion")
             || Build.BRAND.startsWith("generic") && Build.DEVICE.startsWith("generic")
             || "google_sdk" == Build.PRODUCT
+            || Build.HARDWARE.contains("goldfish")
+            || Build.HARDWARE.contains("ranchu")
+            || Build.PRODUCT.contains("sdk")
+            || Build.PRODUCT.contains("emulator")
+            || Build.PRODUCT.contains("simulator")
+            || Build.DEVICE.contains("emulator")
     }
 
-    // Use local server only for debug builds running on an emulator.
-    // Debug builds on physical phones should talk to the deployed server.
-    val SERVER_URL: String = if (BuildConfig.DEBUG && isEmulator()) {
-        DEV_EMULATOR_SERVER_URL
-    } else {
-        PROD_SERVER_URL
+    private val compileTimeServerUrl = BuildConfig.SERVER_URL.trim()
+    private val compileTimeServerWsUrl = BuildConfig.SERVER_WS_URL.trim()
+
+    // Priority:
+    // 1) Compile-time override (used by local e2e tooling)
+    // 2) Debug emulator default
+    // 3) Production
+    val SERVER_URL: String = when {
+        compileTimeServerUrl.isNotEmpty() -> compileTimeServerUrl
+        BuildConfig.DEBUG && isEmulator() -> DEV_EMULATOR_SERVER_URL
+        else -> PROD_SERVER_URL
     }
 
-    val SERVER_WS_URL: String = if (BuildConfig.DEBUG && isEmulator()) {
-        DEV_EMULATOR_SERVER_WS_URL
-    } else {
-        PROD_SERVER_WS_URL
+    val SERVER_WS_URL: String = when {
+        compileTimeServerWsUrl.isNotEmpty() -> compileTimeServerWsUrl
+        BuildConfig.DEBUG && isEmulator() -> DEV_EMULATOR_SERVER_WS_URL
+        else -> PROD_SERVER_WS_URL
     }
 
     // Auth message prefix (must match server's crypto.ts validateAuthMessage)
