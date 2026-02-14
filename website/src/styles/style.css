@@ -822,12 +822,12 @@ ul { list-style: none; }
 
 .game-card__bar-min {
     position: absolute;
-    top: -3px;
+    top: 50%;
     width: 2px;
     height: 12px;
     background: var(--warning);
     border-radius: 1px;
-    transform: translateX(-1px);
+    transform: translate(-1px, -50%);
 }
 
 .game-card__pool {
@@ -1245,12 +1245,12 @@ ul { list-style: none; }
 
 .game-detail__players-bar-min {
     position: absolute;
-    top: -4px;
+    top: 50%;
     width: 2px;
     height: 16px;
     background: var(--warning);
     border-radius: 1px;
-    transform: translateX(-1px);
+    transform: translate(-1px, -50%);
 }
 
 .game-detail__section-title {

@@ -2,7 +2,7 @@
 
 **Hunt or be hunted. On-chain.**
 
-Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on [Base](https://base.org), with Arbitrum support planned.
+Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on [Base](https://base.org), with [Arbitrum](https://arbitrum.io) support planned.
 
 ## How It Works
 
@@ -83,7 +83,7 @@ Game coordination server with:
 - WebSocket connections for real-time game state
 - REST API for game management
 - SQLite persistence and startup recovery
-- Smart contract event indexing + operator transactions on Base (Arbitrum planned)
+- Smart contract event indexing + operator transactions on Base (Arbitrum support planned)
 
 ### `contracts/`
 
@@ -97,17 +97,19 @@ Smart contracts built with:
 | Component | Technology |
 |-----------|-----------|
 | Smart Contracts | Solidity 0.8.24, Foundry, OpenZeppelin |
-| Blockchain Network | Base (Ethereum L2): Base Sepolia + Base Mainnet; Arbitrum support planned |
+| Blockchain Networks | Base (Ethereum L2): Base Sepolia + Base Mainnet; Arbitrum support planned |
 | Backend Server | Node.js 22, TypeScript, Express, ws, ethers v6, better-sqlite3 |
-| Backend Testing | Vitest (unit/integration), E2E flows on Anvil |
+| Backend Testing | Vitest (unit/integration), deterministic E2E flows on Anvil |
 | Web App | React 19, TypeScript, Vite, React Router, Leaflet/React Leaflet |
-| Web Testing | Playwright |
-| Android App | Kotlin, Jetpack Compose, Material 3, Hilt, Web3j, CameraX, ML Kit, osmdroid |
-| CI/Tooling | npm, Gradle, Foundry, TypeScript |
+| Web Testing/Tooling | Playwright (browser checks + PDF doc generation scripts) |
+| Android App | Kotlin, Jetpack Compose, Material 3, Hilt, Web3j, CameraX, ML Kit, osmdroid, OkHttp |
+| Android Testing | Instrumentation tests (Compose + UiAutomator) on emulator/local chain |
+| Deployment/Infra | Fly.io, Docker, npm, Gradle, Foundry, TypeScript |
 
 ## Links
 
 - [Website](https://chainassassin.xyz/)
+- Chains: [Base](https://base.org) (live), [Arbitrum](https://arbitrum.io) (planned)
 - [Twitter / X](https://x.com/assassin_chain)
 - [Discord](https://discord.gg/SayMP2cJsp)
 
