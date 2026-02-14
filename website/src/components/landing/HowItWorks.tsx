@@ -2,7 +2,7 @@ import { Section } from '../layout/Section';
 import { WalletIcon, ClockIcon, QrIcon, CrosshairIcon, HeartIcon, TrophyIcon } from '../icons/Icons';
 
 const STEPS = [
-  { icon: WalletIcon, title: 'Create Wallet', desc: 'Generate a Base wallet in-app. Deposit ETH to enter games.' },
+  { icon: WalletIcon, title: 'Create Wallet', desc: 'Generate a Base wallet in-app (Arbitrum support planned). Deposit ETH to enter games.' },
   { icon: ClockIcon, title: 'Join a Game', desc: 'Browse upcoming games by city. Pay the entry fee to register.' },
   { icon: QrIcon, title: 'Check In', desc: "Arrive at the game zone. Scan another player's QR to verify attendance." },
   { icon: CrosshairIcon, title: 'Hunt Your Target', desc: "Find and scan your target's QR code. Stay inside the shrinking zone." },

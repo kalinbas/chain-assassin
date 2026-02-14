@@ -2,11 +2,11 @@
 
 **Hunt or be hunted. On-chain.**
 
-Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on [Base](https://base.org) blockchain.
+Real-world elimination game with GPS-tracked zones, QR-code kills, and ETH prizes on [Base](https://base.org), with Arbitrum support planned.
 
 ## How It Works
 
-1. **Create Wallet** — Generate a Base wallet in-app and deposit ETH
+1. **Create Wallet** — Generate a Base/Arbitrum-compatible wallet in-app and deposit ETH
 2. **Join a Game** — Browse upcoming games by city, pay the entry fee
 3. **Check In** — Arrive at the game zone, scan another player's QR to verify attendance
 4. **Hunt Your Target** — Find and scan your target's QR code while staying inside the shrinking zone
@@ -35,7 +35,7 @@ chain-assassin/
 Android prototype built with:
 - Kotlin + Jetpack Compose + Material 3
 - Hilt dependency injection
-- Web3j for wallet keypair generation (Base/Ethereum)
+- Web3j for wallet keypair generation (Base/Arbitrum/Ethereum)
 - CameraX + ML Kit for QR scanning
 - GPS location tracking with foreground service
 - osmdroid (OpenStreetMap) for game map
@@ -83,7 +83,7 @@ Game coordination server with:
 - WebSocket connections for real-time game state
 - REST API for game management
 - SQLite persistence and startup recovery
-- Smart contract event indexing + operator transactions on Base
+- Smart contract event indexing + operator transactions on Base (Arbitrum planned)
 
 ### `contracts/`
 
@@ -97,7 +97,7 @@ Smart contracts built with:
 | Component | Technology |
 |-----------|-----------|
 | Smart Contracts | Solidity 0.8.24, Foundry, OpenZeppelin |
-| Blockchain Network | Base (Ethereum L2): Base Sepolia + Base Mainnet |
+| Blockchain Network | Base (Ethereum L2): Base Sepolia + Base Mainnet; Arbitrum support planned |
 | Backend Server | Node.js 22, TypeScript, Express, ws, ethers v6, better-sqlite3 |
 | Backend Testing | Vitest (unit/integration), E2E flows on Anvil |
 | Web App | React 19, TypeScript, Vite, React Router, Leaflet/React Leaflet |

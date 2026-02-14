@@ -16,7 +16,7 @@ export function LandingPage() {
   useEffect(() => {
     setPageSeo({
       title: 'Chain Assassin — Hunt or Be Hunted. On-Chain.',
-      description: 'Real-world elimination game with GPS-tracked zones, QR kills, and ETH prizes on Base.',
+      description: 'Real-world elimination game with GPS-tracked zones, QR kills, and ETH prizes on Base, with Arbitrum support planned.',
       path: '/',
       type: 'website',
     });

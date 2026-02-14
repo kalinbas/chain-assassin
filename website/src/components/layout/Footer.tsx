@@ -30,7 +30,7 @@ export function Footer() {
           <a href="https://github.com/kalinbas/chain-assassin" target="_blank" rel="noopener">GitHub</a>
         </div>
         <div className="footer__base">
-          <span className="footer__base-badge">Built on Base</span>
+          <span className="footer__base-badge">Built on Base (Arbitrum planned)</span>
         </div>
         <p className="footer__copy">&copy; 2026 Chain Assassin. All rights reserved.</p>
       </div>

@@ -51,7 +51,7 @@ flowchart LR
 
 Chain Assassin is a four-layer stack.
 
-- Smart contract (Base): escrow, phases, claim logic, fee accounting.
+- Smart contract (Base; Arbitrum support planned): escrow, phases, claim logic, fee accounting.
 - Server: game orchestration, anti-cheat checks, event indexing, state recovery.
 - Android app: wallet operations + action-heavy gameplay interactions.
 - Web app: spectator + discovery + lightweight management.
@@ -60,7 +60,7 @@ Chain Assassin is a four-layer stack.
 flowchart LR
     A["Android App"] -->|"REST + WebSocket"| B["Game Server"]
     C["Web App"] -->|"REST + WebSocket"| B
-    B -->|"Read + write tx"| D["ChainAssassin Contract (Base)"]
+    B -->|"Read + write tx"| D["ChainAssassin Contract (Base + Arbitrum planned)"]
     D -->|"Events"| B
     B -->|"Live state"| A
     B -->|"Live state"| C
@@ -287,7 +287,7 @@ The long-term model supports city-level circuits, hosted tournaments, and protoc
 
 No native token is required today.
 
-- Settlement currency: ETH on Base.
+- Settlement currency: ETH on Base today (Arbitrum support planned).
 - Revenue rails: creator + platform basis-point shares.
 - Treasury discipline: on-chain accrual + explicit withdrawal paths.
 
@@ -309,7 +309,7 @@ Mitigation: geofencing, policy controls, conservative compliance posture.
 
 ## 15. Public Deployment (Current)
 
-- Network: Base Sepolia
+- Network: Base Sepolia (Arbitrum support planned)
 - Contract: `0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69`
 - Explorer: <https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69>
 

@@ -185,7 +185,7 @@
     <p class="subtitle">Hybrid architecture for fast real-time gameplay and on-chain escrowed settlement integrity on Base.</p>
     <div class="meta">
       Version 1.1<br />
-      Generated: 2026-02-13 22:10:46.029 UTC
+      Generated: 2026-02-14 04:42:23.473 UTC
     </div>
   </section>
 
@@ -236,7 +236,7 @@ flowchart LR
 <h2>4. System Architecture</h2>
 <p>Chain Assassin is a four-layer stack.</p>
 <ul>
-<li>Smart contract (Base): escrow, phases, claim logic, fee accounting.</li>
+<li>Smart contract (Base; Arbitrum support planned): escrow, phases, claim logic, fee accounting.</li>
 <li>Server: game orchestration, anti-cheat checks, event indexing, state recovery.</li>
 <li>Android app: wallet operations + action-heavy gameplay interactions.</li>
 <li>Web app: spectator + discovery + lightweight management.</li>
@@ -248,7 +248,7 @@ flowchart LR
 
     C[&quot;Web App&quot;] --&gt;|&quot;REST + WebSocket&quot;| B
 
-    B --&gt;|&quot;Read + write tx&quot;| D[&quot;ChainAssassin Contract (Base)&quot;]
+    B --&gt;|&quot;Read + write tx&quot;| D[&quot;ChainAssassin Contract (Base + Arbitrum planned)&quot;]
 
     D --&gt;|&quot;Events&quot;| B
 
@@ -489,7 +489,7 @@ flowchart LR
 <h2>13. Token Position</h2>
 <p>No native token is required today.</p>
 <ul>
-<li>Settlement currency: ETH on Base.</li>
+<li>Settlement currency: ETH on Base today (Arbitrum support planned).</li>
 <li>Revenue rails: creator + platform basis-point shares.</li>
 <li>Treasury discipline: on-chain accrual + explicit withdrawal paths.</li>
 </ul>
@@ -513,7 +513,7 @@ flowchart LR
 </ol>
 <h2>15. Public Deployment (Current)</h2>
 <ul>
-<li>Network: Base Sepolia</li>
+<li>Network: Base Sepolia (Arbitrum support planned)</li>
 <li>Contract: <code>0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</code></li>
 <li>Explorer: <a href="https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69">https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69</a></li>
 </ul>

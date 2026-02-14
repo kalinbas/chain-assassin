@@ -7,7 +7,7 @@ Date: February 13, 2026
 
 Chain Assassin is a real-world elimination game with crypto-native settlement rails.
 
-- Players register with ETH on Base.
+- Players register with ETH on Base (Arbitrum support planned).
 - Gameplay is enforced off-chain (GPS, BLE, QR logic) for real-time speed.
 - Funds are escrowed and settled on-chain for transparency and claim safety.
 - The full stack is open-source and rules are publicly auditable.
@@ -81,7 +81,7 @@ BPS split supports:
 - creator fee,
 - platform fee.
 
-No native token is required. ETH on Base is the settlement unit.
+No native token is required. ETH on Base is the settlement unit today (Arbitrum support planned).
 
 ## User Surface Split
 
@@ -114,6 +114,6 @@ Chain Assassin is a reusable pattern for crypto-native physical competition:
 
 ## Current Deployment
 
-- Network: Base Sepolia
+- Network: Base Sepolia (Arbitrum support planned)
 - Contract: `0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69`
 - Explorer: <https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69>

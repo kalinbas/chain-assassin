@@ -9,7 +9,8 @@
     "preview": "vite preview",
     "audit:local": "node scripts/audit-local.mjs",
     "whitepaper:pdf": "node scripts/build-whitepaper-pdf.mjs",
-    "litepaper:pdf": "node scripts/build-litepaper-pdf.mjs"
+    "litepaper:pdf": "node scripts/build-litepaper-pdf.mjs",
+    "onepager:pdf": "node scripts/build-onepager-pdf.mjs"
   },
   "dependencies": {
     "leaflet": "^1.9.4",

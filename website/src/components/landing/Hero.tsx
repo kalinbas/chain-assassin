@@ -19,7 +19,7 @@ export function Hero() {
           Hunt or Be Hunted.<br />
           <span className="text-primary">On-Chain.</span>
         </h1>
-        <p className="hero__sub">Real-world elimination game. GPS-tracked zones. QR-code kills. ETH prizes on Base.</p>
+        <p className="hero__sub">Real-world elimination game. GPS-tracked zones. QR-code kills. ETH prizes on Base, with Arbitrum support planned.</p>
         <div className="hero__ctas">
           {liveCount > 0 && (
             <Link
