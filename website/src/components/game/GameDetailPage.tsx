@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import type { Game } from '../../types/game';
 import { BackIcon, RadarIcon } from '../icons/Icons';
@@ -12,6 +12,7 @@ import { PhotoGallery } from './PhotoGallery';
 import { SpectatorView } from './SpectatorView';
 import { SpectatorMap } from './SpectatorMap';
 import { useSpectatorSocket, type SpectatorSocketState } from '../../hooks/useSpectatorSocket';
+import { loadGame } from '../../lib/api';
 
 function PhaseBadge({ phase, subPhase }: { phase: string; subPhase?: string }) {
   const label = phase === 'active' && subPhase && subPhase !== 'game' ? subPhase : phase;
@@ -39,7 +40,7 @@ function RetryIn({ retryAt }: { retryAt: number | null }) {
   return <>{seconds}s</>;
 }
 
-function SpectatorConnectionBanner({ state }: { state: SpectatorSocketState }) {
+function SpectatorConnectionBanner({ state, onRefresh }: { state: SpectatorSocketState; onRefresh: () => void }) {
   const statusClass = state.connectionState === 'connected'
     ? state.isStale
       ? 'spectator-conn--warn'
@@ -68,7 +69,7 @@ function SpectatorConnectionBanner({ state }: { state: SpectatorSocketState }) {
       <button
         type="button"
         className="spectator-conn__refresh"
-        onClick={state.refresh}
+        onClick={onRefresh}
         title="Reconnect and re-sync spectator feed"
       >
         <RadarIcon width={14} height={14} />
@@ -78,13 +79,23 @@ function SpectatorConnectionBanner({ state }: { state: SpectatorSocketState }) {
   );
 }
 
-function LiveContent({ game }: { game: Game }) {
+function LiveContent({ game, onRefreshGame }: { game: Game; onRefreshGame: () => void }) {
   const spectator = useSpectatorSocket(game.id);
+  const handleRefresh = useCallback(() => {
+    spectator.refresh();
+    onRefreshGame();
+  }, [onRefreshGame, spectator]);
+
+  useEffect(() => {
+    if (spectator.phase === 'ended' || spectator.phase === 'cancelled') {
+      onRefreshGame();
+    }
+  }, [onRefreshGame, spectator.phase]);
 
   if (!spectator.connected) {
     return (
       <>
-        <SpectatorConnectionBanner state={spectator} />
+        <SpectatorConnectionBanner state={spectator} onRefresh={handleRefresh} />
         <p style={{ color: 'var(--text-sec)', textAlign: 'center', padding: '1.25rem 0 2rem' }}>
           Waiting for live stream data...
         </p>
@@ -97,7 +108,7 @@ function LiveContent({ game }: { game: Game }) {
   if (spectator.subPhase === 'checkin') {
     return (
       <div className="game-detail__phase-info">
-        <SpectatorConnectionBanner state={spectator} />
+        <SpectatorConnectionBanner state={spectator} onRefresh={handleRefresh} />
         <div className="game-detail__phase-icon">📍</div>
         <h2>Check-In Phase</h2>
         <p>Players are checking in at the meeting point. The game will begin once check-in ends.</p>
@@ -117,7 +128,7 @@ function LiveContent({ game }: { game: Game }) {
   if (spectator.subPhase === 'pregame') {
     return (
       <div className="game-detail__phase-info">
-        <SpectatorConnectionBanner state={spectator} />
+        <SpectatorConnectionBanner state={spectator} onRefresh={handleRefresh} />
         <div className="game-detail__phase-icon">⏳</div>
         <h2>Pregame Phase</h2>
         <p>Players are spreading out and getting into position. Targets will be assigned when the countdown ends.</p>
@@ -136,7 +147,7 @@ function LiveContent({ game }: { game: Game }) {
 
   return (
     <>
-      <SpectatorConnectionBanner state={spectator} />
+      <SpectatorConnectionBanner state={spectator} onRefresh={handleRefresh} />
       <SpectatorView state={spectator} />
     </>
   );
@@ -166,11 +177,29 @@ function CountdownTimer({ endsAt, label }: { endsAt: number; label: string }) {
 }
 
 export function GameDetailPage({ game }: { game: Game }) {
-  const backLink = game.phase === 'ended' || game.phase === 'cancelled'
+  const [currentGame, setCurrentGame] = useState(game);
+
+  useEffect(() => {
+    setCurrentGame(game);
+  }, [game]);
+
+  const refreshGameSnapshot = useCallback(() => {
+    void loadGame(currentGame.id)
+      .then((latest) => {
+        if (latest) {
+          setCurrentGame(latest);
+        }
+      })
+      .catch(() => {
+        // Keep current snapshot; WebSocket reconnect still runs.
+      });
+  }, [currentGame.id]);
+
+  const backLink = currentGame.phase === 'ended' || currentGame.phase === 'cancelled'
     ? '/#past-games'
     : '/#games';
 
-  const isActive = game.phase === 'active';
+  const isActive = currentGame.phase === 'active';
 
   return (
     <main className="game-detail">
@@ -179,30 +208,30 @@ export function GameDetailPage({ game }: { game: Game }) {
           <BackIcon /> Back to Games
         </Link>
         <div className="game-detail__header">
-          <h1 className="game-detail__title">{game.title}</h1>
-          <PhaseBadge phase={game.phase} subPhase={game.subPhase} />
-          <ShareButton gameId={game.id} title={game.title} />
+          <h1 className="game-detail__title">{currentGame.title}</h1>
+          <PhaseBadge phase={currentGame.phase} subPhase={currentGame.subPhase} />
+          <ShareButton gameId={currentGame.id} title={currentGame.title} />
         </div>
 
-        {game.phase === 'cancelled' && (
+        {currentGame.phase === 'cancelled' && (
           <div className="game-detail__cancelled">
-            Game was cancelled — not enough players registered ({game.players}/{game.minPlayers} minimum). Entry fees have been refunded.
+            Game was cancelled — not enough players registered ({currentGame.players}/{currentGame.minPlayers} minimum). Entry fees have been refunded.
           </div>
         )}
 
         {isActive ? (
-          <LiveContent game={game} />
+          <LiveContent game={currentGame} onRefreshGame={refreshGameSnapshot} />
         ) : (
           <>
-            <GameStatsGrid game={game} />
-            {game.phase === 'ended' && <Leaderboard game={game} />}
-            {game.phase === 'ended' && <PastGameLeaderboard game={game} />}
-            {game.phase === 'ended' && <PhotoGallery gameId={game.id} />}
+            <GameStatsGrid game={currentGame} />
+            {currentGame.phase === 'ended' && <Leaderboard game={currentGame} />}
+            {currentGame.phase === 'ended' && <PastGameLeaderboard game={currentGame} />}
+            {currentGame.phase === 'ended' && <PhotoGallery gameId={currentGame.id} />}
 
-            {game.zoneShrinks.length > 0 && <GameMap game={game} />}
+            {currentGame.zoneShrinks.length > 0 && <GameMap game={currentGame} />}
 
-            {game.phase !== 'ended' && game.phase !== 'cancelled' && (
-              <PrizeBreakdown game={game} />
+            {currentGame.phase !== 'ended' && currentGame.phase !== 'cancelled' && (
+              <PrizeBreakdown game={currentGame} />
             )}
           </>
         )}

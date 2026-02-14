@@ -119,6 +119,23 @@ function playerLabel(playerNumber: number): string {
   return `Player #${playerNumber}`;
 }
 
+function normalizePhase(raw: unknown): string | null {
+  if (typeof raw === 'number') {
+    if (raw === 0) return 'registration';
+    if (raw === 1) return 'active';
+    if (raw === 2) return 'ended';
+    if (raw === 3) return 'cancelled';
+    return null;
+  }
+  if (typeof raw === 'string' && raw.length > 0) {
+    if (/^\d+$/.test(raw)) {
+      return normalizePhase(Number(raw));
+    }
+    return raw;
+  }
+  return null;
+}
+
 function reducer(state: SpectatorState, action: Action): SpectatorState {
   switch (action.type) {
     case 'connecting':
@@ -173,13 +190,15 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
     case 'init': {
       const p = action.payload;
       const players = p.players as SpectatorPlayer[];
+      const phase = normalizePhase(p.phase) ?? state.phase;
+      const subPhase = phase === 'active' ? ((p.subPhase as string | null) ?? null) : null;
       return {
         ...state,
         connected: true,
-        phase: p.phase as string,
-        subPhase: (p.subPhase as string | null) ?? null,
-        checkinEndsAt: (p.checkinEndsAt as number | null) ?? null,
-        pregameEndsAt: (p.pregameEndsAt as number | null) ?? null,
+        phase,
+        subPhase,
+        checkinEndsAt: subPhase === 'checkin' ? ((p.checkinEndsAt as number | null) ?? null) : null,
+        pregameEndsAt: subPhase === 'pregame' ? ((p.pregameEndsAt as number | null) ?? null) : null,
         playerCount: p.playerCount as number,
         aliveCount: p.aliveCount as number,
         checkedInCount: (p.checkedInCount as number) ?? 0,
@@ -304,6 +323,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         ...state,
         phase: 'active',
         subPhase: 'pregame',
+        checkinEndsAt: null,
         pregameEndsAt: (p.pregameEndsAt as number) ?? Math.floor(Date.now() / 1000) + duration,
         aliveCount: (p.playerCount as number) ?? state.aliveCount,
         events: addEvent(state.events, 'Pregame started — players dispersing!', 'pregame'),
@@ -316,6 +336,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         ...state,
         phase: 'active',
         subPhase: 'game',
+        checkinEndsAt: null,
         pregameEndsAt: null,
         playerCount: p.playerCount as number,
         events: addEvent(state.events, 'Game started — hunt begins!', 'start'),
@@ -328,6 +349,9 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
       return {
         ...state,
         phase: 'ended',
+        subPhase: null,
+        checkinEndsAt: null,
+        pregameEndsAt: null,
         winners: {
           winner1: Number(p.winner1),
           winner2: Number(p.winner2),
