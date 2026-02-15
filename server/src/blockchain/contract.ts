@@ -144,7 +144,7 @@ export async function fetchIsAlive(
   address: string
 ): Promise<boolean> {
   const info = await fetchPlayerInfo(gameId, address);
-  return info.registered && info.alive;
+  return info.registered && info.killedAt === 0;
 }
 
 export async function fetchPlayer(
@@ -155,7 +155,7 @@ export async function fetchPlayer(
   const raw = await c.getPlayer(gameId, playerNumber);
   return {
     addr: raw.addr,
-    alive: raw.alive,
+    killedAt: Number(raw.killedAt),
     claimed: raw.claimed,
     killCount: Number(raw.killCount),
   };
@@ -164,12 +164,14 @@ export async function fetchPlayer(
 export async function fetchPlayerInfo(
   gameId: number,
   address: string
-): Promise<{ registered: boolean; alive: boolean; killCount: number; claimed: boolean; playerNumber: number }> {
+): Promise<{ registered: boolean; alive: boolean; killedAt: number; killCount: number; claimed: boolean; playerNumber: number }> {
   const c = getReadContract();
-  const [registered, alive, killCount, claimed, playerNumber] = await c.getPlayerInfo(gameId, address);
+  const [registered, killedAtRaw, killCount, claimed, playerNumber] = await c.getPlayerInfo(gameId, address);
+  const killedAt = Number(killedAtRaw);
   return {
     registered,
-    alive,
+    alive: registered && killedAt === 0,
+    killedAt,
     killCount: Number(killCount),
     claimed,
     playerNumber: Number(playerNumber),

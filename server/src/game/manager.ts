@@ -51,6 +51,7 @@ import { fetchGameState } from "../blockchain/contract.js";
 import { getHttpProvider } from "../blockchain/client.js";
 
 const log = createLogger("gameManager");
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const SIMULATION_PREGAME_DURATION_SECONDS = 60;
 const SIM_GAME_SYNC_KEY_PREFIX = "simulation_game:";
 
@@ -331,9 +332,15 @@ export function onGameCreated(gameConfig: GameConfig, shrinks: ZoneShrink[]): vo
 /**
  * Handle a player registration event from the chain.
  */
-export async function onPlayerRegistered(gameId: number, playerAddress: string, playerCount: number): Promise<void> {
-  insertPlayer(gameId, playerAddress, playerCount);
-  updatePlayerCount(gameId, playerCount);
+export async function onPlayerRegistered(gameId: number, playerAddress: string, playerNumber: number): Promise<void> {
+  const normalizedAddress = playerAddress.toLowerCase();
+  if (normalizedAddress === ZERO_ADDRESS) {
+    log.warn({ gameId, playerNumber }, "Ignoring player registration with zero address");
+    return;
+  }
+
+  insertPlayer(gameId, normalizedAddress, playerNumber);
+  updatePlayerCount(gameId, playerNumber);
 
   // Fetch totalCollected from chain (increases with each registration as entry fees accumulate)
   try {
@@ -343,12 +350,12 @@ export async function onPlayerRegistered(gameId: number, playerAddress: string, 
     log.error({ gameId, error: (err as Error).message }, "Failed to fetch totalCollected after registration");
   }
 
-  log.info({ gameId, player: playerAddress, playerCount }, "Player registered");
+  log.info({ gameId, player: normalizedAddress, playerNumber }, "Player registered");
 
   broadcast(gameId, {
     type: "player:registered",
-    playerNumber: playerCount, // playerCount == new player's number (sequential)
-    playerCount,
+    playerNumber, // playerNumber is sequential registration index from chain
+    playerCount: playerNumber,
   });
 }
 

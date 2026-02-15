@@ -18,6 +18,7 @@ import { GamePhase } from "../utils/types.js";
 import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("listener");
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 const SYNC_KEY_LAST_BLOCK = "lastProcessedBlock";
 
@@ -25,6 +26,57 @@ const SYNC_KEY_LAST_BLOCK = "lastProcessedBlock";
 const BLOCK_TIME_SECONDS = 2;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+interface ResolvedPlayerState {
+  address: string;
+  killedAt: number;
+  claimed: boolean;
+  killCount: number;
+}
+
+async function fetchPlayerStateWithRetry(
+  gameId: number,
+  playerNumber: number,
+  maxAttempts = 8,
+  retryDelayMs = 250
+): Promise<ResolvedPlayerState> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      const playerState = await fetchPlayer(gameId, playerNumber);
+      const address = playerState.addr.toLowerCase();
+      if (address !== ZERO_ADDRESS) {
+        return {
+          address,
+          killedAt: playerState.killedAt,
+          claimed: playerState.claimed,
+          killCount: playerState.killCount,
+        };
+      }
+      lastError = new Error(`Player ${playerNumber} resolved to zero address`);
+    } catch (err) {
+      lastError = err as Error;
+    }
+
+    if (attempt < maxAttempts) {
+      await sleep(retryDelayMs * attempt);
+    }
+  }
+
+  throw new Error(
+    `Failed to resolve on-chain player ${playerNumber}: ${lastError?.message ?? "unknown error"}`
+  );
+}
+
+async function fetchPlayerAddressWithRetry(
+  gameId: number,
+  playerNumber: number,
+  maxAttempts = 8,
+  retryDelayMs = 250
+): Promise<string> {
+  return (await fetchPlayerStateWithRetry(gameId, playerNumber, maxAttempts, retryDelayMs)).address;
+}
 
 /**
  * Estimate the block number for a given unix timestamp based on
@@ -75,9 +127,8 @@ export async function startEventListener(): Promise<void> {
     try {
       const pNum = Number(playerNum);
       log.info({ gameId: Number(gameId), playerNumber: pNum }, "PlayerRegistered event");
-      // Fetch the player's address from chain using the new getPlayer() view
-      const playerState = await fetchPlayer(Number(gameId), pNum);
-      manager.onPlayerRegistered(Number(gameId), playerState.addr.toLowerCase(), pNum);
+      const playerAddress = await fetchPlayerAddressWithRetry(Number(gameId), pNum);
+      await manager.onPlayerRegistered(Number(gameId), playerAddress, pNum);
       saveBlock(event.log.blockNumber);
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling PlayerRegistered");
@@ -158,9 +209,8 @@ export async function startEventListener(): Promise<void> {
         { gameId: Number(gameId), playerNumber: pNum, amount: amount.toString() },
         "PrizeClaimed event"
       );
-      // Resolve address from on-chain player data
-      const playerState = await fetchPlayer(Number(gameId), pNum);
-      manager.onPrizeClaimed(Number(gameId), playerState.addr.toLowerCase());
+      const playerAddress = await fetchPlayerAddressWithRetry(Number(gameId), pNum);
+      manager.onPrizeClaimed(Number(gameId), playerAddress);
       saveBlock(event.log.blockNumber);
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling PrizeClaimed");
@@ -178,8 +228,8 @@ export async function startEventListener(): Promise<void> {
         { gameId: Number(gameId), playerNumber: pNum, amount: amount.toString() },
         "RefundClaimed event"
       );
-      const playerState = await fetchPlayer(Number(gameId), pNum);
-      manager.onRefundClaimed(Number(gameId), playerState.addr.toLowerCase());
+      const playerAddress = await fetchPlayerAddressWithRetry(Number(gameId), pNum);
+      manager.onRefundClaimed(Number(gameId), playerAddress);
       saveBlock(event.log.blockNumber);
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling RefundClaimed");
@@ -251,8 +301,8 @@ export async function backfillEvents(): Promise<void> {
     const pNum = Number(e.args[1]);
     log.info({ gameId, playerNumber: pNum }, "Backfilling PlayerRegistered");
     try {
-      const playerState = await fetchPlayer(gameId, pNum);
-      manager.onPlayerRegistered(gameId, playerState.addr.toLowerCase(), pNum);
+      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
+      await manager.onPlayerRegistered(gameId, playerAddress, pNum);
     } catch (err) {
       log.error({ gameId, error: (err as Error).message }, "Backfill PlayerRegistered failed");
     }
@@ -315,8 +365,8 @@ export async function backfillEvents(): Promise<void> {
     const pNum = Number(e.args[1]);
     log.info({ gameId, playerNumber: pNum }, "Backfilling PrizeClaimed");
     try {
-      const playerState = await fetchPlayer(gameId, pNum);
-      manager.onPrizeClaimed(gameId, playerState.addr.toLowerCase());
+      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
+      manager.onPrizeClaimed(gameId, playerAddress);
     } catch (err) {
       log.error({ gameId, error: (err as Error).message }, "Backfill PrizeClaimed failed");
     }
@@ -331,8 +381,8 @@ export async function backfillEvents(): Promise<void> {
     const pNum = Number(e.args[1]);
     log.info({ gameId, playerNumber: pNum }, "Backfilling RefundClaimed");
     try {
-      const playerState = await fetchPlayer(gameId, pNum);
-      manager.onRefundClaimed(gameId, playerState.addr.toLowerCase());
+      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
+      manager.onRefundClaimed(gameId, playerAddress);
     } catch (err) {
       log.error({ gameId, error: (err as Error).message }, "Backfill RefundClaimed failed");
     }
@@ -380,10 +430,17 @@ export async function rebuildFromChain(): Promise<void> {
       insertZoneShrinks(gameId, shrinks);
 
       // 3. Iterate players 1..playerCount and insert into DB
+      const rebuiltPlayers = new Map<number, ResolvedPlayerState>();
       for (let pNum = 1; pNum <= gameState.playerCount; pNum++) {
         try {
-          const playerState = await fetchPlayer(gameId, pNum);
-          insertPlayer(gameId, playerState.addr.toLowerCase(), pNum);
+          const playerState = await fetchPlayerStateWithRetry(gameId, pNum);
+          rebuiltPlayers.set(pNum, playerState);
+          insertPlayer(gameId, playerState.address, pNum, {
+            isAlive: playerState.killedAt === 0,
+            eliminatedAt: playerState.killedAt === 0 ? null : playerState.killedAt,
+            kills: playerState.killCount,
+            hasClaimed: playerState.claimed,
+          });
         } catch (err) {
           log.error({ gameId, playerNumber: pNum, error: (err as Error).message }, "Failed to rebuild player");
         }
@@ -394,9 +451,10 @@ export async function rebuildFromChain(): Promise<void> {
         // Resolve winner playerNumbers to addresses for DB storage
         const resolveAddr = async (pNum: number): Promise<string> => {
           if (pNum === 0) return "";
+          const fromSnapshot = rebuiltPlayers.get(pNum);
+          if (fromSnapshot) return fromSnapshot.address;
           try {
-            const p = await fetchPlayer(gameId, pNum);
-            return p.addr.toLowerCase();
+            return await fetchPlayerAddressWithRetry(gameId, pNum);
           } catch {
             return "";
           }

@@ -55,7 +55,7 @@ interface IChainAssassin {
     /// @notice Per-player state within a game, keyed by playerNumber (1-based).
     struct PlayerState {
         address addr;       // player's wallet address
-        bool    alive;      // still in the game
+        uint40  killedAt;   // unix timestamp when eliminated; 0 means still alive
         bool    claimed;    // has claimed prize or refund
         uint16  killCount;  // number of kills
     }

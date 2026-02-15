@@ -267,12 +267,12 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         PlayerState storage t = players[gameId][target];
         if (h.addr == address(0)) revert HunterNotRegistered();
         if (t.addr == address(0)) revert TargetNotRegistered();
-        if (!h.alive) revert HunterNotAlive();
-        if (!t.alive) revert TargetNotAlive();
+        if (h.killedAt != 0) revert HunterNotAlive();
+        if (t.killedAt != 0) revert TargetNotAlive();
         if (hunter == target) revert CannotSelfKill();
 
         h.killCount++;
-        t.alive = false;
+        t.killedAt = uint40(block.timestamp);
 
         emit KillRecorded(gameId, hunter, target);
         emit PlayerEliminated(gameId, target, hunter);
@@ -288,9 +288,9 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         if (pNum == 0) revert PlayerNotRegistered();
         PlayerState storage p = players[gameId][pNum];
         if (p.addr == address(0)) revert PlayerNotRegistered();
-        if (!p.alive) revert PlayerNotAlive();
+        if (p.killedAt != 0) revert PlayerNotAlive();
 
-        p.alive = false;
+        p.killedAt = uint40(block.timestamp);
 
         emit PlayerEliminated(gameId, pNum, 0);
     }
@@ -300,7 +300,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
     ///      the sum of all matching BPS shares in a single `claimPrize` call.
     ///      Winner playerNumbers must be distinct from each other when their BPS > 0.
     ///      topKiller is allowed to overlap with any winner.
-    ///      Winners are only required to be registered, not alive — final standings are
+    ///      Winners are only required to be registered — final standings are
     ///      determined by the off-chain server which may use custom scoring rules.
     /// @param gameId  The active game.
     /// @param winner1  1st place playerNumber (required).
@@ -396,7 +396,7 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         playerNumber[gameId][msg.sender] = pNum;
         players[gameId][pNum] = PlayerState({
             addr: msg.sender,
-            alive: true,
+            killedAt: 0,
             claimed: false,
             killCount: 0
         });
@@ -525,16 +525,16 @@ contract ChainAssassin is IChainAssassin, Ownable, ReentrancyGuard {
         return _zoneShrinks[gameId];
     }
 
-    /// @notice Return registration status, alive status, kill count, claim status, and player number.
+    /// @notice Return registration status, elimination timestamp, kill count, claim status, and player number.
     function getPlayerInfo(uint256 gameId, address player)
         external
         view
-        returns (bool registered, bool alive, uint16 kills, bool claimed, uint16 number)
+        returns (bool registered, uint40 killedAt, uint16 kills, bool claimed, uint16 number)
     {
         uint16 pNum = playerNumber[gameId][player];
-        if (pNum == 0) return (false, false, 0, false, 0);
+        if (pNum == 0) return (false, 0, 0, false, 0);
         PlayerState storage p = players[gameId][pNum];
-        return (true, p.alive, p.killCount, p.claimed, pNum);
+        return (true, p.killedAt, p.killCount, p.claimed, pNum);
     }
 
     /// @notice Return the PlayerState for a given playerNumber (enables iteration 1..playerCount).

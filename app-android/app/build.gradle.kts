@@ -46,7 +46,7 @@ android {
         buildConfigField(
             "String",
             "CHAIN_CONTRACT_ADDRESS",
-            quote(envOrDefault("CHAIN_CONTRACT_ADDRESS", "0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69"))
+            quote(envOrDefault("CHAIN_CONTRACT_ADDRESS", "0x991a415B644E84A8a1F12944C6817bf2117e18D7"))
         )
         buildConfigField(
             "String",

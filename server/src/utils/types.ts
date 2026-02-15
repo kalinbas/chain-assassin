@@ -45,7 +45,7 @@ export interface GameState {
 
 export interface PlayerStateOnChain {
   addr: string;
-  alive: boolean;
+  killedAt: number;
   claimed: boolean;
   killCount: number;
 }

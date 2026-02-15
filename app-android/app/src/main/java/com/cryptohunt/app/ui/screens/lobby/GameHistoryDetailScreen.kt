@@ -130,7 +130,11 @@ fun GameHistoryDetailScreen(
                 if (isCancelled) {
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        "Not enough players — ${item.playersTotal}/${item.config.minPlayers} registered",
+                        if (item.cancelledAfterStart) {
+                            "Game was not finished before max game duration. Entry fees were refunded."
+                        } else {
+                            "Not enough players — ${item.playersTotal}/${item.config.minPlayers} registered."
+                        },
                         style = MaterialTheme.typography.bodyMedium,
                         color = TextDim,
                         textAlign = TextAlign.Center
@@ -381,6 +385,22 @@ fun GameHistoryDetailScreen(
                             }
                         }
                     }
+                }
+            } else if (!isCancelled) {
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = CardDefaults.cardColors(containerColor = CardBackground),
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Text(
+                            "Final leaderboard data is unavailable for this restored game snapshot.",
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    Spacer(Modifier.height(24.dp))
                 }
             }
 

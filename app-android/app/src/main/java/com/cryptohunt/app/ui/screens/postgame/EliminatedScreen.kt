@@ -20,6 +20,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.model.EliminationReason
 import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
@@ -34,6 +35,10 @@ fun EliminatedScreen(
     val gameState by viewModel.gameState.collectAsState()
     val state = gameState
     val context = LocalContext.current
+    val reasonCopy = eliminationUiCopy(
+        reason = state?.eliminationReason,
+        eliminatorNumber = state?.eliminatedByPlayerNumber
+    )
 
     Column(
         modifier = Modifier
@@ -57,17 +62,25 @@ fun EliminatedScreen(
 
         // Skull / eliminated header
         Text(
-            text = "YOU'VE BEEN",
+            text = reasonCopy.titleTop,
             style = MaterialTheme.typography.headlineSmall,
             color = TextSecondary,
             letterSpacing = 4.sp
         )
         Text(
-            text = "HUNTED",
+            text = reasonCopy.titleBottom,
             style = MaterialTheme.typography.displayLarge,
             color = Danger,
             fontWeight = FontWeight.Black,
             letterSpacing = 6.sp
+        )
+
+        Spacer(Modifier.height(8.dp))
+        Text(
+            text = reasonCopy.detail,
+            style = MaterialTheme.typography.bodyMedium,
+            color = TextSecondary,
+            textAlign = TextAlign.Center
         )
 
         Spacer(Modifier.height(32.dp))
@@ -228,6 +241,45 @@ private fun StatRow(
             style = MaterialTheme.typography.headlineSmall,
             color = valueColor,
             fontWeight = FontWeight.Bold
+        )
+    }
+}
+
+private data class EliminationCopy(
+    val titleTop: String,
+    val titleBottom: String,
+    val detail: String
+)
+
+private fun eliminationUiCopy(reason: EliminationReason?, eliminatorNumber: Int?): EliminationCopy {
+    return when (reason ?: EliminationReason.UNKNOWN) {
+        EliminationReason.HUNTED -> {
+            val detail = if ((eliminatorNumber ?: 0) > 0) {
+                "Eliminated by Player #$eliminatorNumber."
+            } else {
+                "Another player eliminated you."
+            }
+            EliminationCopy("YOU'VE BEEN", "HUNTED", detail)
+        }
+        EliminationReason.ZONE_VIOLATION -> EliminationCopy(
+            "OUT OF",
+            "ZONE",
+            "You stayed outside the active zone too long."
+        )
+        EliminationReason.HEARTBEAT_TIMEOUT -> EliminationCopy(
+            "HEARTBEAT",
+            "MISSED",
+            "No valid scan happened before your heartbeat deadline."
+        )
+        EliminationReason.NO_CHECKIN -> EliminationCopy(
+            "CHECK-IN",
+            "MISSED",
+            "You were not checked in before check-in ended."
+        )
+        EliminationReason.UNKNOWN -> EliminationCopy(
+            "YOU WERE",
+            "ELIMINATED",
+            "You are out of this round."
         )
     }
 }

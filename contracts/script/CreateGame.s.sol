@@ -8,7 +8,7 @@ import {IChainAssassin} from "../src/IChainAssassin.sol";
 /// @title CreateGame — Creates a test game on the deployed contract
 contract CreateGame is Script {
     function run() external {
-        address gameContract = 0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69;
+        address gameContract = 0x991a415B644E84A8a1F12944C6817bf2117e18D7;
         ChainAssassin game = ChainAssassin(gameContract);
 
         // --- Game parameters ---

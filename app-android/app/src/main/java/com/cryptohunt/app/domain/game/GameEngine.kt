@@ -294,7 +294,12 @@ class GameEngine @Inject constructor() {
             checkinEndsAt = msg.checkinEndsAt ?: current.checkinEndsAt,
             pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt,
             playersRemaining = syncedPlayersRemaining,
-            checkedInCount = msg.checkedInCount ?: current.checkedInCount
+            checkedInCount = msg.checkedInCount ?: current.checkedInCount,
+            eliminationReason = if (phase == GamePhase.ELIMINATED) {
+                current.eliminationReason ?: EliminationReason.UNKNOWN
+            } else {
+                current.eliminationReason
+            }
         )
     }
 
@@ -322,7 +327,22 @@ class GameEngine @Inject constructor() {
 
         if (msg.playerNumber == current.currentPlayer.number) {
             // We were eliminated
-            _state.value = current.copy(phase = GamePhase.ELIMINATED)
+            val eliminationReason = when (msg.reason) {
+                "zone_violation" -> EliminationReason.ZONE_VIOLATION
+                "heartbeat_timeout" -> EliminationReason.HEARTBEAT_TIMEOUT
+                "no_checkin" -> EliminationReason.NO_CHECKIN
+                "killed" -> EliminationReason.HUNTED
+                else -> EliminationReason.UNKNOWN
+            }
+            _state.value = current.copy(
+                phase = GamePhase.ELIMINATED,
+                eliminationReason = eliminationReason,
+                eliminatedByPlayerNumber = if (eliminationReason == EliminationReason.HUNTED && msg.eliminatorNumber > 0) {
+                    msg.eliminatorNumber
+                } else {
+                    null
+                }
+            )
             when (msg.reason) {
                 "zone_violation" -> _events.tryEmit(GameEvent.OutOfZoneEliminated)
                 "heartbeat_timeout" -> _events.tryEmit(GameEvent.HeartbeatEliminated)

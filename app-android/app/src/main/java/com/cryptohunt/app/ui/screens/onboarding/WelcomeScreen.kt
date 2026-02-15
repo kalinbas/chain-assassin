@@ -4,6 +4,8 @@ import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -24,7 +26,8 @@ import com.cryptohunt.app.ui.theme.*
 @Composable
 fun WelcomeScreen(
     onCreateWallet: () -> Unit,
-    onImportWallet: () -> Unit
+    onImportWallet: () -> Unit,
+    onDeviceReadiness: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "crosshair")
     val pulseScale by infiniteTransition.animateFloat(
@@ -58,6 +61,21 @@ fun WelcomeScreen(
             )
             .systemBarsPadding()
     ) {
+        IconButton(
+            onClick = onDeviceReadiness,
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(top = 14.dp, start = 10.dp)
+                .size(36.dp)
+                .testTag(TestTags.WELCOME_DEVICE_READINESS_BUTTON)
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = "Phone requirements",
+                tint = Primary
+            )
+        }
+
         Column(
             modifier = Modifier
                 .fillMaxSize()

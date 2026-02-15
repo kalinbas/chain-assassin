@@ -4,6 +4,8 @@ object TestTags {
     const val WELCOME_SCREEN = "welcome_screen"
     const val WELCOME_CREATE_WALLET_BUTTON = "welcome_create_wallet_button"
     const val WELCOME_IMPORT_WALLET_BUTTON = "welcome_import_wallet_button"
+    const val WELCOME_DEVICE_READINESS_BUTTON = "welcome_device_readiness_button"
+    const val DEVICE_READINESS_SCREEN = "device_readiness_screen"
 
     const val WALLET_SETUP_SCREEN = "wallet_setup_screen"
     const val WALLET_SETUP_PRIVATE_KEY_FIELD = "wallet_setup_private_key_field"

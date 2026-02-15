@@ -662,7 +662,11 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
 
             if (isCancelled) {
                 Text(
-                    "${item.playersTotal}/${item.config.minPlayers} players registered — game cancelled",
+                    if (item.cancelledAfterStart) {
+                        "Game was not finished before max game duration"
+                    } else {
+                        "${item.playersTotal}/${item.config.minPlayers} players registered — game cancelled"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = TextDim
                 )

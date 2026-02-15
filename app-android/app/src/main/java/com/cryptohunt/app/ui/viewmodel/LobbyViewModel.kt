@@ -48,6 +48,7 @@ data class GameHistoryItem(
     val claimed: Boolean = false,
     val claimableWei: BigInteger = BigInteger.ZERO,
     val isCancelled: Boolean = false,
+    val cancelledAfterStart: Boolean = false,
     val gameId: Int = 0,
     val participated: Boolean = true,
     val winner1: Int = 0,      // playerNumber (0 = none)
@@ -202,9 +203,12 @@ class LobbyViewModel @Inject constructor(
                     // Only include ended or cancelled games in history
                     if (phase != OnChainPhase.ENDED && phase != OnChainPhase.CANCELLED) continue
 
-                    val appConfig = ServerMapper.toGameConfig(game)
+                    val detail = try { serverClient.fetchGameDetail(game.gameId) } catch (_: Exception) { null }
+                    val sourceGame = detail ?: game
+                    val appConfig = ServerMapper.toGameConfig(sourceGame)
 
                     val isCancelled = phase == OnChainPhase.CANCELLED
+                    val cancelledAfterStart = isCancelled && !game.subPhase.isNullOrBlank()
                     val gamePhase = if (isCancelled) GamePhase.CANCELLED else GamePhase.ENDED
 
                     // Only include past games where current wallet participated.
@@ -214,7 +218,7 @@ class LobbyViewModel @Inject constructor(
                     if (playerInfo?.registered != true) continue
                     val participated = true
 
-                    val claimable = computeClaimableWei(game, playerInfo)
+                    val claimable = computeClaimableWei(sourceGame, playerInfo)
                     val claimableEth = org.web3j.utils.Convert.fromWei(
                         java.math.BigDecimal(claimable),
                         org.web3j.utils.Convert.Unit.ETHER
@@ -224,12 +228,28 @@ class LobbyViewModel @Inject constructor(
                     val pNum = playerInfo.playerNumber
                     val rank = if (pNum != 0) {
                         when (pNum) {
-                            game.winner1 -> 1
-                            game.winner2 -> 2
-                            game.winner3 -> 3
+                            sourceGame.winner1 -> 1
+                            sourceGame.winner2 -> 2
+                            sourceGame.winner3 -> 3
                             else -> 0
                         }
                     } else 0
+
+                    val leaderboard = sourceGame.leaderboard
+                        .sortedWith(
+                            compareByDescending<com.cryptohunt.app.domain.server.ServerLeaderboardEntry> { it.isAlive }
+                                .thenByDescending { it.kills }
+                                .thenBy { it.playerNumber }
+                        )
+                        .mapIndexed { index, entry ->
+                            LeaderboardEntry(
+                                rank = index + 1,
+                                playerNumber = entry.playerNumber,
+                                kills = entry.kills,
+                                isAlive = entry.isAlive,
+                                isCurrentPlayer = entry.playerNumber == pNum
+                            )
+                        }
 
                     items.add(
                         GameHistoryItem(
@@ -238,19 +258,20 @@ class LobbyViewModel @Inject constructor(
                             kills = playerInfo.kills,
                             rank = rank,
                             survivalSeconds = 0L,
-                            playersTotal = game.playerCount,
-                            leaderboard = emptyList(),
-                            playedAt = game.gameDate * 1000,
+                            playersTotal = sourceGame.playerCount,
+                            leaderboard = leaderboard,
+                            playedAt = sourceGame.gameDate * 1000,
                             prizeEth = claimableEth,
                             claimed = playerInfo.claimed || claimable == BigInteger.ZERO,
                             claimableWei = claimable,
                             isCancelled = isCancelled,
-                            gameId = game.gameId,
+                            cancelledAfterStart = cancelledAfterStart,
+                            gameId = sourceGame.gameId,
                             participated = participated,
-                            winner1 = game.winner1,
-                            winner2 = game.winner2,
-                            winner3 = game.winner3,
-                            topKiller = game.topKiller
+                            winner1 = sourceGame.winner1,
+                            winner2 = sourceGame.winner2,
+                            winner3 = sourceGame.winner3,
+                            topKiller = sourceGame.topKiller
                         )
                     )
                 } catch (_: Exception) {

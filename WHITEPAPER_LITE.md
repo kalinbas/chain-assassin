@@ -115,5 +115,5 @@ Chain Assassin is a reusable pattern for crypto-native physical competition:
 ## Current Deployment
 
 - Network: Base Sepolia (Arbitrum support planned)
-- Contract: `0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69`
-- Explorer: <https://sepolia.basescan.org/address/0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69>
+- Contract: `0x991a415B644E84A8a1F12944C6817bf2117e18D7`
+- Explorer: <https://sepolia.basescan.org/address/0x991a415B644E84A8a1F12944C6817bf2117e18D7>

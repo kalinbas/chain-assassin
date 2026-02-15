@@ -291,9 +291,9 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         emit IChainAssassin.PlayerRegistered(gameId, 1);
         game.register{value: ENTRY_FEE}(gameId);
 
-        (bool registered, bool alive,,, uint16 number) = game.getPlayerInfo(gameId, player1);
+        (bool registered, uint40 killedAt,,, uint16 number) = game.getPlayerInfo(gameId, player1);
         assertTrue(registered);
-        assertTrue(alive);
+        assertEq(killedAt, 0);
         assertEq(number, 1);
     }
 
@@ -428,12 +428,12 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         vm.prank(operator);
         game.recordKill(gameId, 1, 2);
 
-        (, bool alive, uint16 kills,,) = game.getPlayerInfo(gameId, player1);
-        assertTrue(alive);
+        (, uint40 hunterKilledAt, uint16 kills,,) = game.getPlayerInfo(gameId, player1);
+        assertEq(hunterKilledAt, 0);
         assertEq(kills, 1);
 
-        (, bool targetAlive,,,) = game.getPlayerInfo(gameId, player2);
-        assertFalse(targetAlive);
+        (, uint40 targetKilledAt,,,) = game.getPlayerInfo(gameId, player2);
+        assertGt(targetKilledAt, 0);
     }
 
     function test_recordKill_revertsIfTargetDead() public {
@@ -537,8 +537,8 @@ contract ChainAssassinTest is ChainAssassinTestBase {
         emit IChainAssassin.PlayerEliminated(gameId, 1, 0);
         game.eliminatePlayer(gameId, 1);
 
-        (, bool alive,,,) = game.getPlayerInfo(gameId, player1);
-        assertFalse(alive);
+        (, uint40 killedAt,,,) = game.getPlayerInfo(gameId, player1);
+        assertGt(killedAt, 0);
     }
 
     function test_eliminatePlayer_revertsIfAlreadyDead() public {

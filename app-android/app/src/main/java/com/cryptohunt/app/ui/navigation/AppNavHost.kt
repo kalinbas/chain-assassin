@@ -36,6 +36,7 @@ import com.cryptohunt.app.ui.screens.lobby.GameBrowserScreen
 import com.cryptohunt.app.ui.screens.lobby.GameDetailScreen
 import com.cryptohunt.app.ui.screens.lobby.GameHistoryDetailScreen
 import com.cryptohunt.app.ui.screens.lobby.RegisteredDetailScreen
+import com.cryptohunt.app.ui.screens.onboarding.DeviceReadinessScreen
 import com.cryptohunt.app.ui.screens.onboarding.PermissionsScreen
 import com.cryptohunt.app.ui.screens.onboarding.WalletSetupScreen
 import com.cryptohunt.app.ui.screens.onboarding.WelcomeScreen
@@ -88,7 +89,14 @@ fun AppNavHost(
         composable(NavRoutes.Welcome.route) {
             WelcomeScreen(
                 onCreateWallet = { navController.navigate(NavRoutes.WalletSetup.route) },
-                onImportWallet = { navController.navigate(NavRoutes.WalletSetup.route + "?import=true") }
+                onImportWallet = { navController.navigate(NavRoutes.WalletSetup.route + "?import=true") },
+                onDeviceReadiness = { navController.navigate(NavRoutes.DeviceReadiness.route) }
+            )
+        }
+
+        composable(NavRoutes.DeviceReadiness.route) {
+            DeviceReadinessScreen(
+                onBack = { navController.popBackStack() }
             )
         }
 

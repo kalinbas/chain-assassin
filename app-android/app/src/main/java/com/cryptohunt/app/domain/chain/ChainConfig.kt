@@ -3,7 +3,7 @@ package com.cryptohunt.app.domain.chain
 import com.cryptohunt.app.BuildConfig
 
 object ChainConfig {
-    private const val PROD_CONTRACT_ADDRESS = "0x6c14a010100cf5e0E1E67DD66ef7BBb3ea8B6D69"
+    private const val PROD_CONTRACT_ADDRESS = "0x991a415B644E84A8a1F12944C6817bf2117e18D7"
     private const val PROD_RPC_URL = "https://base-sepolia.g.alchemy.com/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX"
     private const val PROD_RPC_WS_URL = "wss://base-sepolia.g.alchemy.com/v2/gwRYWylWRij2jXTnPXR90v-YqXh96PDX"
     private const val PROD_CHAIN_ID = 84532L

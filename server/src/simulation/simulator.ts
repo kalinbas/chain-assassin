@@ -4,7 +4,10 @@ import { contractCoordToDegrees, degreesToContractCoord } from "../utils/geo.js"
 import { encodeKillQrPayload } from "../utils/crypto.js";
 import { config } from "../config.js";
 import {
+  getAlivePlayerCount,
   getAlivePlayers,
+  getPlayer,
+  getPlayerCount,
   getLatestLocationPing,
   getTargetAssignment,
   getGame,
@@ -22,9 +25,10 @@ import {
   removeSimulatedGame,
   broadcastToGame,
   getSimulatedGameIds,
+  onPlayerRegistered,
 } from "../game/manager.js";
 import { getHttpProvider } from "../blockchain/client.js";
-import { getAbi } from "../blockchain/contract.js";
+import { fetchPlayerInfo, getAbi } from "../blockchain/contract.js";
 import { movePlayer, scatterPlayers, shouldAttemptKill } from "./playerAgent.js";
 import type { SimulationConfig, SimulationStatus, SimulatedPlayer, DeploySimulationConfig } from "./types.js";
 import { DEFAULT_ZONE_SHRINKS, ITEM_DEFINITIONS } from "./types.js";
@@ -51,6 +55,10 @@ const KILL_PROBABILITY_PER_TICK = 0.08;
 const BASE_SPEED_MPS = 1.5; // meters per second walking speed
 // Keep check-in phase visible for manual testing before bulk simulated check-ins complete.
 const CHECKIN_SPREAD_DELAY_MS = 60_000;
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const SIM_WALLET_ADDRESS_SET = new Set(
+  SIM_WALLET_KEYS.map((key) => new ethers.Wallet(key).address.toLowerCase())
+);
 
 export function getSimulation(): GameSimulator | null {
   return currentSimulation;
@@ -123,7 +131,7 @@ export function recoverSimulation(): void {
   const centerLng = contractCoordToDegrees(game.centerLng);
   const shrinks = getZoneShrinks(candidateGameId);
   const initialRadius = shrinks[0]?.radiusMeters ?? 500;
-  const dbPlayers = getPlayers(candidateGameId);
+  const dbPlayers = getPlayers(candidateGameId).filter((p) => p.address !== ZERO_ADDRESS);
   const baseCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
 
   const simConfig: SimulationConfig = {
@@ -140,19 +148,21 @@ export function recoverSimulation(): void {
   const sim = new GameSimulator(simConfig);
   sim.gameId = candidateGameId;
   sim.setZoneShrinks(shrinks);
-  sim.players = dbPlayers.map((p) => {
-    const ping = getLatestLocationPing(candidateGameId, p.address);
-    return {
-      address: p.address.toLowerCase(),
-      playerNumber: p.playerNumber,
+  sim.players = dbPlayers
+    .filter((p) => SIM_WALLET_ADDRESS_SET.has(p.address))
+    .map((p) => {
+      const ping = getLatestLocationPing(candidateGameId, p.address);
+      return {
+        address: p.address.toLowerCase(),
+        playerNumber: p.playerNumber,
       lat: ping?.lat ?? centerLat,
       lng: ping?.lng ?? centerLng,
       isAlive: p.isAlive,
       aggressiveness: 0.5 + Math.random() * 1.5,
-      state: "wandering" as const,
-      itemCooldowns: { ...baseCooldowns },
-    };
-  });
+        state: "wandering" as const,
+        itemCooldowns: { ...baseCooldowns },
+      };
+    });
 
   currentSimulation = sim;
 
@@ -173,6 +183,7 @@ export class GameSimulator {
   private tickTimer: ReturnType<typeof setInterval> | null = null;
   private abortReason: string | null = null;
   private zoneShrinks: ZoneShrink[] = [];
+  private simulatedAddressSet = new Set<string>(SIM_WALLET_ADDRESS_SET);
 
   constructor(cfg: SimulationConfig) {
     this.config = cfg;
@@ -223,6 +234,7 @@ export class GameSimulator {
     const wallets: ethers.Wallet[] = SIM_WALLET_KEYS
       .slice(0, cfg.playerCount)
       .map((key) => new ethers.Wallet(key));
+    this.simulatedAddressSet = new Set(wallets.map((wallet) => wallet.address.toLowerCase()));
     log.info({ count: wallets.length }, "Loaded simulated wallets");
 
     // --- Create game on-chain ---
@@ -367,12 +379,13 @@ export class GameSimulator {
       }
     }
 
+    await this.reconcileRegisteredPlayersInDb(registeredWallets);
+
     // Build simulated player list from DB
     const initialCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
     const dbPlayers = getPlayers(this.gameId);
-    const simAddressSet = new Set(wallets.map(w => w.address.toLowerCase()));
     this.players = dbPlayers
-      .filter(p => simAddressSet.has(p.address.toLowerCase()))
+      .filter((p) => this.simulatedAddressSet.has(p.address.toLowerCase()))
       .map(p => ({
         address: p.address.toLowerCase(),
         playerNumber: p.playerNumber,
@@ -427,10 +440,11 @@ export class GameSimulator {
       }
 
       const dbPlayersNow = getPlayers(this.gameId);
+      const eligiblePlayers = dbPlayersNow.filter((p) => p.address !== ZERO_ADDRESS);
       const checkedInAddresses = new Set(
-        dbPlayersNow.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
+        eligiblePlayers.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
       );
-      if (checkedInAddresses.size >= dbPlayersNow.length && dbPlayersNow.length > 0) {
+      if (checkedInAddresses.size >= eligiblePlayers.length && eligiblePlayers.length > 0) {
         break;
       }
 
@@ -441,7 +455,7 @@ export class GameSimulator {
         const seedPlayer = this.players[0];
         const seedBleId = simBluetoothIds[0];
         setPlayerCheckedIn(this.gameId, seedPlayer.address, seedBleId);
-        const updatedPlayers = getPlayers(this.gameId);
+        const updatedPlayers = getPlayers(this.gameId).filter((p) => p.address !== ZERO_ADDRESS);
         const checkedInCount = updatedPlayers.filter((p) => p.checkedIn).length;
         broadcastToGame(this.gameId, {
           type: "checkin:update",
@@ -468,7 +482,7 @@ export class GameSimulator {
       for (let i = 0; i < this.players.length; i++) {
         const p = this.players[i];
         const bleId = simBluetoothIds[i];
-        const dbPlayer = dbPlayersNow.find((db) => db.address.toLowerCase() === p.address);
+        const dbPlayer = eligiblePlayers.find((db) => db.address.toLowerCase() === p.address);
         if (!dbPlayer) continue;
 
         if (checkedInAddresses.has(p.address)) {
@@ -480,7 +494,7 @@ export class GameSimulator {
           continue;
         }
 
-        const checkedInPlayer = dbPlayersNow.find(
+        const checkedInPlayer = eligiblePlayers.find(
           (db) => db.checkedIn && db.address.toLowerCase() !== p.address
         );
         if (!checkedInPlayer) continue;
@@ -494,7 +508,7 @@ export class GameSimulator {
       // Simulation mode fallback: ensure every registered player gets checked in.
       // This avoids real-device testers being eliminated in hybrid rounds where most
       // other participants are simulated and no practical scan partner exists.
-      for (const player of dbPlayersNow) {
+      for (const player of eligiblePlayers) {
         if (player.checkedIn) continue;
         const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
         setPlayerCheckedIn(this.gameId, player.address, autoBle);
@@ -503,7 +517,7 @@ export class GameSimulator {
         broadcastToGame(this.gameId, {
           type: "checkin:update",
           checkedInCount: checkedInAddresses.size,
-          totalPlayers: dbPlayersNow.length,
+          totalPlayers: eligiblePlayers.length,
           playerNumber: player.playerNumber,
         });
       }
@@ -551,6 +565,7 @@ export class GameSimulator {
 
   async resumeAfterRestart(): Promise<void> {
     log.info({ gameId: this.gameId }, "Resuming simulation after restart");
+    await this.reconcileRegisteredPlayersInDb(this.simulatedAddressSet);
 
     while (true) {
       const dbGame = getGame(this.gameId);
@@ -604,12 +619,35 @@ export class GameSimulator {
     }
   }
 
+  private async reconcileRegisteredPlayersInDb(addresses: Set<string>): Promise<void> {
+    for (const address of addresses) {
+      try {
+        const normalized = address.toLowerCase();
+        if (normalized === ZERO_ADDRESS) continue;
+        const info = await fetchPlayerInfo(this.gameId, normalized);
+        if (!info.registered || info.playerNumber <= 0) continue;
+
+        const dbPlayer = getPlayer(this.gameId, normalized);
+        if (!dbPlayer || dbPlayer.playerNumber !== info.playerNumber) {
+          await onPlayerRegistered(this.gameId, normalized, info.playerNumber);
+        }
+      } catch (err) {
+        log.warn(
+          { gameId: this.gameId, address: address.slice(0, 10), error: (err as Error).message },
+          "Failed to reconcile simulation player in DB"
+        );
+      }
+    }
+  }
+
   private refreshPlayersFromDb(): void {
     const dbPlayers = getPlayers(this.gameId);
     const existing = new Map(this.players.map((p) => [p.address.toLowerCase(), p]));
     const baseCooldowns: Record<ItemId, number> = { ping_target: 0, ping_hunter: 0 };
 
-    this.players = dbPlayers.map((dbPlayer) => {
+    this.players = dbPlayers
+      .filter((dbPlayer) => this.simulatedAddressSet.has(dbPlayer.address.toLowerCase()))
+      .map((dbPlayer) => {
       const addr = dbPlayer.address.toLowerCase();
       const prev = existing.get(addr);
       const ping = getLatestLocationPing(this.gameId, addr);
@@ -623,13 +661,14 @@ export class GameSimulator {
         state: prev?.state ?? "wandering",
         itemCooldowns: prev?.itemCooldowns ?? { ...baseCooldowns },
       };
-    });
+      });
   }
 
   private autoCheckinAllRegisteredPlayers(): void {
     const dbPlayers = getPlayers(this.gameId);
     let checkedInCount = dbPlayers.filter((p) => p.checkedIn).length;
     for (const player of dbPlayers) {
+      if (player.address === ZERO_ADDRESS) continue;
       if (player.checkedIn) continue;
       const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
       setPlayerCheckedIn(this.gameId, player.address, autoBle);
@@ -656,16 +695,10 @@ export class GameSimulator {
       return;
     }
 
+    // Keep bot roster synced with DB in hybrid (real + simulated) games.
+    this.refreshPlayersFromDb();
     const alive = this.players.filter((p) => p.isAlive);
-    if (alive.length <= 1) {
-      // Should have been caught by the manager, but just in case
-      this.phase = "ended";
-      this.cleanup();
-      return;
-    }
 
-    // Get current zone radius from DB
-    const dbGame = getGame(this.gameId);
     const currentZoneRadius = this.getCurrentZoneRadius();
 
     // Move each alive player
@@ -889,16 +922,29 @@ export class GameSimulator {
   }
 
   getStatus(): SimulationStatus {
-    const aliveCount = this.players.filter((p) => p.isAlive).length;
+    const game = this.gameId > 0 ? getGame(this.gameId) : null;
+    const playerCount = this.gameId > 0 ? getPlayerCount(this.gameId) : this.config.playerCount;
+    const aliveCount = this.gameId > 0 ? getAlivePlayerCount(this.gameId) : this.players.filter((p) => p.isAlive).length;
     const elapsed = this.startedAtWall > 0
       ? Math.floor(Date.now() / 1000) - this.startedAtWall
       : 0;
+    const derivedPhase: SimulationStatus["phase"] = game?.phase === GamePhase.ACTIVE
+      ? game.subPhase === "game"
+        ? "active"
+        : game.subPhase === "pregame"
+          ? "pregame"
+          : "checkin"
+      : game?.phase === GamePhase.REGISTRATION
+        ? "registration"
+        : game?.phase === GamePhase.CANCELLED || game?.phase === GamePhase.ENDED
+          ? "ended"
+          : this.phase;
 
     return {
       gameId: this.gameId,
       title: this.config.title,
-      phase: this.phase,
-      playerCount: this.config.playerCount,
+      phase: derivedPhase,
+      playerCount,
       aliveCount,
       killCount: this.killCount,
       elapsedSeconds: elapsed,

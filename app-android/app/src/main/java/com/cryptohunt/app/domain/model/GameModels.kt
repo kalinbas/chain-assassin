@@ -61,6 +61,14 @@ enum class GamePhase {
     NOT_JOINED, REGISTERED, CHECK_IN, PREGAME, ACTIVE, ELIMINATED, ENDED, CANCELLED
 }
 
+enum class EliminationReason {
+    HUNTED,
+    ZONE_VIOLATION,
+    HEARTBEAT_TIMEOUT,
+    NO_CHECKIN,
+    UNKNOWN
+}
+
 data class GameState(
     val phase: GamePhase = GamePhase.NOT_JOINED,
     val config: GameConfig,
@@ -89,7 +97,9 @@ data class GameState(
     val heartbeatDeadline: Long = 0L,
     val heartbeatIntervalSeconds: Int = 600,
     val heartbeatDisableThreshold: Int = 4,
-    val heartbeatDisabled: Boolean = false
+    val heartbeatDisabled: Boolean = false,
+    val eliminationReason: EliminationReason? = null,
+    val eliminatedByPlayerNumber: Int? = null
 )
 
 sealed class CheckInResult {

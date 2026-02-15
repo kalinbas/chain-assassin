@@ -425,6 +425,23 @@ class GameServerClient @Inject constructor(
                 shrinks.add(ServerZoneShrink(s.optInt("atSecond"), s.optInt("radiusMeters")))
             }
         }
+
+        val leaderboardArray = obj.optJSONArray("leaderboard")
+        val leaderboard = mutableListOf<ServerLeaderboardEntry>()
+        if (leaderboardArray != null) {
+            for (i in 0 until leaderboardArray.length()) {
+                val entry = leaderboardArray.getJSONObject(i)
+                leaderboard.add(
+                    ServerLeaderboardEntry(
+                        playerNumber = entry.optInt("playerNumber"),
+                        kills = entry.optInt("kills"),
+                        isAlive = entry.optBoolean("isAlive", false),
+                        eliminatedAt = if (entry.isNull("eliminatedAt")) null else entry.optLong("eliminatedAt")
+                    )
+                )
+            }
+        }
+
         return ServerGame(
             gameId = obj.optInt("gameId"),
             title = obj.optString("title", ""),
@@ -455,7 +472,8 @@ class GameServerClient @Inject constructor(
             winner2 = obj.optInt("winner2"),
             winner3 = obj.optInt("winner3"),
             topKiller = obj.optInt("topKiller"),
-            zoneShrinks = shrinks
+            zoneShrinks = shrinks,
+            leaderboard = leaderboard
         )
     }
 

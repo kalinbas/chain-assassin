@@ -39,7 +39,44 @@ function sortByKillTimeline(entries: GameLeaderboardEntry[]): GameLeaderboardEnt
 }
 
 export function PastGameLeaderboard({ game }: { game: Game }) {
-  if (game.leaderboard.length === 0) return null;
+  if (game.leaderboard.length === 0) {
+    const winnerRows = [
+      { label: '1st Place', player: game.winner1 },
+      { label: '2nd Place', player: game.winner2 },
+      { label: '3rd Place', player: game.winner3 },
+      { label: 'Most Kills', player: game.topKiller },
+    ].filter((row) => row.player > 0);
+
+    return (
+      <section className="past-leaderboard">
+        <h3 className="game-detail__section-title">Final Leaderboard</h3>
+        <p className="past-leaderboard__sub">
+          Detailed per-player stats are not available for this restored game snapshot.
+        </p>
+
+        {winnerRows.length > 0 ? (
+          <div className="past-leaderboard__table">
+            <div className="past-leaderboard__head past-leaderboard__head--fallback">
+              <span>Prize</span>
+              <span>Player</span>
+            </div>
+            {winnerRows.map((row) => (
+              <div className="past-leaderboard__row past-leaderboard__row--fallback" key={row.label}>
+                <span>{row.label}</span>
+                <span>#{row.player}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="past-leaderboard__table">
+            <div className="past-leaderboard__row past-leaderboard__row--single">
+              <span>No final stats indexed for this game.</span>
+            </div>
+          </div>
+        )}
+      </section>
+    );
+  }
 
   const startAt = getGameStart(game);
   const endAt = getGameEnd(game);

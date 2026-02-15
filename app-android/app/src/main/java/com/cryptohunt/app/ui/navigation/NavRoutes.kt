@@ -3,6 +3,7 @@ package com.cryptohunt.app.ui.navigation
 sealed class NavRoutes(val route: String) {
     // Onboarding
     data object Welcome : NavRoutes("welcome")
+    data object DeviceReadiness : NavRoutes("device_readiness")
     data object WalletSetup : NavRoutes("wallet_setup")
     data object Permissions : NavRoutes("permissions")
 

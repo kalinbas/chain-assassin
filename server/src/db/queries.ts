@@ -17,6 +17,7 @@ import type {
 } from "../utils/types.js";
 
 const log = createLogger("db");
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 let db: Database.Database;
 
@@ -414,13 +415,109 @@ export function getZoneShrinks(gameId: number): ZoneShrink[] {
 export function insertPlayer(
   gameId: number,
   address: string,
-  playerNumber: number
+  playerNumber: number,
+  options?: {
+    isAlive?: boolean;
+    kills?: number;
+    checkedIn?: boolean;
+    bluetoothId?: string | null;
+    eliminatedAt?: number | null;
+    eliminatedBy?: string | null;
+    lastHeartbeatAt?: number | null;
+    hasClaimed?: boolean;
+  }
 ): void {
-  getDb()
-    .prepare(
-      "INSERT INTO players (game_id, address, player_number) VALUES (?, ?, ?)"
-    )
-    .run(gameId, address.toLowerCase(), playerNumber);
+  const normalizedAddress = address.toLowerCase();
+  if (normalizedAddress === ZERO_ADDRESS) return;
+
+  const database = getDb();
+  const applySnapshot = (whereClause: string, whereParams: unknown[]) => {
+    const sets: string[] = [];
+    const params: unknown[] = [];
+
+    if (options?.isAlive !== undefined) {
+      sets.push("is_alive = ?");
+      params.push(options.isAlive ? 1 : 0);
+    }
+    if (options?.kills !== undefined) {
+      sets.push("kills = ?");
+      params.push(options.kills);
+    }
+    if (options?.checkedIn !== undefined) {
+      sets.push("checked_in = ?");
+      params.push(options.checkedIn ? 1 : 0);
+    }
+    if (options?.bluetoothId !== undefined) {
+      sets.push("bluetooth_id = ?");
+      params.push(options.bluetoothId);
+    }
+    if (options?.eliminatedAt !== undefined) {
+      sets.push("eliminated_at = ?");
+      params.push(options.eliminatedAt);
+    }
+    if (options?.eliminatedBy !== undefined) {
+      sets.push("eliminated_by = ?");
+      params.push(options.eliminatedBy?.toLowerCase() ?? null);
+    }
+    if (options?.lastHeartbeatAt !== undefined) {
+      sets.push("last_heartbeat_at = ?");
+      params.push(options.lastHeartbeatAt);
+    }
+    if (options?.hasClaimed !== undefined) {
+      sets.push("has_claimed = ?");
+      params.push(options.hasClaimed ? 1 : 0);
+    }
+
+    if (sets.length === 0) return;
+
+    database
+      .prepare(`UPDATE players SET ${sets.join(", ")} WHERE ${whereClause}`)
+      .run(...params, ...whereParams);
+  };
+
+  const upsert = database.transaction(() => {
+    const byAddress = database
+      .prepare(
+        "SELECT player_number FROM players WHERE game_id = ? AND address = ?"
+      )
+      .get(gameId, normalizedAddress) as { player_number: number } | undefined;
+    if (byAddress) {
+      if (byAddress.player_number !== playerNumber) {
+        database
+          .prepare(
+            "UPDATE players SET player_number = ? WHERE game_id = ? AND address = ?"
+          )
+          .run(playerNumber, gameId, normalizedAddress);
+      }
+      applySnapshot("game_id = ? AND address = ?", [gameId, normalizedAddress]);
+      return;
+    }
+
+    const byNumber = database
+      .prepare(
+        "SELECT rowid, address FROM players WHERE game_id = ? AND player_number = ? ORDER BY rowid ASC LIMIT 1"
+      )
+      .get(gameId, playerNumber) as { rowid: number; address: string } | undefined;
+    if (byNumber) {
+      database
+        .prepare("UPDATE players SET address = ? WHERE rowid = ?")
+        .run(normalizedAddress, byNumber.rowid);
+      database
+        .prepare("DELETE FROM players WHERE game_id = ? AND player_number = ? AND rowid != ?")
+        .run(gameId, playerNumber, byNumber.rowid);
+      applySnapshot("rowid = ?", [byNumber.rowid]);
+      return;
+    }
+
+    database
+      .prepare(
+        "INSERT INTO players (game_id, address, player_number) VALUES (?, ?, ?)"
+      )
+      .run(gameId, normalizedAddress, playerNumber);
+    applySnapshot("game_id = ? AND address = ?", [gameId, normalizedAddress]);
+  });
+
+  upsert();
 }
 
 export function getPlayer(gameId: number, address: string): Player | null {
@@ -433,41 +530,41 @@ export function getPlayer(gameId: number, address: string): Player | null {
 
 export function getPlayerByNumber(gameId: number, playerNumber: number): Player | null {
   const row = getDb()
-    .prepare("SELECT * FROM players WHERE game_id = ? AND player_number = ?")
-    .get(gameId, playerNumber) as Record<string, unknown> | undefined;
+    .prepare("SELECT * FROM players WHERE game_id = ? AND player_number = ? AND address != ?")
+    .get(gameId, playerNumber, ZERO_ADDRESS) as Record<string, unknown> | undefined;
   if (!row) return null;
   return mapPlayer(row);
 }
 
 export function getPlayers(gameId: number): Player[] {
   const rows = getDb()
-    .prepare("SELECT * FROM players WHERE game_id = ? ORDER BY player_number ASC")
-    .all(gameId) as Record<string, unknown>[];
+    .prepare("SELECT * FROM players WHERE game_id = ? AND address != ? ORDER BY player_number ASC")
+    .all(gameId, ZERO_ADDRESS) as Record<string, unknown>[];
   return rows.map(mapPlayer);
 }
 
 export function getAlivePlayers(gameId: number): Player[] {
   const rows = getDb()
     .prepare(
-      "SELECT * FROM players WHERE game_id = ? AND is_alive = 1 ORDER BY player_number ASC"
+      "SELECT * FROM players WHERE game_id = ? AND address != ? AND is_alive = 1 ORDER BY player_number ASC"
     )
-    .all(gameId) as Record<string, unknown>[];
+    .all(gameId, ZERO_ADDRESS) as Record<string, unknown>[];
   return rows.map(mapPlayer);
 }
 
 export function getPlayerCount(gameId: number): number {
   const row = getDb()
-    .prepare("SELECT COUNT(*) as count FROM players WHERE game_id = ?")
-    .get(gameId) as { count: number };
+    .prepare("SELECT COUNT(*) as count FROM players WHERE game_id = ? AND address != ?")
+    .get(gameId, ZERO_ADDRESS) as { count: number };
   return row.count;
 }
 
 export function getAlivePlayerCount(gameId: number): number {
   const row = getDb()
     .prepare(
-      "SELECT COUNT(*) as count FROM players WHERE game_id = ? AND is_alive = 1"
+      "SELECT COUNT(*) as count FROM players WHERE game_id = ? AND address != ? AND is_alive = 1"
     )
-    .get(gameId) as { count: number };
+    .get(gameId, ZERO_ADDRESS) as { count: number };
   return row.count;
 }
 
@@ -503,9 +600,9 @@ export function setPlayerCheckedIn(gameId: number, address: string, bluetoothId?
 export function getCheckedInCount(gameId: number): number {
   const row = getDb()
     .prepare(
-      "SELECT COUNT(*) as count FROM players WHERE game_id = ? AND checked_in = 1"
+      "SELECT COUNT(*) as count FROM players WHERE game_id = ? AND address != ? AND checked_in = 1"
     )
-    .get(gameId) as { count: number };
+    .get(gameId, ZERO_ADDRESS) as { count: number };
   return row.count;
 }
 
@@ -794,9 +891,9 @@ export function listSyncState(prefix: string): Array<{ key: string; value: strin
 export function initPlayersHeartbeat(gameId: number, timestamp: number): void {
   getDb()
     .prepare(
-      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND is_alive = 1"
+      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND address != ? AND is_alive = 1"
     )
-    .run(timestamp, gameId);
+    .run(timestamp, gameId, ZERO_ADDRESS);
 }
 
 export function updateLastHeartbeat(gameId: number, address: string, timestamp: number): void {
@@ -815,11 +912,11 @@ export function getHeartbeatExpiredPlayers(
   const rows = getDb()
     .prepare(
       `SELECT * FROM players
-       WHERE game_id = ? AND is_alive = 1
+       WHERE game_id = ? AND address != ? AND is_alive = 1
        AND last_heartbeat_at IS NOT NULL
        AND (? - last_heartbeat_at) > ?`
     )
-    .all(gameId, now, intervalSeconds) as Record<string, unknown>[];
+    .all(gameId, ZERO_ADDRESS, now, intervalSeconds) as Record<string, unknown>[];
   return rows.map(mapPlayer);
 }
 
@@ -854,10 +951,10 @@ export function getLeaderboard(gameId: number): LeaderboardEntry[] {
   const rows = getDb()
     .prepare(
       `SELECT address, player_number, kills, is_alive, eliminated_at
-       FROM players WHERE game_id = ?
+       FROM players WHERE game_id = ? AND address != ?
        ORDER BY is_alive DESC, kills DESC, player_number ASC`
     )
-    .all(gameId) as Record<string, unknown>[];
+    .all(gameId, ZERO_ADDRESS) as Record<string, unknown>[];
   return rows.map((r) => ({
     address: r.address as string,
     playerNumber: r.player_number as number,
