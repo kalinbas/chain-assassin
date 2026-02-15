@@ -403,15 +403,18 @@ export async function rebuildFromChain(): Promise<void> {
   const startId = config.startGameId;
   const nextId = await fetchNextGameId();
 
+  // Always wipe existing game data first so REBUILD_DB provides a true reset
+  // even when there are no chain games in the selected ID range.
+  resetGameData();
+
   if (startId >= nextId) {
     log.info({ startId, nextId }, "No games to rebuild");
+    const finalBlock = await getHttpProvider().getBlockNumber();
+    setSyncState(SYNC_KEY_LAST_BLOCK, finalBlock.toString());
     return;
   }
 
   log.info({ startId, nextId: nextId - 1 }, "Rebuilding DB from chain...");
-
-  // Wipe all existing game data
-  resetGameData();
 
   for (let gameId = startId; gameId < nextId; gameId++) {
     try {

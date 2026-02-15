@@ -32,6 +32,13 @@ data class HeartbeatSubmitResult(
     val error: String? = null
 )
 
+data class DebugScanEchoResult(
+    val success: Boolean,
+    val statusCode: Int,
+    val responseBody: String? = null,
+    val error: String? = null
+)
+
 @Singleton
 class GameServerClient @Inject constructor(
     private val walletManager: WalletManager
@@ -293,6 +300,50 @@ class GameServerClient @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "Heartbeat error: ${e.message}")
             HeartbeatSubmitResult(success = false, error = "Network error while submitting heartbeat")
+        }
+    }
+
+    /**
+     * Submit a scan debug payload to the public echo endpoint.
+     * Returns the full server response body so UI can render all echoed data.
+     */
+    fun submitScanDebugEcho(payload: JSONObject): DebugScanEchoResult {
+        val request = Request.Builder()
+            .url("${ServerConfig.SERVER_URL}/api/debug/scan-echo")
+            .header("Content-Type", "application/json")
+            .post(payload.toString().toRequestBody("application/json".toMediaType()))
+            .build()
+
+        return try {
+            client.newCall(request).execute().use { response ->
+                val body = response.body?.string()
+                if (!response.isSuccessful) {
+                    val errorMessage = if (body.isNullOrBlank()) {
+                        "Debug scan endpoint returned ${response.code}"
+                    } else {
+                        body
+                    }
+                    DebugScanEchoResult(
+                        success = false,
+                        statusCode = response.code,
+                        responseBody = body,
+                        error = errorMessage
+                    )
+                } else {
+                    DebugScanEchoResult(
+                        success = true,
+                        statusCode = response.code,
+                        responseBody = body
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Scan debug echo error: ${e.message}")
+            DebugScanEchoResult(
+                success = false,
+                statusCode = -1,
+                error = "Network error: ${e.message ?: "unknown"}"
+            )
         }
     }
 

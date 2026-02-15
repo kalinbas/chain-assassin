@@ -38,10 +38,13 @@ import com.cryptohunt.app.ui.screens.lobby.GameHistoryDetailScreen
 import com.cryptohunt.app.ui.screens.lobby.RegisteredDetailScreen
 import com.cryptohunt.app.ui.screens.onboarding.DeviceReadinessScreen
 import com.cryptohunt.app.ui.screens.onboarding.PermissionsScreen
+import com.cryptohunt.app.ui.screens.onboarding.ScanDebugScreen
+import com.cryptohunt.app.ui.screens.onboarding.ScanDebugResultScreen
 import com.cryptohunt.app.ui.screens.onboarding.WalletSetupScreen
 import com.cryptohunt.app.ui.screens.onboarding.WelcomeScreen
 import com.cryptohunt.app.ui.screens.postgame.EliminatedScreen
 import com.cryptohunt.app.ui.screens.postgame.ResultsScreen
+import com.cryptohunt.app.ui.viewmodel.ScanDebugViewModel
 import com.cryptohunt.app.ui.viewmodel.WalletViewModel
 
 private val enterSlide: EnterTransition = slideInHorizontally(initialOffsetX = { it }) + fadeIn()
@@ -90,13 +93,30 @@ fun AppNavHost(
             WelcomeScreen(
                 onCreateWallet = { navController.navigate(NavRoutes.WalletSetup.route) },
                 onImportWallet = { navController.navigate(NavRoutes.WalletSetup.route + "?import=true") },
-                onDeviceReadiness = { navController.navigate(NavRoutes.DeviceReadiness.route) }
+                onDeviceReadiness = { navController.navigate(NavRoutes.DeviceReadiness.route) },
+                onScanDebug = { navController.navigate(NavRoutes.ScanDebug.route) }
             )
         }
 
         composable(NavRoutes.DeviceReadiness.route) {
             DeviceReadinessScreen(
                 onBack = { navController.popBackStack() }
+            )
+        }
+
+        composable(NavRoutes.ScanDebug.route) {
+            ScanDebugScreen(
+                onBack = { navController.popBackStack() },
+                onShowResult = { navController.navigate(NavRoutes.ScanDebugResult.route) }
+            )
+        }
+
+        composable(NavRoutes.ScanDebugResult.route) {
+            val scanDebugEntry = remember { navController.getBackStackEntry(NavRoutes.ScanDebug.route) }
+            val scanDebugViewModel: ScanDebugViewModel = hiltViewModel(scanDebugEntry)
+            ScanDebugResultScreen(
+                onBackToScanner = { navController.popBackStack() },
+                viewModel = scanDebugViewModel
             )
         }
 

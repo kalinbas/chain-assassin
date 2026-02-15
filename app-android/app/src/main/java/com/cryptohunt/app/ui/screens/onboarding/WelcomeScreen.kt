@@ -5,6 +5,7 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -27,7 +28,8 @@ import com.cryptohunt.app.ui.theme.*
 fun WelcomeScreen(
     onCreateWallet: () -> Unit,
     onImportWallet: () -> Unit,
-    onDeviceReadiness: () -> Unit
+    onDeviceReadiness: () -> Unit,
+    onScanDebug: () -> Unit
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "crosshair")
     val pulseScale by infiniteTransition.animateFloat(
@@ -61,19 +63,39 @@ fun WelcomeScreen(
             )
             .systemBarsPadding()
     ) {
-        IconButton(
-            onClick = onDeviceReadiness,
+        Row(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .padding(top = 14.dp, start = 10.dp)
-                .size(36.dp)
-                .testTag(TestTags.WELCOME_DEVICE_READINESS_BUTTON)
+                .height(36.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                imageVector = Icons.Default.Info,
-                contentDescription = "Phone requirements",
-                tint = Primary
-            )
+            IconButton(
+                onClick = onDeviceReadiness,
+                modifier = Modifier
+                    .size(36.dp)
+                    .testTag(TestTags.WELCOME_DEVICE_READINESS_BUTTON)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Info,
+                    contentDescription = "Phone requirements",
+                    tint = Primary
+                )
+            }
+
+            IconButton(
+                onClick = onScanDebug,
+                modifier = Modifier
+                    .size(36.dp)
+                    .testTag(TestTags.WELCOME_SCAN_DEBUG_BUTTON)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.BugReport,
+                    contentDescription = "Scan debugger",
+                    tint = Primary
+                )
+            }
         }
 
         Column(

@@ -10,6 +10,7 @@ import { getLeaderboard } from "../game/leaderboard.js";
 import { config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
 import { contractCoordToDegrees } from "../utils/geo.js";
+import { parseKillQrPayload } from "../utils/crypto.js";
 
 const log = createLogger("api");
 
@@ -18,6 +19,45 @@ const log = createLogger("api");
  */
 export function healthCheck(_req: Request, res: Response): void {
   res.json({ status: "ok", timestamp: Date.now() });
+}
+
+/**
+ * POST /api/debug/scan-echo
+ * Public debug endpoint that echoes all received scan payload data.
+ */
+export function debugScanEcho(req: Request, res: Response): void {
+  const received = req.body && typeof req.body === "object"
+    ? req.body as Record<string, unknown>
+    : {};
+
+  const scannedCodeCandidate = received.scannedCode ?? received.qrPayload;
+  const scannedCode = typeof scannedCodeCandidate === "string" ? scannedCodeCandidate : "";
+  const parsedQr = scannedCode ? parseKillQrPayload(scannedCode) : null;
+
+  const bleNearbyAddresses = Array.isArray(received.bleNearbyAddresses)
+    ? received.bleNearbyAddresses.filter((entry): entry is string => typeof entry === "string")
+    : [];
+
+  const nearbyBluetooth = Array.isArray(received.nearbyBluetooth)
+    ? received.nearbyBluetooth
+    : [];
+
+  res.json({
+    success: true,
+    serverTimestamp: Math.floor(Date.now() / 1000),
+    received,
+    parsedQr: parsedQr
+      ? {
+          gameId: parsedQr.gameId,
+          playerNumber: parsedQr.playerNumber,
+        }
+      : null,
+    summary: {
+      scannedCodeLength: scannedCode.length,
+      bleNearbyCount: bleNearbyAddresses.length,
+      nearbyBluetoothCount: nearbyBluetooth.length,
+    },
+  });
 }
 
 /**

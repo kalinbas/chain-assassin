@@ -4,6 +4,8 @@ sealed class NavRoutes(val route: String) {
     // Onboarding
     data object Welcome : NavRoutes("welcome")
     data object DeviceReadiness : NavRoutes("device_readiness")
+    data object ScanDebug : NavRoutes("scan_debug")
+    data object ScanDebugResult : NavRoutes("scan_debug_result")
     data object WalletSetup : NavRoutes("wallet_setup")
     data object Permissions : NavRoutes("permissions")
 

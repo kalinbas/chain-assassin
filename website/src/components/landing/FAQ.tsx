@@ -23,6 +23,10 @@ const FAQ_ITEMS: { q: string; a: ReactNode }[] = [
     a: 'Each game has its own prize split configured by the host. The entry fees are divided between 1st, 2nd, and 3rd place, a kill bonus pool, a creator fee, and a platform fee — all defined as basis points (bps) that must total 100%. This means every game can have a unique payout structure. Check the game detail page to see the exact split before joining.',
   },
   {
+    q: 'Has Chain Assassin been audited?',
+    a: 'Yes. The smart contract and core flows are reviewed with state-of-the-art AI auditing software, then validated with automated tests and end-to-end simulations before release. Security review is treated as a continuous process with ongoing checks as the code evolves.',
+  },
+  {
     q: 'Does the website use blockchain directly?',
     a: 'No. The website is API-only. It reads game state from the server REST API and live updates from the server WebSocket.',
   },
