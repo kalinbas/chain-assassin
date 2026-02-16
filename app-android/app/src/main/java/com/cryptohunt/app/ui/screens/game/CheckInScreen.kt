@@ -69,6 +69,8 @@ fun CheckInScreen(
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopBleScanning()
+            viewModel.stopLocationTracking()
+            viewModel.disconnectFromServer()
         }
     }
 

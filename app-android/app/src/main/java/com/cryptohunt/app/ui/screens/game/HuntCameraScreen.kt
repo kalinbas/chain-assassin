@@ -72,14 +72,23 @@ fun HuntCameraScreen(
     var heartbeatSuccess by remember { mutableStateOf(false) }
     var heartbeatPlayerNumber by remember { mutableIntStateOf(0) }
     var heartbeatError by remember { mutableStateOf<String?>(null) }
+    val activeGameId = gameState?.config?.id?.toIntOrNull()
 
-    // Keep BLE session alive on camera route so token advertising continues during scans.
+    // Keep realtime side effects active while this scan route is visible.
+    LaunchedEffect(activeGameId) {
+        if (activeGameId != null) {
+            viewModel.connectToServer(activeGameId)
+        }
+    }
     LaunchedEffect(Unit) {
+        viewModel.startLocationTracking()
         viewModel.startBleScanning()
     }
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopBleScanning()
+            viewModel.stopLocationTracking()
+            viewModel.disconnectFromServer()
         }
     }
 

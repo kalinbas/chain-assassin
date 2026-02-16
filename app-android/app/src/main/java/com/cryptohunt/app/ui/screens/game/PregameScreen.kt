@@ -44,6 +44,11 @@ fun PregameScreen(
             viewModel.connectToServer(id)
         }
     }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.disconnectFromServer()
+        }
+    }
 
     // Navigate when game starts
     LaunchedEffect(state.phase) {

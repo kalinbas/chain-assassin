@@ -44,25 +44,31 @@ fun MainGameScreen(
     val gameState by viewModel.gameState.collectAsState()
     val locationState by viewModel.locationState.collectAsState()
     val haptic = LocalHapticFeedback.current
+    val activeGameId = gameState?.config?.id?.toIntOrNull()
 
     // Kill feed banner
     var bannerText by remember { mutableStateOf<String?>(null) }
     var showKillFlash by remember { mutableStateOf(false) }
 
-    // Ensure server connection + start location tracking and BLE scanning
-    LaunchedEffect(Unit) {
-        val gameId = gameState?.config?.id?.toIntOrNull()
-        if (gameId != null) {
-            viewModel.connectToServer(gameId)
+    // Ensure server connection while this route is visible.
+    LaunchedEffect(activeGameId) {
+        if (activeGameId != null) {
+            viewModel.connectToServer(activeGameId)
         }
+    }
+
+    // Start location tracking and BLE scanning while this route is visible.
+    LaunchedEffect(Unit) {
         viewModel.startLocationTracking()
         viewModel.startBleScanning()
     }
 
-    // Stop BLE scanning when leaving screen
+    // Stop game realtime side effects when leaving screen
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopBleScanning()
+            viewModel.stopLocationTracking()
+            viewModel.disconnectFromServer()
         }
     }
 

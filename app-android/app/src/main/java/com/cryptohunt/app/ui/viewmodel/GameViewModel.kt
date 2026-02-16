@@ -223,6 +223,7 @@ class GameViewModel @Inject constructor(
     override fun onCleared() {
         bleAdvertiser.stopAdvertising()
         bleScanner.stopScanning()
+        locationTracker.stopTracking()
         super.onCleared()
     }
 }

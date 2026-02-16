@@ -113,7 +113,7 @@ fun RegisteredDetailScreen(
     // Keep WS open only while this detail screen is visible.
     DisposableEffect(config.id) {
         onDispose {
-            viewModel.disconnectFromRegisteredDetailIfIdle()
+            viewModel.disconnectFromServer()
         }
     }
 

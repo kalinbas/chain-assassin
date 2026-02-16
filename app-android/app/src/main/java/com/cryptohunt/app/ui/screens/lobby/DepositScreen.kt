@@ -234,6 +234,26 @@ fun DepositScreen(
                             fontWeight = FontWeight.Bold
                         )
                     }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // View on explorer
+                    OutlinedButton(
+                        onClick = {
+                            val uri = Uri.parse("${ChainConfig.EXPLORER_URL}/address/${walletState.address}")
+                            context.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary)
+                    ) {
+                        Icon(
+                            Icons.Default.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text("View on BaseScan", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
 
@@ -284,83 +304,50 @@ fun DepositScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    Divider(color = DividerColor)
+                    Button(
+                        onClick = {
+                            val metamaskUri = Uri.parse(
+                                "https://metamask.app.link/send/${walletState.address}@${ChainConfig.CHAIN_ID}"
+                            )
+                            val intent = Intent(Intent.ACTION_VIEW, metamaskUri)
+                            try {
+                                context.startActivity(intent)
+                            } catch (_: Exception) {
+                                val storeUri = Uri.parse("https://metamask.io/download/")
+                                context.startActivity(Intent(Intent.ACTION_VIEW, storeUri))
+                            }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(56.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = Warning,
+                            contentColor = Background
+                        )
+                    ) {
+                        Icon(
+                            Icons.Default.OpenInNew,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            "Open MetaMask",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     Text(
-                        "Entry fees are typically 0.001 – 0.01 ETH per game. " +
-                                "Get testnet ETH from a Base Sepolia faucet.",
+                        "Opens MetaMask with your address pre-filled on Base Sepolia",
                         style = MaterialTheme.typography.bodySmall,
-                        color = TextDim
+                        color = TextDim,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // MetaMask button — fixed chain ID to Base Sepolia (84532)
-            Button(
-                onClick = {
-                    val metamaskUri = Uri.parse(
-                        "https://metamask.app.link/send/${walletState.address}@${ChainConfig.CHAIN_ID}"
-                    )
-                    val intent = Intent(Intent.ACTION_VIEW, metamaskUri)
-                    try {
-                        context.startActivity(intent)
-                    } catch (_: Exception) {
-                        val storeUri = Uri.parse("https://metamask.io/download/")
-                        context.startActivity(Intent(Intent.ACTION_VIEW, storeUri))
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Warning,
-                    contentColor = Background
-                )
-            ) {
-                Icon(
-                    Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(
-                    "Open MetaMask",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Text(
-                "Opens MetaMask with your address pre-filled on Base Sepolia",
-                style = MaterialTheme.typography.bodySmall,
-                color = TextDim,
-                textAlign = TextAlign.Center
-            )
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // View on explorer
-            OutlinedButton(
-                onClick = {
-                    val uri = Uri.parse("${ChainConfig.EXPLORER_URL}/address/${walletState.address}")
-                    context.startActivity(Intent(Intent.ACTION_VIEW, uri))
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary)
-            ) {
-                Icon(
-                    Icons.Default.OpenInNew,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("View on BaseScan", fontWeight = FontWeight.Bold)
             }
 
             Spacer(modifier = Modifier.height(24.dp))
