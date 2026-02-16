@@ -4,14 +4,11 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.Context
-import android.os.ParcelUuid
-import android.provider.Settings
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +17,7 @@ import javax.inject.Singleton
  */
 data class NearbyDevice(
     val address: String,
+    val token: String? = null,
     val name: String?,
     val rssi: Int,
     val lastSeenMs: Long = System.currentTimeMillis()
@@ -66,8 +64,12 @@ class BleScanner @Inject constructor(
             val address = result.device.address ?: return
             @SuppressLint("MissingPermission")
             val name = try { result.device.name } catch (_: SecurityException) { null }
+            val token = BleTokenProtocol.decodeToken(
+                result.scanRecord?.getServiceData(BleTokenProtocol.serviceParcelUuid)
+            )
             val device = NearbyDevice(
                 address = address,
+                token = token,
                 name = name,
                 rssi = result.rssi,
                 lastSeenMs = System.currentTimeMillis()
@@ -169,14 +171,12 @@ class BleScanner @Inject constructor(
     }
 
     /**
-     * Returns a stable device identifier for this device's Bluetooth.
-     * On Android 6+, BluetoothAdapter.getAddress() returns "02:00:00:00:00:00" for privacy,
-     * so we use ANDROID_ID as a stable per-device identifier prefixed with "BLE:".
+     * Returns this device Bluetooth adapter address (MAC) when available.
+     * No opaque device-id fallback is used, because server proximity checks
+     * compare against scanned nearby Bluetooth addresses.
      */
-    @SuppressLint("HardwareIds")
-    fun getLocalBluetoothId(): String? {
+    fun getLocalBluetoothAddress(): String? {
         val adapter = bluetoothAdapter ?: return null
-        // Try real BLE address first (works on some devices / with BLUETOOTH_CONNECT permission)
         try {
             @SuppressLint("MissingPermission")
             val address = adapter.address
@@ -184,9 +184,13 @@ class BleScanner @Inject constructor(
                 return address
             }
         } catch (_: SecurityException) { }
-        // Fallback: use ANDROID_ID as stable device identifier
-        val androidId = Settings.Secure.getString(context.contentResolver, Settings.Secure.ANDROID_ID)
-        return if (androidId != null) "BLE:$androidId" else null
+        return null
+    }
+
+    fun getNearbyTokens(): List<String> {
+        return synchronized(devices) {
+            devices.values.mapNotNull { BleTokenProtocol.normalizeToken(it.token) }.distinct()
+        }
     }
 
     fun cleanup() {

@@ -3,6 +3,7 @@ package com.cryptohunt.app.util
 import android.graphics.Bitmap
 import android.graphics.Color
 import com.google.zxing.BarcodeFormat
+import com.google.zxing.EncodeHintType
 import com.google.zxing.qrcode.QRCodeWriter
 
 object QrGenerator {
@@ -14,7 +15,13 @@ object QrGenerator {
         background: Int = Color.TRANSPARENT
     ): Bitmap {
         val writer = QRCodeWriter()
-        val bitMatrix = writer.encode(content, BarcodeFormat.QR_CODE, size, size)
+        val bitMatrix = writer.encode(
+            content,
+            BarcodeFormat.QR_CODE,
+            size,
+            size,
+            mapOf(EncodeHintType.MARGIN to 2)
+        )
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
         for (x in 0 until size) {
             for (y in 0 until size) {

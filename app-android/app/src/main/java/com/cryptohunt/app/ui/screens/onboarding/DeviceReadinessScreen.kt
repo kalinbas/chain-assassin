@@ -20,8 +20,6 @@ import androidx.compose.material.icons.filled.GpsFixed
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SignalCellularAlt
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
@@ -192,7 +190,7 @@ fun DeviceReadinessScreen(onBack: () -> Unit) {
                         if (!gameReady) {
                             Spacer(modifier = Modifier.height(6.dp))
                             Text(
-                                text = "Enable missing items and tap Re-check.",
+                                text = "Enable missing items and use the refresh icon.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = TextSecondary
                             )
@@ -202,24 +200,6 @@ fun DeviceReadinessScreen(onBack: () -> Unit) {
             }
 
             Spacer(modifier = Modifier.height(18.dp))
-
-            Button(
-                onClick = refreshRequirements,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Primary,
-                    contentColor = Background
-                )
-            ) {
-                Text(
-                    text = "Re-check Device",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -291,7 +271,7 @@ private fun evaluateRequirements(context: Context): List<RequirementStatus> {
         ),
         RequirementStatus(
             title = "Bluetooth ready",
-            description = "Bluetooth must be enabled with nearby permissions.",
+            description = "Bluetooth scanning + advertising must be available.",
             icon = Icons.Default.Bluetooth,
             available = isBluetoothReady(context)
         ),
@@ -352,7 +332,22 @@ private fun isBluetoothReady(context: Context): Boolean {
         true
     }
 
-    return bluetoothEnabled && permissionsGranted
+    if (!bluetoothEnabled || !permissionsGranted) return false
+
+    val scannerAvailable = try {
+        adapter?.bluetoothLeScanner != null
+    } catch (_: SecurityException) {
+        false
+    }
+
+    val advertiserAvailable = try {
+        adapter?.isMultipleAdvertisementSupported == true &&
+            adapter.bluetoothLeAdvertiser != null
+    } catch (_: SecurityException) {
+        false
+    }
+
+    return scannerAvailable && advertiserAvailable
 }
 
 private fun hasValidatedInternet(context: Context): Boolean {

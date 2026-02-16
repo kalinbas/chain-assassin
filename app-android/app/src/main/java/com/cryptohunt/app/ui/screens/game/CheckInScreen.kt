@@ -63,6 +63,13 @@ fun CheckInScreen(
             viewModel.connectToServer(id)
         }
         viewModel.startLocationTracking()
+        viewModel.startBleScanning()
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopBleScanning()
+        }
     }
 
     // Navigate based on phase change

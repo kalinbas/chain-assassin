@@ -23,6 +23,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -48,6 +49,14 @@ fun ScanDebugResultScreen(
     viewModel: ScanDebugViewModel
 ) {
     val uiState by viewModel.uiState.collectAsState()
+
+    // Ensure scanner is always re-armed when leaving result screen
+    // (system back gesture/button or explicit actions).
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.resetScan()
+        }
+    }
 
     Column(
         modifier = Modifier

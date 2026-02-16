@@ -292,7 +292,8 @@ fun RegisteredDetailScreen(
                             context = context,
                             gameId = config.id.toIntOrNull() ?: 0,
                             playerNumber = player.number,
-                            gameName = config.name
+                            gameName = config.name,
+                            gameStartTimeMillis = gameStartTime
                         )
                         QrPdfGenerator.sharePdf(context, uri)
                     },

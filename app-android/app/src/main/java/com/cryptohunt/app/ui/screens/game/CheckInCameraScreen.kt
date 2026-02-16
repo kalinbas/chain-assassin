@@ -54,6 +54,16 @@ fun CheckInCameraScreen(
     var verified by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
+    // Keep BLE session alive on camera route so token advertising continues during scans.
+    LaunchedEffect(Unit) {
+        viewModel.startBleScanning()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopBleScanning()
+        }
+    }
+
     // Auto-navigate back after successful verification
     LaunchedEffect(verified) {
         if (verified) {

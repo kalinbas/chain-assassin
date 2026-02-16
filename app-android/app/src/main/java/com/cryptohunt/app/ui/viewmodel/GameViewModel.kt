@@ -2,6 +2,7 @@ package com.cryptohunt.app.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cryptohunt.app.domain.ble.BleAdvertiser
 import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.game.GameEngine
 import com.cryptohunt.app.domain.game.GameEvent
@@ -14,6 +15,7 @@ import com.cryptohunt.app.domain.model.GameState
 import com.cryptohunt.app.domain.model.LocationState
 import com.cryptohunt.app.domain.server.ConnectionState
 import com.cryptohunt.app.domain.server.GameServerClient
+import com.cryptohunt.app.util.QrGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -24,6 +26,7 @@ class GameViewModel @Inject constructor(
     private val gameEngine: GameEngine,
     private val locationTracker: LocationTracker,
     private val bleScanner: BleScanner,
+    private val bleAdvertiser: BleAdvertiser,
     private val serverClient: GameServerClient
 ) : ViewModel() {
 
@@ -36,6 +39,7 @@ class GameViewModel @Inject constructor(
     val uiEvents: SharedFlow<UiEvent> = _uiEvents.asSharedFlow()
     private val _heartbeatSubmissionErrors = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val heartbeatSubmissionErrors: SharedFlow<String> = _heartbeatSubmissionErrors.asSharedFlow()
+    private var bleSessionActive = false
 
     init {
         // Forward game events to UI events
@@ -60,6 +64,14 @@ class GameViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            gameState.collect { state ->
+                if (bleSessionActive) {
+                    syncBleAdvertising(state)
+                }
+            }
+        }
     }
 
     fun connectToServer(gameId: Int) {
@@ -81,11 +93,15 @@ class GameViewModel @Inject constructor(
     }
 
     fun startBleScanning() {
+        bleSessionActive = true
         bleScanner.startScanning()
+        syncBleAdvertising(gameState.value)
     }
 
     fun stopBleScanning() {
+        bleSessionActive = false
         bleScanner.stopScanning()
+        bleAdvertiser.stopAdvertising()
     }
 
     suspend fun processKill(qrPayload: String): KillResult {
@@ -93,7 +109,7 @@ class GameViewModel @Inject constructor(
         if (result is KillResult.Confirmed) {
             val loc = locationTracker.state.value
             val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
-            val bleAddresses = getNearbyBleAddresses()
+            val bleAddresses = getNearbyBleTokens()
             val submitted = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 serverClient.submitKill(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
             }
@@ -115,17 +131,18 @@ class GameViewModel @Inject constructor(
             if (distance > 500.0) return CheckInResult.TooFar
         }
 
-        val result = gameEngine.processCheckInScan(qrPayload, bleScanner.getLocalBluetoothId())
+        val ownBleToken = buildOwnBleToken(state)
+        val result = gameEngine.processCheckInScan(qrPayload, ownBleToken)
         if (result is CheckInResult.Verified) {
             val gameId = state.config.id.toIntOrNull() ?: return result
-            val bleAddresses = getNearbyBleAddresses()
+            val bleAddresses = getNearbyBleTokens()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 serverClient.submitCheckin(
                     gameId = gameId,
                     lat = loc.lat,
                     lng = loc.lng,
                     qrPayload = qrPayload,
-                    bluetoothId = bleScanner.getLocalBluetoothId(),
+                    bluetoothId = ownBleToken,
                     bleAddresses = bleAddresses
                 )
             }
@@ -139,7 +156,7 @@ class GameViewModel @Inject constructor(
         if (result is HeartbeatResult.Success) {
             val loc = locationTracker.state.value
             val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
-            val bleAddresses = getNearbyBleAddresses()
+            val bleAddresses = getNearbyBleTokens()
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
                 val submitResult = serverClient.submitHeartbeat(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
                 if (!submitResult.success) {
@@ -182,10 +199,31 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    private fun getNearbyBleAddresses(): List<String> {
-        return bleScanner.state.value.nearbyDevices
-            .map { it.address }
-            .distinct()
+    private fun syncBleAdvertising(state: GameState?) {
+        val token = buildOwnBleToken(state)
+        if (token != null) {
+            bleAdvertiser.startAdvertising(token)
+        } else {
+            bleAdvertiser.stopAdvertising()
+        }
+    }
+
+    private fun buildOwnBleToken(state: GameState?): String? {
+        val currentState = state ?: return null
+        val gameId = currentState.config.id.toIntOrNull() ?: return null
+        val playerNumber = currentState.currentPlayer.number
+        if (gameId <= 0 || playerNumber <= 0) return null
+        return QrGenerator.buildPayload(gameId, playerNumber)
+    }
+
+    private fun getNearbyBleTokens(): List<String> {
+        return bleScanner.getNearbyTokens()
+    }
+
+    override fun onCleared() {
+        bleAdvertiser.stopAdvertising()
+        bleScanner.stopScanning()
+        super.onCleared()
     }
 }
 

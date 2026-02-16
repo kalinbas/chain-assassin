@@ -3,6 +3,7 @@ package com.cryptohunt.app.ui.viewmodel
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cryptohunt.app.domain.ble.BleAdvertiser
 import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.model.LocationState
@@ -19,6 +20,7 @@ import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import javax.inject.Inject
+import kotlin.random.Random
 
 enum class DebugScanMode(val wireValue: String, val label: String) {
     CHECKIN("checkin", "Debug Scan"),
@@ -41,6 +43,7 @@ data class ScanDebugUiState(
 class ScanDebugViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
     private val bleScanner: BleScanner,
+    private val bleAdvertiser: BleAdvertiser,
     private val serverClient: GameServerClient
 ) : ViewModel() {
 
@@ -50,8 +53,10 @@ class ScanDebugViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(ScanDebugUiState())
     val uiState: StateFlow<ScanDebugUiState> = _uiState.asStateFlow()
 
+    private val debugBleToken: String = generateDebugBleToken()
     private var locationTrackingEnabled = false
     private var bleScanningEnabled = false
+    private var bleAdvertisingEnabled = false
 
     fun syncSensors(locationPermissionGranted: Boolean, bluetoothPermissionGranted: Boolean) {
         if (locationPermissionGranted && !locationTrackingEnabled) {
@@ -69,9 +74,17 @@ class ScanDebugViewModel @Inject constructor(
         if (bluetoothPermissionGranted && !bleScanningEnabled) {
             bleScanner.startScanning()
             bleScanningEnabled = true
+            bleAdvertisingEnabled = bleAdvertiser.startAdvertising(debugBleToken)
         } else if (!bluetoothPermissionGranted && bleScanningEnabled) {
             bleScanner.stopScanning()
             bleScanningEnabled = false
+        }
+
+        if (bluetoothPermissionGranted && bleScanningEnabled && !bleAdvertisingEnabled) {
+            bleAdvertisingEnabled = bleAdvertiser.startAdvertising(debugBleToken)
+        } else if (!bluetoothPermissionGranted && bleAdvertisingEnabled) {
+            bleAdvertiser.stopAdvertising()
+            bleAdvertisingEnabled = false
         }
     }
 
@@ -95,13 +108,12 @@ class ScanDebugViewModel @Inject constructor(
 
         val location = locationState.value
         val ble = bleState.value
-        val bleAddresses = ble.nearbyDevices.map { it.address }.distinct()
+        val bleTokens = ble.nearbyDevices.mapNotNull { it.token }.distinct()
         val payload = buildPayload(
             mode = mode,
             scannedCode = scannedCode,
             location = location,
-            ble = ble,
-            bleAddresses = bleAddresses,
+            bleTokens = bleTokens,
             cameraPermissionGranted = cameraPermissionGranted,
             locationPermissionGranted = locationPermissionGranted,
             bluetoothPermissionGranted = bluetoothPermissionGranted
@@ -147,6 +159,10 @@ class ScanDebugViewModel @Inject constructor(
             bleScanner.stopScanning()
             bleScanningEnabled = false
         }
+        if (bleAdvertisingEnabled) {
+            bleAdvertiser.stopAdvertising()
+            bleAdvertisingEnabled = false
+        }
     }
 
     override fun onCleared() {
@@ -158,8 +174,7 @@ class ScanDebugViewModel @Inject constructor(
         mode: DebugScanMode,
         scannedCode: String,
         location: LocationState,
-        ble: BleScanState,
-        bleAddresses: List<String>,
+        bleTokens: List<String>,
         cameraPermissionGranted: Boolean,
         locationPermissionGranted: Boolean,
         bluetoothPermissionGranted: Boolean
@@ -172,19 +187,6 @@ class ScanDebugViewModel @Inject constructor(
             put("gpsLostSeconds", location.gpsLostSeconds)
             put("isInsideZone", location.isInsideZone)
             put("distanceToZoneEdge", if (location.isTracking) location.distanceToZoneEdge else JSONObject.NULL)
-        }
-
-        val nearbyBluetooth = JSONArray().apply {
-            ble.nearbyDevices.forEach { device ->
-                put(
-                    JSONObject().apply {
-                        put("address", device.address)
-                        put("name", device.name ?: JSONObject.NULL)
-                        put("rssi", device.rssi)
-                        put("lastSeenMs", device.lastSeenMs)
-                    }
-                )
-            }
         }
 
         val permissionsJson = JSONObject().apply {
@@ -205,12 +207,16 @@ class ScanDebugViewModel @Inject constructor(
             put("scannedCode", scannedCode)
             put("capturedAtMs", System.currentTimeMillis())
             put("location", locationJson)
-            put("bleNearbyAddresses", JSONArray(bleAddresses))
-            put("nearbyBluetooth", nearbyBluetooth)
-            put("bluetoothId", bleScanner.getLocalBluetoothId() ?: JSONObject.NULL)
+            put("bleNearbyAddresses", JSONArray(bleTokens))
+            put("bluetoothId", debugBleToken)
             put("permissions", permissionsJson)
             put("device", deviceJson)
         }
+    }
+
+    private fun generateDebugBleToken(): String {
+        // Keep one stable random numeric token for the whole debug screen session.
+        return Random.nextLong(1_000_000_000L, 9_999_999_999L).toString()
     }
 
     private fun prettifyJson(raw: String?): String? {

@@ -73,6 +73,16 @@ fun HuntCameraScreen(
     var heartbeatPlayerNumber by remember { mutableIntStateOf(0) }
     var heartbeatError by remember { mutableStateOf<String?>(null) }
 
+    // Keep BLE session alive on camera route so token advertising continues during scans.
+    LaunchedEffect(Unit) {
+        viewModel.startBleScanning()
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopBleScanning()
+        }
+    }
+
     // Hold timer for kill confirmation
     LaunchedEffect(scannedTarget) {
         if (scannedTarget) {
