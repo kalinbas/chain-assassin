@@ -15,3 +15,9 @@
   - `./scripts/android-gradle.sh :app:assembleDebug`
 - Run instrumentation tests:
   - `./scripts/android-gradle.sh :app:connectedDebugAndroidTest`
+
+## Server Deploy Rule
+
+- Always deploy the server using local Docker build from the `server` directory:
+  - `fly deploy --local-only`
+- Prefer local Docker deploy over remote builders unless explicitly requested otherwise.

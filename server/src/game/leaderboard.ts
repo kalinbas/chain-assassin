@@ -1,5 +1,5 @@
 import { getLeaderboard as dbGetLeaderboard, getPlayers } from "../db/queries.js";
-import type { LeaderboardEntry, Player } from "../utils/types.js";
+import type { LeaderboardEntry } from "../utils/types.js";
 
 /**
  * Get the current leaderboard for a game.

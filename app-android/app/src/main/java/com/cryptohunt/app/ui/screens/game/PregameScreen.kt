@@ -37,19 +37,6 @@ fun PregameScreen(
     val gameState by viewModel.gameState.collectAsState()
     val state = gameState ?: return
 
-    // Ensure server connection
-    LaunchedEffect(Unit) {
-        val id = gameId.toIntOrNull() ?: state.config.id.toIntOrNull()
-        if (id != null) {
-            viewModel.connectToServer(id)
-        }
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.disconnectFromServer()
-        }
-    }
-
     // Navigate when game starts
     LaunchedEffect(state.phase) {
         when (state.phase) {

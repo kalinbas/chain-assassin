@@ -2,6 +2,7 @@ package com.cryptohunt.app.ui.screens.lobby
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -239,6 +240,7 @@ fun GameDetailScreen(
                     .fillMaxWidth()
                     .height(220.dp)
                     .clip(RoundedCornerShape(12.dp))
+                    .background(Background)
             ) {
                 AndroidView(
                     modifier = Modifier.fillMaxSize(),
@@ -260,6 +262,7 @@ fun GameDetailScreen(
                             }
                         }
                         MapView(ctx).apply {
+                            setBackgroundColor(Background.toArgb())
                             setTileSource(cartoDark)
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)

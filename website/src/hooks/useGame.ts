@@ -5,12 +5,7 @@ import type { Game } from '../types/game';
 const gameCache = new Map<number, Game | null>();
 const inFlightById = new Map<number, Promise<Game | null>>();
 
-function loadGameOnce(id: number): Promise<Game | null> {
-  const cached = gameCache.get(id);
-  if (cached !== undefined) {
-    return Promise.resolve(cached);
-  }
-
+function loadGameFresh(id: number): Promise<Game | null> {
   const inFlight = inFlightById.get(id);
   if (inFlight) {
     return inFlight;
@@ -30,11 +25,8 @@ function loadGameOnce(id: number): Promise<Game | null> {
 }
 
 export function useGame(id: number) {
-  const [game, setGame] = useState<Game | null>(() => {
-    if (id <= 0) return null;
-    return gameCache.get(id) ?? null;
-  });
-  const [loading, setLoading] = useState(() => (id > 0 ? !gameCache.has(id) : false));
+  const [game, setGame] = useState<Game | null>(() => (id <= 0 ? null : (gameCache.get(id) ?? null)));
+  const [loading, setLoading] = useState(() => id > 0);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -50,13 +42,11 @@ export function useGame(id: number) {
     const cached = gameCache.get(id);
     if (cached !== undefined) {
       setGame(cached);
-      setLoading(false);
-      return;
     }
 
     setLoading(true);
 
-    loadGameOnce(id)
+    loadGameFresh(id)
       .then((gameData) => {
         if (cancelled) return;
         setGame(gameData);

@@ -152,3 +152,26 @@ export function getConnection(ws: WebSocket): PlayerConnection | undefined {
   return connectionMap.get(ws);
 }
 
+export function getRoomStats(): {
+  playerGames: number;
+  playerConnections: number;
+  spectatorGames: number;
+  spectatorConnections: number;
+} {
+  let playerConnections = 0;
+  for (const room of rooms.values()) {
+    playerConnections += room.size;
+  }
+
+  let spectatorConnections = 0;
+  for (const room of spectatorRooms.values()) {
+    spectatorConnections += room.size;
+  }
+
+  return {
+    playerGames: rooms.size,
+    playerConnections,
+    spectatorGames: spectatorRooms.size,
+    spectatorConnections,
+  };
+}

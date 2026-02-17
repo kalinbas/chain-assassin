@@ -2,7 +2,6 @@ import { randomBytes } from "crypto";
 import {
   setTargetAssignment,
   getTargetAssignment,
-  getAllTargetAssignments,
   removeTargetAssignment,
   findHunterOf,
 } from "../db/queries.js";
@@ -149,23 +148,4 @@ export function removeFromChain(
     "Player removed from chain"
   );
   return { reassignedHunter: hunter, newTarget };
-}
-
-/**
- * Get the current target chain as a map (for recovery/debugging).
- */
-export function getChainMap(gameId: number): Map<string, string> {
-  const assignments = getAllTargetAssignments(gameId);
-  const map = new Map<string, string>();
-  for (const a of assignments) {
-    map.set(a.hunterAddress, a.targetAddress);
-  }
-  return map;
-}
-
-/**
- * Get the number of players remaining in the chain.
- */
-export function getChainSize(gameId: number): number {
-  return getAllTargetAssignments(gameId).length;
 }

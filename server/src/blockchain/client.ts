@@ -5,7 +5,7 @@ import { createLogger } from "../utils/logger.js";
 const log = createLogger("blockchain");
 
 let httpProvider: ethers.JsonRpcProvider;
-let wsProvider: ethers.WebSocketProvider;
+let wsProvider: ethers.WebSocketProvider | null = null;
 let operatorWallet: ethers.Wallet;
 
 /**
@@ -58,8 +58,21 @@ export function getOperatorWallet(): ethers.Wallet {
  * Cleanup providers on shutdown.
  */
 export async function closeProviders(): Promise<void> {
-  if (wsProvider) {
+  await resetWsProvider();
+}
+
+/**
+ * Destroy and clear the current WebSocket provider instance.
+ * Next getWsProvider() call will create a fresh connection.
+ */
+export async function resetWsProvider(): Promise<void> {
+  if (!wsProvider) return;
+  try {
     await wsProvider.destroy();
     log.info("WebSocket provider closed");
+  } catch (err) {
+    log.warn({ error: (err as Error).message }, "WebSocket provider close failed");
+  } finally {
+    wsProvider = null;
   }
 }

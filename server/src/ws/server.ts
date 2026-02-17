@@ -7,7 +7,7 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("ws");
 
-let wss: WebSocketServer;
+let wss: WebSocketServer | null = null;
 
 /**
  * Initialize the WebSocket server on the given HTTP server.
@@ -56,3 +56,9 @@ export function initWebSocketServer(server: HttpServer): WebSocketServer {
   return wss;
 }
 
+export function getWebSocketServerStats(): { initialized: boolean; totalConnections: number } {
+  return {
+    initialized: wss != null,
+    totalConnections: wss?.clients.size ?? 0,
+  };
+}

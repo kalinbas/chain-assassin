@@ -24,15 +24,6 @@ export function PlayersIcon(props: IconProps) {
   );
 }
 
-export function UserIcon(props: IconProps) {
-  return (
-    <svg {...defaults} {...props}>
-      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
-      <circle cx="9" cy="7" r="4" />
-    </svg>
-  );
-}
-
 export function ClockIcon(props: IconProps) {
   return (
     <svg {...defaults} {...props}>
@@ -66,15 +57,6 @@ export function PinIcon(props: IconProps) {
     <svg {...defaults} {...props}>
       <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
       <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
-
-export function PersonIcon(props: IconProps) {
-  return (
-    <svg {...defaults} {...props}>
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
@@ -161,19 +143,6 @@ export function QrIcon(props: IconProps) {
   );
 }
 
-export function SkullIcon(props: IconProps) {
-  return (
-    <svg {...defaults} {...props}>
-      <circle cx="12" cy="10" r="8" />
-      <circle cx="9" cy="9" r="1.5" fill="currentColor" stroke="none" />
-      <circle cx="15" cy="9" r="1.5" fill="currentColor" stroke="none" />
-      <path d="M8 14h8" />
-      <path d="M10 14v3" />
-      <path d="M14 14v3" />
-    </svg>
-  );
-}
-
 export function RadarIcon(props: IconProps) {
   return (
     <svg {...defaults} {...props}>
@@ -201,25 +170,6 @@ export function SoundOffIcon(props: IconProps) {
       <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
       <line x1="23" y1="9" x2="17" y2="15" />
       <line x1="17" y1="9" x2="23" y2="15" />
-    </svg>
-  );
-}
-
-export function EyeIcon(props: IconProps) {
-  return (
-    <svg {...defaults} {...props}>
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-export function EyeOffIcon(props: IconProps) {
-  return (
-    <svg {...defaults} {...props}>
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94" />
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19" />
-      <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   );
 }

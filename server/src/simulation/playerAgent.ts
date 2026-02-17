@@ -1,5 +1,5 @@
 import { haversineDistance } from "../utils/geo.js";
-import type { SimulatedPlayer, PlayerAgentState } from "./types.js";
+import type { SimulatedPlayer } from "./types.js";
 
 // Meters per degree latitude (approximate)
 const METERS_PER_DEG_LAT = 111_320;

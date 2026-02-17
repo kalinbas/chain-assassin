@@ -355,25 +355,6 @@ private fun GameCard(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.Default.Place,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = TextSecondary
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = game.locationName,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = TextSecondary
-                )
-            }
-
-            Spacer(modifier = Modifier.height(6.dp))
-
             // Date and time
             if (game.startTime > 0) {
                 Row(
@@ -425,15 +406,6 @@ private fun GameCard(
                     trackColor = SurfaceVariant,
                 )
             }
-            if (!meetsMin) {
-                Text(
-                    "Min ${game.config.minPlayers} players to start",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = Warning,
-                    modifier = Modifier.padding(start = 24.dp, top = 2.dp)
-                )
-            }
-
             Spacer(modifier = Modifier.height(12.dp))
 
             // Prize pool — use real BPS from contract

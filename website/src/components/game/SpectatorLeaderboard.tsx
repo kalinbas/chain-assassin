@@ -13,15 +13,15 @@ export function SpectatorLeaderboard({ state }: { state: SpectatorState }) {
 
   return (
     <div className="spectator__leaderboard">
-      <h4 className="spectator__panel-title">Leaderboard</h4>
+      <h4 className="spectator__panel-title">Anonymous Leaderboard</h4>
       <div className="spectator__lb-list">
         {entries.map((entry, i) => (
           <div
-            key={entry.playerNumber}
+            key={`entry-${i}`}
             className={`spectator__lb-row ${!entry.isAlive ? 'spectator__lb-row--dead' : ''}`}
           >
             <span className={`spectator__lb-rank ${rankClass(i + 1)}`}>{i + 1}</span>
-            <span className="spectator__lb-player">Player #{entry.playerNumber}</span>
+            <span className="spectator__lb-player">Anonymous Hunter</span>
             <span className="spectator__lb-kills">
               <CrosshairIcon width={12} height={12} style={{ verticalAlign: 'middle', marginRight: 3 }} />
               {entry.kills}

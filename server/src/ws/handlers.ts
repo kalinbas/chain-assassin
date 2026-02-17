@@ -14,6 +14,7 @@ import {
 import { handleLocationUpdate, handleHeartbeatScan, getGameStatus, getPregameDurationSeconds } from "../game/manager.js";
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
+import { approximateSpectatorPosition } from "../utils/spectator.js";
 import type { WsClientMessage } from "../utils/types.js";
 import { GamePhase } from "../utils/types.js";
 import { config } from "../config.js";
@@ -177,16 +178,12 @@ function handleSpectate(
   joinSpectator(gameId, ws);
 
   const alivePlayers = getAlivePlayers(gameId);
-  const players = alivePlayers.map((p) => {
+  const players = alivePlayers.flatMap((p) => {
     const ping = getLatestLocationPing(gameId, p.address);
-    return {
-      address: p.address,
-      playerNumber: p.playerNumber,
-      lat: ping?.lat ?? null,
-      lng: ping?.lng ?? null,
-      isAlive: p.isAlive,
-      kills: p.kills,
-    };
+    if (!ping) return [];
+    const approx = approximateSpectatorPosition(ping.lat, ping.lng);
+    if (!approx) return [];
+    return [{ lat: approx.lat, lng: approx.lng }];
   });
 
   ws.send(
@@ -200,13 +197,13 @@ function handleSpectate(
       playerCount: status.playerCount,
       aliveCount: status.aliveCount,
       checkedInCount: status.checkedInCount,
-      leaderboard: status.leaderboard,
+      leaderboard: [],
       zone: status.zone,
       players,
-      winner1: status.winner1,
-      winner2: status.winner2,
-      winner3: status.winner3,
-      topKiller: status.topKiller,
+      winner1: 0,
+      winner2: 0,
+      winner3: 0,
+      topKiller: 0,
     })
   );
 

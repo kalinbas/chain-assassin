@@ -2,6 +2,7 @@ import { config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
 import { contractCoordToDegrees, haversineDistance } from "../utils/geo.js";
 import { parseKillQrPayload } from "../utils/crypto.js";
+import { approximateSpectatorPosition } from "../utils/spectator.js";
 import { GamePhase } from "../utils/types.js";
 import type { GameConfig, ZoneShrink, Player } from "../utils/types.js";
 import {
@@ -41,19 +42,131 @@ import {
   deleteSyncState,
   listSyncState,
 } from "../db/queries.js";
-import { initializeTargetChain, processKill, removeFromChain, getChainMap } from "./targetChain.js";
+import { initializeTargetChain, processKill, removeFromChain } from "./targetChain.js";
 import { ZoneTracker } from "./zoneTracker.js";
 import { verifyKill } from "./killVerifier.js";
 import { getLeaderboard, determineWinners } from "./leaderboard.js";
 import { hasBleMatch, normalizeBluetoothId } from "./ble.js";
 import * as operator from "../blockchain/operator.js";
-import { fetchGameState } from "../blockchain/contract.js";
+import { fetchGameState, fetchPlayer } from "../blockchain/contract.js";
 import { getHttpProvider } from "../blockchain/client.js";
 
 const log = createLogger("gameManager");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const SIMULATION_PREGAME_DURATION_SECONDS = 60;
 const SIM_GAME_SYNC_KEY_PREFIX = "simulation_game:";
+const OPERATOR_SYNC_MAX_ATTEMPTS = 4;
+const OPERATOR_SYNC_BASE_DELAY_MS = 1_000;
+const REGISTRATION_SWEEP_INTERVAL_MS = 30_000;
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+interface OperatorSyncTask {
+  action: "recordKill" | "eliminatePlayer";
+  gameId: number;
+  context: Record<string, unknown>;
+  submit: () => Promise<{ txHash: string }>;
+  isApplied: () => Promise<boolean>;
+  onSuccess?: (txHash: string) => void;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+async function runOperatorSyncTask(task: OperatorSyncTask): Promise<void> {
+  for (let attempt = 1; attempt <= OPERATOR_SYNC_MAX_ATTEMPTS; attempt++) {
+    try {
+      const tx = await task.submit();
+      task.onSuccess?.(tx.txHash);
+      return;
+    } catch (err) {
+      const txError = errorMessage(err);
+      let applied = false;
+
+      try {
+        applied = await task.isApplied();
+      } catch (checkErr) {
+        log.warn(
+          {
+            gameId: task.gameId,
+            action: task.action,
+            attempt,
+            error: txError,
+            checkError: errorMessage(checkErr),
+            ...task.context,
+          },
+          "Operator tx failed and on-chain state verification also failed"
+        );
+      }
+
+      if (applied) {
+        log.warn(
+          { gameId: task.gameId, action: task.action, attempt, error: txError, ...task.context },
+          "Operator tx failed but on-chain state is already applied"
+        );
+        return;
+      }
+
+      if (attempt >= OPERATOR_SYNC_MAX_ATTEMPTS) {
+        log.error(
+          { gameId: task.gameId, action: task.action, attempts: attempt, error: txError, ...task.context },
+          "Operator tx failed after retries"
+        );
+        return;
+      }
+
+      const delayMs = OPERATOR_SYNC_BASE_DELAY_MS * (1 << (attempt - 1));
+      log.warn(
+        { gameId: task.gameId, action: task.action, attempt, delayMs, error: txError, ...task.context },
+        "Operator tx failed; retrying"
+      );
+      await sleep(delayMs);
+    }
+  }
+}
+
+function submitRecordKillWithRetry(
+  gameId: number,
+  killId: number,
+  hunterNum: number,
+  targetNum: number,
+  expectedHunterKills: number
+): void {
+  void runOperatorSyncTask({
+    action: "recordKill",
+    gameId,
+    context: { killId, hunterNum, targetNum },
+    submit: () => operator.recordKill(gameId, hunterNum, targetNum),
+    isApplied: async () => {
+      const [hunterState, targetState] = await Promise.all([
+        fetchPlayer(gameId, hunterNum),
+        fetchPlayer(gameId, targetNum),
+      ]);
+      return targetState.killedAt > 0 && hunterState.killCount >= expectedHunterKills;
+    },
+    onSuccess: (txHash) => {
+      updateKillTxHash(killId, txHash);
+    },
+  });
+}
+
+function submitEliminationWithRetry(
+  gameId: number,
+  playerNumber: number,
+  address: string,
+  reason: string
+): void {
+  void runOperatorSyncTask({
+    action: "eliminatePlayer",
+    gameId,
+    context: { playerNumber, address, reason },
+    submit: () => operator.eliminatePlayer(gameId, playerNumber),
+    isApplied: async () => {
+      const playerState = await fetchPlayer(gameId, playerNumber);
+      return playerState.killedAt > 0;
+    },
+  });
+}
 
 /** Clear and delete a timer from a map. */
 function clearMapTimer<K>(
@@ -89,6 +202,10 @@ const preGameSpectatorIntervals = new Map<number, ReturnType<typeof setInterval>
 // Per-game auto-seed retry timers — retries every 60s until enough nearby players are seeded
 const autoSeedTimers = new Map<number, ReturnType<typeof setInterval>>();
 
+// Periodic safety sweep for registration-phase transitions (start/cancel retries).
+let registrationSweepTimer: ReturnType<typeof setInterval> | null = null;
+let registrationSweepInProgress = false;
+
 // Simulated game IDs — skip on-chain operator calls for these
 const simulatedGames = new Set<number>();
 
@@ -101,6 +218,9 @@ const expiryTriggerInFlight = new Set<number>();
 
 // Prevent duplicate cancellation tx submissions while waiting for chain event processing.
 const cancellationTriggerInFlight = new Set<number>();
+
+// Prevent duplicate start tx submissions while waiting for chain event processing.
+const startTriggerInFlight = new Set<number>();
 
 // Prevent concurrent endGame attempts for the same game.
 const endingGames = new Set<number>();
@@ -198,7 +318,12 @@ export function setSpectatorBroadcast(
 
 function broadcast(gameId: number, message: Record<string, unknown>): void {
   if (broadcastFn) broadcastFn(gameId, message);
-  if (spectatorBroadcastFn) spectatorBroadcastFn(gameId, message);
+  if (spectatorBroadcastFn) {
+    const sanitized = sanitizeForSpectators(message);
+    if (sanitized) {
+      spectatorBroadcastFn(gameId, sanitized);
+    }
+  }
 }
 
 /**
@@ -210,6 +335,124 @@ export function broadcastToGame(gameId: number, message: Record<string, unknown>
 
 function sendToPlayer(gameId: number, address: string, message: Record<string, unknown>): void {
   if (sendToPlayerFn) sendToPlayerFn(gameId, address, message);
+}
+
+function toNumberOrNull(value: unknown): number | null {
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+/**
+ * Spectators should never receive direct player identifiers or exact private state.
+ */
+function sanitizeForSpectators(
+  message: Record<string, unknown>
+): Record<string, unknown> | null {
+  const type = typeof message.type === "string" ? message.type : null;
+  if (!type) return null;
+
+  switch (type) {
+    case "player:registered":
+      return {
+        type,
+        playerCount: toNumberOrNull(message.playerCount) ?? 0,
+      };
+
+    case "checkin:update":
+      return {
+        type,
+        checkedInCount: toNumberOrNull(message.checkedInCount) ?? 0,
+        totalPlayers: toNumberOrNull(message.totalPlayers) ?? 0,
+      };
+
+    case "game:checkin_started":
+      return {
+        type,
+        checkinEndsAt: toNumberOrNull(message.checkinEndsAt),
+      };
+
+    case "game:pregame_started":
+      return {
+        type,
+        pregameEndsAt: toNumberOrNull(message.pregameEndsAt),
+        pregameDurationSeconds: toNumberOrNull(message.pregameDurationSeconds),
+        checkedInCount: toNumberOrNull(message.checkedInCount) ?? 0,
+        playerCount: toNumberOrNull(message.playerCount) ?? 0,
+      };
+
+    case "game:started_broadcast":
+      return {
+        type,
+        playerCount: toNumberOrNull(message.playerCount) ?? 0,
+      };
+
+    case "game:ended":
+      return {
+        type,
+        winner1: toNumberOrNull(message.winner1) ?? 0,
+        winner2: toNumberOrNull(message.winner2) ?? 0,
+        winner3: toNumberOrNull(message.winner3) ?? 0,
+        topKiller: toNumberOrNull(message.topKiller) ?? 0,
+      };
+
+    case "game:cancelled":
+      return { type };
+
+    case "zone:shrink":
+      return {
+        type,
+        centerLat: toNumberOrNull(message.centerLat),
+        centerLng: toNumberOrNull(message.centerLng),
+        currentRadiusMeters: toNumberOrNull(message.currentRadiusMeters),
+        nextShrinkAt: toNumberOrNull(message.nextShrinkAt),
+        nextRadiusMeters: toNumberOrNull(message.nextRadiusMeters),
+      };
+
+    case "spectator:positions":
+      return {
+        type,
+        players: Array.isArray(message.players) ? message.players : [],
+        zone: message.zone ?? null,
+        aliveCount: toNumberOrNull(message.aliveCount) ?? 0,
+      };
+
+    case "kill:recorded":
+      return { type };
+
+    case "leaderboard:update":
+      return {
+        type,
+        entries: Array.isArray(message.entries)
+          ? message.entries
+              .map((entry) => {
+                if (!entry || typeof entry !== "object") return null;
+                const kills = toNumberOrNull((entry as { kills?: unknown }).kills) ?? 0;
+                const isAlive = Boolean((entry as { isAlive?: unknown }).isAlive);
+                return { kills, isAlive };
+              })
+              .filter((entry): entry is { kills: number; isAlive: boolean } => entry != null)
+          : [],
+      };
+
+    case "player:eliminated":
+      return {
+        type,
+        reason: typeof message.reason === "string" ? message.reason : "unknown",
+      };
+
+    case "item:used":
+      return {
+        type,
+        itemId: typeof message.itemId === "string" ? message.itemId : null,
+        itemName: typeof message.itemName === "string" ? message.itemName : null,
+        pingLat: toNumberOrNull(message.pingLat),
+        pingLng: toNumberOrNull(message.pingLng),
+        pingRadiusMeters: toNumberOrNull(message.pingRadiusMeters),
+        pingDurationMs: toNumberOrNull(message.pingDurationMs),
+      };
+
+    default:
+      return null;
+  }
 }
 
 function getRequiredCheckedInPlayers(game: Pick<GameConfig, "bps2nd" | "bps3rd">): number {
@@ -677,14 +920,8 @@ export async function handleKillSubmission(
     const hunterNum = hunter?.playerNumber ?? 0;
     const targetNum = target?.playerNumber ?? 0;
     if (hunterNum > 0 && targetNum > 0) {
-      operator
-        .recordKill(gameId, hunterNum, targetNum)
-        .then((tx) => {
-          updateKillTxHash(killId, tx.txHash);
-        })
-        .catch((err) => {
-          log.error({ gameId, killId, error: err.message }, "Failed to record kill on-chain");
-        });
+      const expectedHunterKills = hunter?.kills ?? 0;
+      submitRecordKillWithRetry(gameId, killId, hunterNum, targetNum, expectedHunterKills);
     }
   }
 
@@ -752,6 +989,13 @@ export function handleLocationUpdate(
   lat: number,
   lng: number
 ): { success: boolean; error?: string } {
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return { success: false, error: "Invalid latitude" };
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return { success: false, error: "Invalid longitude" };
+  }
+
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
 
@@ -818,6 +1062,13 @@ export function handleCheckin(
   bluetoothId?: string,
   bleNearbyAddresses: string[] = []
 ): { success: boolean; error?: string } {
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+    return { success: false, error: "Invalid latitude" };
+  }
+  if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+    return { success: false, error: "Invalid longitude" };
+  }
+
   const game = getGame(gameId);
   if (!game) return { success: false, error: "Game not found" };
 
@@ -939,15 +1190,12 @@ function startPreGameSpectatorBroadcast(gameId: number): void {
     if (!spectatorBroadcastFn) return;
 
     const alivePlayers = getAlivePlayers(gameId);
-    const positions = alivePlayers.map((p) => {
+    const positions = alivePlayers.flatMap((p) => {
       const ping = getLatestLocationPing(gameId, p.address);
-      return {
-        playerNumber: p.playerNumber,
-        lat: ping?.lat ?? null,
-        lng: ping?.lng ?? null,
-        isAlive: true,
-        kills: p.kills,
-      };
+      if (!ping) return [];
+      const approx = approximateSpectatorPosition(ping.lat, ping.lng);
+      if (!approx) return [];
+      return [{ lat: approx.lat, lng: approx.lng }];
     });
 
     spectatorBroadcastFn(gameId, {
@@ -955,7 +1203,6 @@ function startPreGameSpectatorBroadcast(gameId: number): void {
       players: positions,
       zone,
       aliveCount: alivePlayers.length,
-      huntLinks: [],
     });
   }, 2000);
 
@@ -1015,32 +1262,19 @@ async function gameTick(gameId: number): Promise<void> {
   // Broadcast player positions to spectators every 2 seconds
   if (now % 2 === 0 && spectatorBroadcastFn) {
     const alivePlayers = getAlivePlayers(gameId);
-    const positions = alivePlayers.map((p) => {
+    const positions = alivePlayers.flatMap((p) => {
       const ping = getLatestLocationPing(gameId, p.address);
-      return {
-        playerNumber: p.playerNumber,
-        lat: ping?.lat ?? null,
-        lng: ping?.lng ?? null,
-        isAlive: true,
-        kills: p.kills,
-      };
+      if (!ping) return [];
+      const approx = approximateSpectatorPosition(ping.lat, ping.lng);
+      if (!approx) return [];
+      return [{ lat: approx.lat, lng: approx.lng }];
     });
-
-    // Build hunt links from target chain (using player numbers)
-    const chainMap = getChainMap(gameId);
-    const huntLinks: { hunter: number; target: number }[] = [];
-    for (const [hunterAddr, targetAddr] of chainMap) {
-      const h = getPlayer(gameId, hunterAddr);
-      const t = getPlayer(gameId, targetAddr);
-      if (h && t) huntLinks.push({ hunter: h.playerNumber, target: t.playerNumber });
-    }
 
     spectatorBroadcastFn(gameId, {
       type: "spectator:positions",
       players: positions,
       zone: active.zoneTracker.getZoneState(),
       aliveCount: alivePlayers.length,
-      huntLinks,
     });
   }
 
@@ -1069,9 +1303,7 @@ async function eliminateAndReassign(
   if (!isSimulatedGame(gameId)) {
     const pNum = player.playerNumber;
     if (pNum > 0) {
-      operator.eliminatePlayer(gameId, pNum).catch((err) => {
-        log.error({ gameId, address, error: err.message }, `Failed to eliminate player on-chain (${reason})`);
-      });
+      submitEliminationWithRetry(gameId, pNum, address, reason);
     }
   }
 
@@ -1394,6 +1626,15 @@ export function onGameEnded(
     winner3: winner3Addr,
     topKiller: topKillerAddr,
   });
+
+  broadcast(gameId, {
+    type: "game:ended",
+    winner1,
+    winner2,
+    winner3,
+    topKiller,
+  });
+
   removeSimulatedGame(gameId);
   cleanupActiveGame(gameId);
   log.info({ gameId, winner1, winner2, winner3, topKiller }, "Game ended (chain confirmed)");
@@ -1424,6 +1665,7 @@ export function onRefundClaimed(gameId: number, address: string): void {
  */
 export function scheduleTimers(config: GameConfig): void {
   cancelTimers(config.gameId);
+  ensureRegistrationSweepRunning();
 
   const nowSec = Math.floor(Date.now() / 1000);
 
@@ -1463,6 +1705,55 @@ export function cancelTimers(gameId: number): void {
 }
 
 // ============ Deadline Check (registrationDeadline) ============
+
+function ensureRegistrationSweepRunning(): void {
+  if (registrationSweepTimer) return;
+
+  registrationSweepTimer = setInterval(() => {
+    void runRegistrationSweep("interval");
+  }, REGISTRATION_SWEEP_INTERVAL_MS);
+
+  if (typeof registrationSweepTimer.unref === "function") {
+    registrationSweepTimer.unref();
+  }
+
+  log.info(
+    { intervalMs: REGISTRATION_SWEEP_INTERVAL_MS },
+    "Registration safety sweep started"
+  );
+}
+
+function stopRegistrationSweep(): void {
+  if (!registrationSweepTimer) return;
+  clearInterval(registrationSweepTimer);
+  registrationSweepTimer = null;
+  registrationSweepInProgress = false;
+  log.info("Registration safety sweep stopped");
+}
+
+async function triggerStartIfNeeded(gameId: number): Promise<void> {
+  if (startTriggerInFlight.has(gameId)) {
+    log.info({ gameId }, "Skipping duplicate start trigger (already in-flight)");
+    return;
+  }
+
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.REGISTRATION) return;
+
+  startTriggerInFlight.add(gameId);
+  try {
+    // Guard against async races: if another actor already cancelled/started on-chain,
+    // do not enqueue a stale operator start tx.
+    const state = await fetchGameState(gameId);
+    if (state.phase !== GamePhase.REGISTRATION) {
+      log.info({ gameId, onChainPhase: state.phase }, "Skipping start: on-chain phase is no longer registration");
+      return;
+    }
+    await operator.startGame(gameId);
+  } finally {
+    startTriggerInFlight.delete(gameId);
+  }
+}
 
 async function triggerCancellationIfNeeded(gameId: number, reason: "deadline" | "gameDate"): Promise<void> {
   if (cancellationTriggerInFlight.has(gameId)) {
@@ -1541,7 +1832,7 @@ async function checkGameDate(gameId: number): Promise<void> {
 
   log.info({ gameId, playerCount }, "Auto-starting game (game date reached)");
   try {
-    await operator.startGame(gameId);
+    await triggerStartIfNeeded(gameId);
     // onGameStarted will be called from the event listener when tx confirms
   } catch (err) {
     log.error({ gameId, error: (err as Error).message }, "Failed to auto-start game");
@@ -1550,31 +1841,54 @@ async function checkGameDate(gameId: number): Promise<void> {
 
 // ============ Admin: force check all registration games ============
 
+async function runRegistrationSweep(trigger: "manual" | "interval"): Promise<void> {
+  if (registrationSweepInProgress) {
+    if (trigger === "manual") {
+      log.info("Registration safety sweep already running, skipping manual trigger");
+    }
+    return;
+  }
+
+  registrationSweepInProgress = true;
+  try {
+    const regGames = getGamesInPhase(GamePhase.REGISTRATION);
+    if (regGames.length === 0) {
+      if (trigger === "interval") {
+        stopRegistrationSweep();
+      }
+      return;
+    }
+
+    let nowSec = Math.floor(Date.now() / 1000);
+    try {
+      const latest = await getHttpProvider().getBlock("latest");
+      if (latest) nowSec = latest.timestamp;
+    } catch (err) {
+      log.warn({ error: (err as Error).message }, "Falling back to wall-clock time for registration checks");
+    }
+
+    for (const game of regGames) {
+      // Avoid duplicate cancellation submissions: if deadline is passed and the game
+      // is still below min players, only run deadline cancellation logic.
+      if (nowSec >= game.registrationDeadline && getPlayerCount(game.gameId) < game.minPlayers) {
+        await checkDeadline(game.gameId);
+        continue;
+      }
+
+      if (nowSec >= game.gameDate) {
+        await checkGameDate(game.gameId);
+      }
+    }
+  } finally {
+    registrationSweepInProgress = false;
+  }
+}
+
 /**
  * Admin endpoint: run deadline + game date checks on all registration games.
  */
 export async function checkAllRegistrationGames(): Promise<void> {
-  const regGames = getGamesInPhase(GamePhase.REGISTRATION);
-  let nowSec = Math.floor(Date.now() / 1000);
-  try {
-    const latest = await getHttpProvider().getBlock("latest");
-    if (latest) nowSec = latest.timestamp;
-  } catch (err) {
-    log.warn({ error: (err as Error).message }, "Falling back to wall-clock time for admin registration checks");
-  }
-
-  for (const game of regGames) {
-    // Avoid duplicate cancellation submissions: if deadline is passed and the game
-    // is still below min players, only run deadline cancellation logic.
-    if (nowSec >= game.registrationDeadline && getPlayerCount(game.gameId) < game.minPlayers) {
-      await checkDeadline(game.gameId);
-      continue;
-    }
-
-    if (nowSec >= game.gameDate) {
-      await checkGameDate(game.gameId);
-    }
-  }
+  await runRegistrationSweep("manual");
 }
 
 // ============ Recovery ============
@@ -1645,6 +1959,9 @@ export function recoverGames(): void {
   for (const game of regGames) {
     scheduleTimers(game);
   }
+  if (regGames.length > 0) {
+    ensureRegistrationSweepRunning();
+  }
 
   log.info(
     { recoveredActive: activeDbGames.length, recoveredRegistration: regGames.length },
@@ -1677,35 +1994,37 @@ export function cleanupAll(): void {
   }
   activeGames.clear();
 
-  for (const [gameId, timer] of deadlineTimers) {
+  for (const [, timer] of deadlineTimers) {
     clearTimeout(timer);
   }
   deadlineTimers.clear();
 
-  for (const [gameId, timer] of gameDateTimers) {
+  for (const [, timer] of gameDateTimers) {
     clearTimeout(timer);
   }
   gameDateTimers.clear();
 
-  for (const [gameId, timer] of checkinTimers) {
+  for (const [, timer] of checkinTimers) {
     clearInterval(timer);
   }
   checkinTimers.clear();
 
-  for (const [gameId, timer] of pregameTimers) {
+  for (const [, timer] of pregameTimers) {
     clearTimeout(timer);
   }
   pregameTimers.clear();
 
-  for (const [gameId, interval] of preGameSpectatorIntervals) {
+  for (const [, interval] of preGameSpectatorIntervals) {
     clearInterval(interval);
   }
   preGameSpectatorIntervals.clear();
 
-  for (const [gameId, interval] of autoSeedTimers) {
+  for (const [, interval] of autoSeedTimers) {
     clearInterval(interval);
   }
   autoSeedTimers.clear();
+
+  stopRegistrationSweep();
 }
 
 // ============ Query Helpers ============

@@ -48,11 +48,7 @@ async function main(): Promise<void> {
   }
 
   // 6. Backfill missed blockchain events (since last processed block)
-  try {
-    await backfillEvents();
-  } catch (err) {
-    log.error({ error: (err as Error).message }, "Event backfill failed (continuing anyway)");
-  }
+  await backfillEvents();
 
   // 7. Recover games from DB (active + registration-phase) after backfill,
   // so in-memory timers/loops start from the freshest on-chain-synced state.
@@ -60,11 +56,7 @@ async function main(): Promise<void> {
   recoverSimulation();
 
   // 8. Start live event listener
-  try {
-    await startEventListener();
-  } catch (err) {
-    log.warn({ error: (err as Error).message }, "Event listener failed to start (simulation-only mode still works)");
-  }
+  await startEventListener();
 
   // 9. Start HTTP server
   server.listen(config.port, config.host, () => {
@@ -80,7 +72,7 @@ async function main(): Promise<void> {
   const shutdown = async (signal: string) => {
     log.info({ signal }, "Shutting down...");
 
-    stopEventListener();
+    await stopEventListener();
     cleanupAll();
 
     server.close(() => {

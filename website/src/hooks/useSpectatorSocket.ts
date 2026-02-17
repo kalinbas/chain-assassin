@@ -3,11 +3,8 @@ import { SERVER_WS_URL } from '../config/server';
 import { trackEvent } from '../lib/analytics';
 
 export interface SpectatorPlayer {
-  playerNumber: number;
   lat: number | null;
   lng: number | null;
-  isAlive: boolean;
-  kills: number;
 }
 
 export interface SpectatorEvent {
@@ -50,15 +47,12 @@ export interface SpectatorState {
     nextRadiusMeters?: number | null;
   } | null;
   players: SpectatorPlayer[];
-  leaderboard: { playerNumber: number; kills: number; isAlive: boolean }[];
+  leaderboard: { kills: number; isAlive: boolean }[];
   events: SpectatorEvent[];
   aliveCount: number;
   playerCount: number;
   checkedInCount: number;
-  winners: { winner1: number; winner2: number; winner3: number; topKiller: number } | null;
   killFlashes: KillFlash[];
-  trails: Record<number, { lat: number; lng: number; timestamp: number }[]>;
-  huntLinks: { hunter: number; target: number }[];
   pingCircles: PingCircle[];
   totalKills: number;
   gameStartedAt: number | null;
@@ -82,10 +76,7 @@ const initialState: SpectatorState = {
   aliveCount: 0,
   playerCount: 0,
   checkedInCount: 0,
-  winners: null,
   killFlashes: [],
-  trails: {},
-  huntLinks: [],
   pingCircles: [],
   totalKills: 0,
   gameStartedAt: null,
@@ -116,10 +107,6 @@ type Action =
 function addEvent(events: SpectatorEvent[], text: string, type: string, meta?: SpectatorEvent['meta']): SpectatorEvent[] {
   const updated = [{ type, text, timestamp: Date.now(), meta }, ...events];
   return updated.slice(0, 50);
-}
-
-function playerLabel(playerNumber: number): string {
-  return `Player #${playerNumber}`;
 }
 
 function normalizePhase(raw: unknown): string | null {
@@ -192,7 +179,15 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'init': {
       const p = action.payload;
-      const players = p.players as SpectatorPlayer[];
+      const players = Array.isArray(p.players)
+        ? (p.players as SpectatorPlayer[])
+        : [];
+      const leaderboard = Array.isArray(p.leaderboard)
+        ? (p.leaderboard as Array<Record<string, unknown>>).map((entry) => ({
+            kills: typeof entry.kills === 'number' ? entry.kills : 0,
+            isAlive: typeof entry.isAlive === 'boolean' ? entry.isAlive : true,
+          }))
+        : [];
       const phase = normalizePhase(p.phase) ?? state.phase;
       const subPhase = phase === 'active' ? ((p.subPhase as string | null) ?? null) : null;
       return {
@@ -205,31 +200,19 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         playerCount: p.playerCount as number,
         aliveCount: p.aliveCount as number,
         checkedInCount: (p.checkedInCount as number) ?? 0,
-        leaderboard: p.leaderboard as SpectatorState['leaderboard'],
+        leaderboard,
         zone: p.zone as SpectatorState['zone'],
         players,
-        winners: (p.winner1 && Number(p.winner1) !== 0)
-          ? { winner1: Number(p.winner1), winner2: Number(p.winner2), winner3: Number(p.winner3), topKiller: Number(p.topKiller) }
-          : null,
         gameStartedAt: state.gameStartedAt ?? Date.now(),
       };
     }
 
     case 'positions': {
       const p = action.payload;
-      const newPlayers = p.players as SpectatorPlayer[];
+      const newPlayers = Array.isArray(p.players)
+        ? (p.players as SpectatorPlayer[])
+        : [];
       const now = Date.now();
-
-      // Build trails from position history
-      const newTrails = { ...state.trails };
-      for (const player of newPlayers) {
-        if (player.lat != null && player.lng != null && player.isAlive) {
-          const key = player.playerNumber;
-          const existing = newTrails[key] || [];
-          const updated = [...existing, { lat: player.lat, lng: player.lng, timestamp: now }];
-          newTrails[key] = updated.slice(-8);
-        }
-      }
 
       // Clean up old kill flashes (>3s)
       const killFlashes = state.killFlashes.filter((f) => now - f.timestamp < 3000);
@@ -242,47 +225,32 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
         players: newPlayers,
         zone: p.zone as SpectatorState['zone'],
         aliveCount: p.aliveCount as number,
-        huntLinks: (p.huntLinks as SpectatorState['huntLinks']) ?? state.huntLinks,
-        trails: newTrails,
         killFlashes,
         pingCircles,
       };
     }
 
     case 'kill': {
-      const p = action.payload;
-      const hunterNum = p.hunterNumber as number;
-      const targetNum = p.targetNumber as number;
-
-      // Find target's last position for kill flash
-      const targetPlayer = state.players.find((pl) => pl.playerNumber === targetNum);
-      const newFlashes = [...state.killFlashes];
-      if (targetPlayer?.lat != null && targetPlayer?.lng != null) {
-        newFlashes.push({ lat: targetPlayer.lat, lng: targetPlayer.lng, timestamp: Date.now() });
-      }
-
       return {
         ...state,
-        events: addEvent(state.events, `${playerLabel(hunterNum)} eliminated ${playerLabel(targetNum)}`, 'kill'),
-        killFlashes: newFlashes,
+        events: addEvent(state.events, 'A player was eliminated', 'kill'),
         totalKills: state.totalKills + 1,
       };
     }
 
     case 'eliminated': {
       const p = action.payload;
-      const num = p.playerNumber as number;
       const reason = p.reason as string;
       if (reason === 'zone_violation') {
         return {
           ...state,
-          events: addEvent(state.events, `${playerLabel(num)} eliminated by zone`, 'zone_elim'),
+          events: addEvent(state.events, 'A player was eliminated by zone', 'zone_elim'),
         };
       }
       if (reason === 'heartbeat_timeout') {
         return {
           ...state,
-          events: addEvent(state.events, `${playerLabel(num)} eliminated (missed heartbeat)`, 'heartbeat_elim'),
+          events: addEvent(state.events, 'A player was eliminated (missed heartbeat)', 'heartbeat_elim'),
         };
       }
       return state;
@@ -305,9 +273,15 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'leaderboard': {
       const p = action.payload;
+      const entries = Array.isArray(p.entries)
+        ? (p.entries as Array<Record<string, unknown>>).map((entry) => ({
+            kills: typeof entry.kills === 'number' ? entry.kills : 0,
+            isAlive: typeof entry.isAlive === 'boolean' ? entry.isAlive : true,
+          }))
+        : state.leaderboard;
       return {
         ...state,
-        leaderboard: p.entries as SpectatorState['leaderboard'],
+        leaderboard: entries,
       };
     }
 
@@ -371,19 +345,12 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
     }
 
     case 'game_ended': {
-      const p = action.payload;
       return {
         ...state,
         phase: 'ended',
         subPhase: null,
         checkinEndsAt: null,
         pregameEndsAt: null,
-        winners: {
-          winner1: Number(p.winner1),
-          winner2: Number(p.winner2),
-          winner3: Number(p.winner3),
-          topKiller: Number(p.topKiller),
-        },
         events: addEvent(state.events, 'Game ended!', 'end'),
       };
     }
@@ -401,8 +368,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
     case 'item_used': {
       const p = action.payload;
-      const num = p.playerNumber as number;
-      const itemName = p.itemName as string;
+      const itemName = (p.itemName as string) || 'an item';
       const itemId = p.itemId as string;
 
       // Add ping circle if position data is available
@@ -424,7 +390,7 @@ function reducer(state: SpectatorState, action: Action): SpectatorState {
 
       return {
         ...state,
-        events: addEvent(state.events, `${playerLabel(num)} used ${itemName}`, 'item', { itemId }),
+        events: addEvent(state.events, `A player used ${itemName}`, 'item', { itemId }),
         pingCircles,
       };
     }

@@ -1,11 +1,22 @@
 import { ethers, ContractEventPayload } from "ethers";
-import { getWsContract, getReadContract, fetchGameConfig, fetchGameState, fetchZoneShrinks, fetchNextGameId, fetchPlayer } from "./contract.js";
-import { getHttpProvider } from "./client.js";
+import {
+  getWsContract,
+  fetchGameConfig,
+  fetchGameState,
+  fetchZoneShrinks,
+  fetchNextGameId,
+  fetchPlayer,
+  resetWsContract,
+} from "./contract.js";
+import { getHttpProvider, getWsProvider, resetWsProvider } from "./client.js";
 import { config } from "../config.js";
 import {
   getSyncState,
   setSyncState,
   resetGameData,
+  getGame,
+  getPlayerByNumber,
+  getZoneShrinks as getDbZoneShrinks,
   insertGame,
   insertPlayer,
   insertZoneShrinks,
@@ -19,13 +30,39 @@ import { createLogger } from "../utils/logger.js";
 
 const log = createLogger("listener");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const WS_READY_STATE_OPEN = 1;
 
 const SYNC_KEY_LAST_BLOCK = "lastProcessedBlock";
 
-// Base Sepolia block time ~2 seconds
-const BLOCK_TIME_SECONDS = 2;
-
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+let listenerRunning = false;
+let listenerRestarting = false;
+let lastHeartbeatAtMs = 0;
+let lastHeartbeatBlock = 0;
+let lastRestartAtMs = 0;
+let restartCount = 0;
+let lastRestartReason: string | null = null;
+let lastRestartError: string | null = null;
+let heartbeatCheckTimer: NodeJS.Timeout | null = null;
+let restartRetryTimer: NodeJS.Timeout | null = null;
+let wsBlockHandler: ((blockNumber: number) => void) | null = null;
+let wsProviderForListener: ethers.WebSocketProvider | null = null;
+
+export interface EventListenerStatus {
+  running: boolean;
+  restarting: boolean;
+  wsReadyState: number | null;
+  heartbeatMonitorActive: boolean;
+  lastHeartbeatAtMs: number | null;
+  lastHeartbeatBlock: number | null;
+  heartbeatAgeMs: number | null;
+  lastRestartAtMs: number | null;
+  restartCount: number;
+  lastRestartReason: string | null;
+  lastRestartError: string | null;
+  lastProcessedBlock: number | null;
+}
 
 interface ResolvedPlayerState {
   address: string;
@@ -78,20 +115,135 @@ async function fetchPlayerAddressWithRetry(
   return (await fetchPlayerStateWithRetry(gameId, playerNumber, maxAttempts, retryDelayMs)).address;
 }
 
-/**
- * Estimate the block number for a given unix timestamp based on
- * the current block number and timestamp. Uses Base Sepolia's ~2s block time.
- */
-async function estimateBlockForTimestamp(targetTimestamp: number): Promise<number> {
-  const provider = getHttpProvider();
-  const latest = await provider.getBlock("latest");
-  if (!latest) throw new Error("Cannot fetch latest block");
+function touchWsHeartbeat(blockNumber?: number): void {
+  lastHeartbeatAtMs = Date.now();
+  if (blockNumber != null) {
+    lastHeartbeatBlock = blockNumber;
+  }
+}
 
-  const secondsAgo = latest.timestamp - targetTimestamp;
-  const blocksAgo = Math.floor(secondsAgo / BLOCK_TIME_SECONDS);
-  // Add generous buffer (10%) to account for variable block times
-  const estimated = latest.number - blocksAgo - Math.floor(blocksAgo * 0.1);
-  return Math.max(0, estimated);
+function getWsReadyState(): number | undefined {
+  const ws = wsProviderForListener?.websocket as { readyState?: number } | undefined;
+  return ws?.readyState;
+}
+
+function startHeartbeatMonitor(): void {
+  if (heartbeatCheckTimer) {
+    clearInterval(heartbeatCheckTimer);
+  }
+
+  heartbeatCheckTimer = setInterval(() => {
+    if (!listenerRunning || listenerRestarting) return;
+
+    const now = Date.now();
+    const heartbeatAgeMs = now - lastHeartbeatAtMs;
+    const readyState = getWsReadyState();
+    let reason: string | null = null;
+
+    if (readyState !== undefined && readyState !== WS_READY_STATE_OPEN) {
+      reason = `websocket_not_open:${readyState}`;
+    } else if (heartbeatAgeMs > config.wsHeartbeatStaleMs) {
+      reason = `heartbeat_stale:${heartbeatAgeMs}ms`;
+    }
+
+    if (reason) {
+      void restartEventListener(reason);
+    }
+  }, config.wsHeartbeatCheckIntervalMs);
+
+  if (typeof heartbeatCheckTimer.unref === "function") {
+    heartbeatCheckTimer.unref();
+  }
+}
+
+function stopHeartbeatMonitor(): void {
+  if (heartbeatCheckTimer) {
+    clearInterval(heartbeatCheckTimer);
+    heartbeatCheckTimer = null;
+  }
+}
+
+function clearRestartRetryTimer(): void {
+  if (restartRetryTimer) {
+    clearTimeout(restartRetryTimer);
+    restartRetryTimer = null;
+  }
+}
+
+function scheduleRestartRetry(reason: string, overrideDelayMs?: number): void {
+  if (restartRetryTimer) return;
+
+  const delayMs =
+    overrideDelayMs ?? Math.max(config.wsRestartCooldownMs, config.wsHeartbeatCheckIntervalMs);
+
+  restartRetryTimer = setTimeout(() => {
+    restartRetryTimer = null;
+    void restartEventListener(`retry_after_failure:${reason}`);
+  }, delayMs);
+
+  if (typeof restartRetryTimer.unref === "function") {
+    restartRetryTimer.unref();
+  }
+
+  log.warn({ reason, delayMs }, "Scheduled WebSocket listener retry");
+}
+
+async function restartEventListener(reason: string): Promise<void> {
+  if (listenerRestarting) return;
+  const now = Date.now();
+  const sinceLastRestart = now - lastRestartAtMs;
+  if (sinceLastRestart < config.wsRestartCooldownMs) {
+    const remainingCooldownMs = config.wsRestartCooldownMs - sinceLastRestart;
+    log.warn(
+      {
+        reason,
+        cooldownMs: config.wsRestartCooldownMs,
+        sinceLastRestartMs: sinceLastRestart,
+        remainingCooldownMs,
+      },
+      "Skipping WebSocket listener restart due to cooldown"
+    );
+    scheduleRestartRetry(reason, remainingCooldownMs + 50);
+    return;
+  }
+
+  clearRestartRetryTimer();
+  listenerRestarting = true;
+  restartCount += 1;
+  lastRestartReason = reason;
+  lastRestartError = null;
+  lastRestartAtMs = now;
+  const heartbeatAgeMs = lastHeartbeatAtMs > 0 ? now - lastHeartbeatAtMs : -1;
+
+  try {
+    log.warn(
+      {
+        reason,
+        heartbeatAgeMs,
+        lastHeartbeatBlock,
+      },
+      "Restarting WebSocket event listener"
+    );
+
+    await stopEventListener();
+
+    // Catch up state while the WS stream was stale.
+    try {
+      await backfillEvents();
+    } catch (err) {
+      log.warn({ error: (err as Error).message }, "Backfill during WS restart failed");
+    }
+
+    await startEventListener();
+    clearRestartRetryTimer();
+    log.info("WebSocket event listener restarted");
+  } catch (err) {
+    lastRestartError = (err as Error).message;
+    log.error({ error: (err as Error).message }, "WebSocket event listener restart failed");
+    scheduleRestartRetry(reason);
+  } finally {
+    listenerRestarting = false;
+  }
 }
 
 /**
@@ -101,14 +253,29 @@ async function estimateBlockForTimestamp(targetTimestamp: number): Promise<numbe
  * The ContractEventPayload has `.log.blockNumber` for block tracking.
  */
 export async function startEventListener(): Promise<void> {
-  const contract = getWsContract();
+  if (listenerRunning) {
+    log.info("Contract event listeners already running");
+    return;
+  }
 
-  // GameCreated(gameId, title, entryFee, minPlayers, maxPlayers, centerLat, centerLng)
-  contract.on("GameCreated", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, title] = args as [bigint, string, bigint, bigint, bigint, bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+  try {
+    const contract = getWsContract();
+    wsProviderForListener = getWsProvider();
+    listenerRunning = true;
+    touchWsHeartbeat();
+
+    wsBlockHandler = (blockNumber: number) => {
+      touchWsHeartbeat(blockNumber);
+    };
+    wsProviderForListener.on("block", wsBlockHandler);
+
+    // GameCreated(gameId, title, entryFee, minPlayers, maxPlayers, centerLat, centerLng)
+    contract.on("GameCreated", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, title] = args as [bigint, string, bigint, bigint, bigint, bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       log.info({ gameId: Number(gameId), title }, "GameCreated event");
       const cfg = await fetchGameConfig(Number(gameId));
       const shrinks = await fetchZoneShrinks(Number(gameId));
@@ -117,14 +284,15 @@ export async function startEventListener(): Promise<void> {
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling GameCreated");
     }
-  });
+    });
 
-  // PlayerRegistered(gameId, playerNumber)
-  contract.on("PlayerRegistered", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, playerNum] = args as [bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // PlayerRegistered(gameId, playerNumber)
+    contract.on("PlayerRegistered", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, playerNum] = args as [bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       const pNum = Number(playerNum);
       log.info({ gameId: Number(gameId), playerNumber: pNum }, "PlayerRegistered event");
       const playerAddress = await fetchPlayerAddressWithRetry(Number(gameId), pNum);
@@ -133,14 +301,15 @@ export async function startEventListener(): Promise<void> {
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling PlayerRegistered");
     }
-  });
+    });
 
-  // GameStarted(gameId, playerCount)
-  contract.on("GameStarted", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, playerCount] = args as [bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // GameStarted(gameId, playerCount)
+    contract.on("GameStarted", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, playerCount] = args as [bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       log.info(
         { gameId: Number(gameId), playerCount: Number(playerCount) },
         "GameStarted event"
@@ -150,60 +319,65 @@ export async function startEventListener(): Promise<void> {
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling GameStarted");
     }
-  });
+    });
 
-  // GameEnded(gameId, winner1, winner2, winner3, topKiller) — all uint16 playerNumbers
-  contract.on("GameEnded", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, winner1, winner2, winner3, topKiller] = args as [bigint, bigint, bigint, bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // GameEnded(gameId, winner1, winner2, winner3, topKiller) — all uint16 playerNumbers
+    contract.on("GameEnded", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, winner1, winner2, winner3, topKiller] = args as [bigint, bigint, bigint, bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       log.info({ gameId: Number(gameId), winner1: Number(winner1) }, "GameEnded event");
       manager.onGameEnded(Number(gameId), Number(winner1), Number(winner2), Number(winner3), Number(topKiller));
       saveBlock(event.log.blockNumber);
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling GameEnded");
     }
-  });
+    });
 
-  // GameCancelled(gameId)
-  contract.on("GameCancelled", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId] = args as [bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // GameCancelled(gameId)
+    contract.on("GameCancelled", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId] = args as [bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       log.info({ gameId: Number(gameId) }, "GameCancelled event");
       manager.onGameCancelled(Number(gameId));
       saveBlock(event.log.blockNumber);
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling GameCancelled");
     }
-  });
+    });
 
-  // KillRecorded (just for logging — our server already knows about it)
-  contract.on("KillRecorded", async (...args: unknown[]) => {
-    const [gameId, hunter, target] = args as [bigint, bigint, bigint];
-    log.info(
-      { gameId: Number(gameId), hunter: Number(hunter), target: Number(target) },
-      "KillRecorded event (chain confirmation)"
-    );
-  });
+    // KillRecorded (just for logging — our server already knows about it)
+    contract.on("KillRecorded", async (...args: unknown[]) => {
+      touchWsHeartbeat();
+      const [gameId, hunter, target] = args as [bigint, bigint, bigint];
+      log.info(
+        { gameId: Number(gameId), hunter: Number(hunter), target: Number(target) },
+        "KillRecorded event (chain confirmation)"
+      );
+    });
 
-  // PlayerEliminated (just for logging)
-  contract.on("PlayerEliminated", async (...args: unknown[]) => {
-    const [gameId, playerNum, eliminator] = args as [bigint, bigint, bigint];
-    log.info(
-      { gameId: Number(gameId), playerNumber: Number(playerNum), eliminator: Number(eliminator) },
-      "PlayerEliminated event (chain confirmation)"
-    );
-  });
+    // PlayerEliminated (just for logging)
+    contract.on("PlayerEliminated", async (...args: unknown[]) => {
+      touchWsHeartbeat();
+      const [gameId, playerNum, eliminator] = args as [bigint, bigint, bigint];
+      log.info(
+        { gameId: Number(gameId), playerNumber: Number(playerNum), eliminator: Number(eliminator) },
+        "PlayerEliminated event (chain confirmation)"
+      );
+    });
 
-  // PrizeClaimed(gameId, playerNumber, amount)
-  contract.on("PrizeClaimed", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, playerNum, amount] = args as [bigint, bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // PrizeClaimed(gameId, playerNumber, amount)
+    contract.on("PrizeClaimed", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, playerNum, amount] = args as [bigint, bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       const pNum = Number(playerNum);
       log.info(
         { gameId: Number(gameId), playerNumber: pNum, amount: amount.toString() },
@@ -215,14 +389,15 @@ export async function startEventListener(): Promise<void> {
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling PrizeClaimed");
     }
-  });
+    });
 
-  // RefundClaimed(gameId, playerNumber, amount)
-  contract.on("RefundClaimed", async (...args: unknown[]) => {
-    const event = args[args.length - 1] as ContractEventPayload;
-    const [gameId, playerNum, amount] = args as [bigint, bigint, bigint];
-    if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
-    try {
+    // RefundClaimed(gameId, playerNumber, amount)
+    contract.on("RefundClaimed", async (...args: unknown[]) => {
+      const event = args[args.length - 1] as ContractEventPayload;
+      touchWsHeartbeat(event.log.blockNumber);
+      const [gameId, playerNum, amount] = args as [bigint, bigint, bigint];
+      if (Number(gameId) < config.startGameId) { saveBlock(event.log.blockNumber); return; }
+      try {
       const pNum = Number(playerNum);
       log.info(
         { gameId: Number(gameId), playerNumber: pNum, amount: amount.toString() },
@@ -234,162 +409,296 @@ export async function startEventListener(): Promise<void> {
     } catch (err) {
       log.error({ error: (err as Error).message }, "Error handling RefundClaimed");
     }
-  });
+    });
 
-  log.info("Contract event listeners started");
+    startHeartbeatMonitor();
+    log.info(
+      {
+        checkIntervalMs: config.wsHeartbeatCheckIntervalMs,
+        staleThresholdMs: config.wsHeartbeatStaleMs,
+        restartCooldownMs: config.wsRestartCooldownMs,
+      },
+      "Contract event listeners started"
+    );
+  } catch (err) {
+    listenerRunning = false;
+    await stopEventListener();
+    throw err;
+  }
+}
+
+type ChainSyncMode = "backfill" | "rebuild";
+
+interface ChainSyncResult {
+  startId: number;
+  nextId: number;
+  currentBlock: number;
+  syncedGames: number;
+  failures: number;
+}
+
+function resolveLocalPlayerAddress(gameId: number, playerNumber: number): string {
+  if (playerNumber === 0) return "";
+  return getPlayerByNumber(gameId, playerNumber)?.address ?? "";
+}
+
+async function resolveSnapshotPlayerAddress(
+  gameId: number,
+  playerNumber: number,
+  snapshots: Map<number, ResolvedPlayerState>
+): Promise<string> {
+  if (playerNumber === 0) return "";
+  const fromSnapshot = snapshots.get(playerNumber);
+  if (fromSnapshot) return fromSnapshot.address;
+  try {
+    return await fetchPlayerAddressWithRetry(gameId, playerNumber);
+  } catch {
+    return "";
+  }
+}
+
+async function syncPlayersForGame(
+  gameId: number,
+  playerCount: number,
+  mode: ChainSyncMode
+): Promise<Map<number, ResolvedPlayerState>> {
+  const snapshots = new Map<number, ResolvedPlayerState>();
+
+  for (let pNum = 1; pNum <= playerCount; pNum++) {
+    let onChainPlayer: ResolvedPlayerState;
+    try {
+      onChainPlayer = await fetchPlayerStateWithRetry(gameId, pNum);
+    } catch (err) {
+      if (mode === "rebuild") {
+        log.error({ gameId, playerNumber: pNum, error: (err as Error).message }, "Failed to rebuild player");
+        continue;
+      }
+      throw err;
+    }
+
+    snapshots.set(pNum, onChainPlayer);
+
+    if (mode === "backfill") {
+      const localPlayer = getPlayerByNumber(gameId, pNum);
+      if (!localPlayer || localPlayer.address !== onChainPlayer.address) {
+        await manager.onPlayerRegistered(gameId, onChainPlayer.address, pNum);
+      }
+
+      const refreshedPlayer = getPlayerByNumber(gameId, pNum);
+      const chainAlive = onChainPlayer.killedAt === 0;
+      const mergedAlive = refreshedPlayer ? refreshedPlayer.isAlive && chainAlive : chainAlive;
+      const mergedKilledAt = mergedAlive
+        ? null
+        : (onChainPlayer.killedAt || (refreshedPlayer?.eliminatedAt ?? null));
+      const mergedKills = Math.max(refreshedPlayer?.kills ?? 0, onChainPlayer.killCount);
+      const mergedClaimed = (refreshedPlayer?.hasClaimed ?? false) || onChainPlayer.claimed;
+
+      insertPlayer(gameId, onChainPlayer.address, pNum, {
+        isAlive: mergedAlive,
+        eliminatedAt: mergedKilledAt,
+        kills: mergedKills,
+        hasClaimed: mergedClaimed,
+      });
+      continue;
+    }
+
+    insertPlayer(gameId, onChainPlayer.address, pNum, {
+      isAlive: onChainPlayer.killedAt === 0,
+      eliminatedAt: onChainPlayer.killedAt === 0 ? null : onChainPlayer.killedAt,
+      kills: onChainPlayer.killCount,
+      hasClaimed: onChainPlayer.claimed,
+    });
+  }
+
+  return snapshots;
+}
+
+async function applyBackfillPhase(
+  gameId: number,
+  gameState: Awaited<ReturnType<typeof fetchGameState>>
+): Promise<void> {
+  const localAfterPlayers = getGame(gameId);
+  const localPhase = localAfterPlayers?.phase;
+
+  if (gameState.phase === GamePhase.ACTIVE) {
+    if (localPhase !== GamePhase.ACTIVE || localAfterPlayers?.subPhase == null) {
+      manager.onGameStarted(gameId);
+    }
+    return;
+  }
+
+  if (gameState.phase === GamePhase.ENDED) {
+    if (localPhase !== GamePhase.ENDED) {
+      manager.onGameEnded(
+        gameId,
+        gameState.winner1,
+        gameState.winner2,
+        gameState.winner3,
+        gameState.topKiller
+      );
+      return;
+    }
+
+    // Keep winner mapping and totals canonical even when already ended locally.
+    updateGamePhase(gameId, GamePhase.ENDED, {
+      winner1: resolveLocalPlayerAddress(gameId, gameState.winner1),
+      winner2: resolveLocalPlayerAddress(gameId, gameState.winner2),
+      winner3: resolveLocalPlayerAddress(gameId, gameState.winner3),
+      topKiller: resolveLocalPlayerAddress(gameId, gameState.topKiller),
+    });
+    return;
+  }
+
+  if (gameState.phase === GamePhase.CANCELLED) {
+    if (localPhase !== GamePhase.CANCELLED) {
+      manager.onGameCancelled(gameId);
+    } else {
+      updateGamePhase(gameId, GamePhase.CANCELLED);
+    }
+    return;
+  }
+
+  if (localPhase !== GamePhase.REGISTRATION) {
+    updateGamePhase(gameId, GamePhase.REGISTRATION);
+  }
+}
+
+async function applyRebuildPhase(
+  gameId: number,
+  gameState: Awaited<ReturnType<typeof fetchGameState>>,
+  snapshots: Map<number, ResolvedPlayerState>
+): Promise<void> {
+  if (gameState.phase === GamePhase.ENDED) {
+    const winner1 = await resolveSnapshotPlayerAddress(gameId, gameState.winner1, snapshots);
+    const winner2 = await resolveSnapshotPlayerAddress(gameId, gameState.winner2, snapshots);
+    const winner3 = await resolveSnapshotPlayerAddress(gameId, gameState.winner3, snapshots);
+    const topKiller = await resolveSnapshotPlayerAddress(gameId, gameState.topKiller, snapshots);
+
+    updateGamePhase(gameId, GamePhase.ENDED, {
+      winner1,
+      winner2,
+      winner3,
+      topKiller,
+    });
+  } else if (gameState.phase === GamePhase.CANCELLED) {
+    updateGamePhase(gameId, GamePhase.CANCELLED);
+  }
+}
+
+async function syncSingleGameFromChain(gameId: number, mode: ChainSyncMode): Promise<void> {
+  const [gameConfig, gameState, shrinks] = await Promise.all([
+    fetchGameConfig(gameId),
+    fetchGameState(gameId),
+    fetchZoneShrinks(gameId),
+  ]);
+
+  if (mode === "backfill") {
+    const localBefore = getGame(gameId);
+    if (!localBefore) {
+      manager.onGameCreated(gameConfig, shrinks);
+    } else if (getDbZoneShrinks(gameId).length === 0) {
+      insertZoneShrinks(gameId, shrinks);
+    }
+  } else {
+    insertGame({
+      ...gameConfig,
+      phase: gameState.phase,
+      totalCollected: gameState.totalCollected.toString(),
+      playerCount: gameState.playerCount,
+    });
+    insertZoneShrinks(gameId, shrinks);
+  }
+
+  const playerSnapshots = await syncPlayersForGame(gameId, gameState.playerCount, mode);
+
+  updatePlayerCount(gameId, gameState.playerCount);
+  updateTotalCollected(gameId, gameState.totalCollected.toString());
+
+  if (mode === "backfill") {
+    await applyBackfillPhase(gameId, gameState);
+    return;
+  }
+
+  await applyRebuildPhase(gameId, gameState, playerSnapshots);
+  log.info({ gameId, phase: gameState.phase, players: gameState.playerCount }, "Rebuilt game");
+}
+
+async function syncGamesFromChain(mode: ChainSyncMode): Promise<ChainSyncResult> {
+  const startId = config.startGameId;
+  const nextId = await fetchNextGameId();
+  const currentBlock = await getHttpProvider().getBlockNumber();
+
+  if (mode === "rebuild") {
+    // Always wipe existing game data first so REBUILD_DB provides a true reset
+    // even when there are no chain games in the selected ID range.
+    resetGameData();
+  }
+
+  if (startId >= nextId) {
+    setSyncState(SYNC_KEY_LAST_BLOCK, currentBlock.toString());
+    return {
+      startId,
+      nextId,
+      currentBlock,
+      syncedGames: 0,
+      failures: 0,
+    };
+  }
+
+  let syncedGames = 0;
+  let failures = 0;
+
+  for (let gameId = startId; gameId < nextId; gameId++) {
+    try {
+      await syncSingleGameFromChain(gameId, mode);
+      syncedGames++;
+    } catch (err) {
+      failures++;
+      const msg = mode === "backfill"
+        ? "RPC snapshot backfill failed for game"
+        : "Failed to rebuild game";
+      log.error({ gameId, error: (err as Error).message }, msg);
+    }
+
+    // Small delay to avoid RPC rate limits during full rebuild.
+    if (mode === "rebuild") {
+      await sleep(500);
+    }
+  }
+
+  setSyncState(SYNC_KEY_LAST_BLOCK, currentBlock.toString());
+  return {
+    startId,
+    nextId,
+    currentBlock,
+    syncedGames,
+    failures,
+  };
 }
 
 /**
- * Backfill missed events from the last processed block.
+ * Backfill chain state from RPC snapshots (no historical log queries).
  */
 export async function backfillEvents(): Promise<void> {
   const lastBlockStr = getSyncState(SYNC_KEY_LAST_BLOCK);
   const lastBlock = lastBlockStr ? parseInt(lastBlockStr, 10) : 0;
 
-  if (lastBlock === 0) {
-    // Find the block where startGameId was created and backfill from there
-    const startBlock = await findGameCreatedBlock(config.startGameId);
-    if (startBlock === null) {
-      log.info({ startGameId: config.startGameId }, "No GameCreated event found for startGameId, saving current block");
-      const currentBlock = await getHttpProvider().getBlockNumber();
-      setSyncState(SYNC_KEY_LAST_BLOCK, currentBlock.toString());
-      return;
-    }
-    log.info({ startGameId: config.startGameId, startBlock }, "Found creation block for startGameId, backfilling from there");
-    // Set lastBlock to one before the creation block so backfill includes it
-    setSyncState(SYNC_KEY_LAST_BLOCK, (startBlock - 1).toString());
-    // Re-read and fall through to the normal backfill logic
-    return backfillEvents();
-  }
-
-  const currentBlock = await getHttpProvider().getBlockNumber();
-  if (lastBlock >= currentBlock) {
-    log.info("No blocks to backfill");
+  const result = await syncGamesFromChain("backfill");
+  if (result.startId >= result.nextId) {
+    log.info({ currentBlock: result.currentBlock }, "Backfill complete (no chain games in configured range)");
     return;
   }
 
   log.info(
-    { fromBlock: lastBlock + 1, toBlock: currentBlock },
-    "Backfilling missed events"
+    {
+      previousBlock: lastBlock,
+      currentBlock: result.currentBlock,
+      gameIdRange: `${result.startId}-${result.nextId - 1}`,
+      syncedGames: result.syncedGames,
+      failures: result.failures,
+    },
+    "Backfill complete"
   );
-
-  const contract = getReadContract();
-  const from = lastBlock + 1;
-
-  // Backfill GameCreated events
-  const createdEvents = await contract.queryFilter(contract.filters.GameCreated(), from, currentBlock);
-  for (const event of createdEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    log.info({ gameId }, "Backfilling GameCreated");
-    try {
-      const cfg = await fetchGameConfig(gameId);
-      const shrinks = await fetchZoneShrinks(gameId);
-      manager.onGameCreated(cfg, shrinks);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill GameCreated failed");
-    }
-  }
-
-  // Backfill PlayerRegistered events — now emits (gameId, playerNumber)
-  const regEvents = await contract.queryFilter(contract.filters.PlayerRegistered(), from, currentBlock);
-  for (const event of regEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    const pNum = Number(e.args[1]);
-    log.info({ gameId, playerNumber: pNum }, "Backfilling PlayerRegistered");
-    try {
-      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
-      await manager.onPlayerRegistered(gameId, playerAddress, pNum);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill PlayerRegistered failed");
-    }
-  }
-
-  // Backfill GameStarted events
-  const startedEvents = await contract.queryFilter(contract.filters.GameStarted(), from, currentBlock);
-  for (const event of startedEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    log.info({ gameId }, "Backfilling GameStarted");
-    try {
-      manager.onGameStarted(gameId);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill GameStarted failed");
-    }
-  }
-
-  // Backfill GameEnded events — now emits (gameId, winner1, winner2, winner3, topKiller) as uint16
-  const endedEvents = await contract.queryFilter(contract.filters.GameEnded(), from, currentBlock);
-  for (const event of endedEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    log.info({ gameId }, "Backfilling GameEnded");
-    try {
-      manager.onGameEnded(
-        gameId,
-        Number(e.args[1]),
-        Number(e.args[2]),
-        Number(e.args[3]),
-        Number(e.args[4])
-      );
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill GameEnded failed");
-    }
-  }
-
-  // Backfill GameCancelled events
-  const cancelledEvents = await contract.queryFilter(contract.filters.GameCancelled(), from, currentBlock);
-  for (const event of cancelledEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    log.info({ gameId }, "Backfilling GameCancelled");
-    try {
-      manager.onGameCancelled(gameId);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill GameCancelled failed");
-    }
-  }
-
-  // Backfill PrizeClaimed events — now emits (gameId, playerNumber, amount)
-  const prizeClaimedEvents = await contract.queryFilter(contract.filters.PrizeClaimed(), from, currentBlock);
-  for (const event of prizeClaimedEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    const pNum = Number(e.args[1]);
-    log.info({ gameId, playerNumber: pNum }, "Backfilling PrizeClaimed");
-    try {
-      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
-      manager.onPrizeClaimed(gameId, playerAddress);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill PrizeClaimed failed");
-    }
-  }
-
-  // Backfill RefundClaimed events — now emits (gameId, playerNumber, amount)
-  const refundClaimedEvents = await contract.queryFilter(contract.filters.RefundClaimed(), from, currentBlock);
-  for (const event of refundClaimedEvents) {
-    const e = event as ethers.EventLog;
-    const gameId = Number(e.args[0]);
-    if (gameId < config.startGameId) continue;
-    const pNum = Number(e.args[1]);
-    log.info({ gameId, playerNumber: pNum }, "Backfilling RefundClaimed");
-    try {
-      const playerAddress = await fetchPlayerAddressWithRetry(gameId, pNum);
-      manager.onRefundClaimed(gameId, playerAddress);
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Backfill RefundClaimed failed");
-    }
-  }
-
-  setSyncState(SYNC_KEY_LAST_BLOCK, currentBlock.toString());
-  log.info({ newBlock: currentBlock }, "Backfill complete");
 }
 
 /**
@@ -400,116 +709,22 @@ export async function backfillEvents(): Promise<void> {
  * Player data is populated by iterating getPlayer(gameId, 1..playerCount).
  */
 export async function rebuildFromChain(): Promise<void> {
-  const startId = config.startGameId;
-  const nextId = await fetchNextGameId();
-
-  // Always wipe existing game data first so REBUILD_DB provides a true reset
-  // even when there are no chain games in the selected ID range.
-  resetGameData();
-
-  if (startId >= nextId) {
-    log.info({ startId, nextId }, "No games to rebuild");
-    const finalBlock = await getHttpProvider().getBlockNumber();
-    setSyncState(SYNC_KEY_LAST_BLOCK, finalBlock.toString());
+  const result = await syncGamesFromChain("rebuild");
+  if (result.startId >= result.nextId) {
+    log.info({ startId: result.startId, nextId: result.nextId }, "No games to rebuild");
     return;
   }
 
-  log.info({ startId, nextId: nextId - 1 }, "Rebuilding DB from chain...");
-
-  for (let gameId = startId; gameId < nextId; gameId++) {
-    try {
-      // 1. Fetch game config + state + shrinks from chain
-      const gameConfig = await fetchGameConfig(gameId);
-      const gameState = await fetchGameState(gameId);
-      const shrinks = await fetchZoneShrinks(gameId);
-
-      // 2. Insert game with on-chain state
-      insertGame({
-        ...gameConfig,
-        phase: gameState.phase,
-        totalCollected: gameState.totalCollected.toString(),
-        playerCount: gameState.playerCount,
-      });
-      insertZoneShrinks(gameId, shrinks);
-
-      // 3. Iterate players 1..playerCount and insert into DB
-      const rebuiltPlayers = new Map<number, ResolvedPlayerState>();
-      for (let pNum = 1; pNum <= gameState.playerCount; pNum++) {
-        try {
-          const playerState = await fetchPlayerStateWithRetry(gameId, pNum);
-          rebuiltPlayers.set(pNum, playerState);
-          insertPlayer(gameId, playerState.address, pNum, {
-            isAlive: playerState.killedAt === 0,
-            eliminatedAt: playerState.killedAt === 0 ? null : playerState.killedAt,
-            kills: playerState.killCount,
-            hasClaimed: playerState.claimed,
-          });
-        } catch (err) {
-          log.error({ gameId, playerNumber: pNum, error: (err as Error).message }, "Failed to rebuild player");
-        }
-      }
-
-      // 4. Update winners/ended state if game is ended/cancelled
-      if (gameState.phase === GamePhase.ENDED) {
-        // Resolve winner playerNumbers to addresses for DB storage
-        const resolveAddr = async (pNum: number): Promise<string> => {
-          if (pNum === 0) return "";
-          const fromSnapshot = rebuiltPlayers.get(pNum);
-          if (fromSnapshot) return fromSnapshot.address;
-          try {
-            return await fetchPlayerAddressWithRetry(gameId, pNum);
-          } catch {
-            return "";
-          }
-        };
-
-        const winner1Addr = await resolveAddr(gameState.winner1);
-        const winner2Addr = await resolveAddr(gameState.winner2);
-        const winner3Addr = await resolveAddr(gameState.winner3);
-        const topKillerAddr = await resolveAddr(gameState.topKiller);
-
-        updateGamePhase(gameId, GamePhase.ENDED, {
-          winner1: winner1Addr,
-          winner2: winner2Addr,
-          winner3: winner3Addr,
-          topKiller: topKillerAddr,
-        });
-      } else if (gameState.phase === GamePhase.CANCELLED) {
-        updateGamePhase(gameId, GamePhase.CANCELLED);
-      }
-
-      // 5. Update player_count and totalCollected from chain (canonical)
-      updatePlayerCount(gameId, gameState.playerCount);
-      updateTotalCollected(gameId, gameState.totalCollected.toString());
-
-      log.info({ gameId, phase: gameState.phase, players: gameState.playerCount }, "Rebuilt game");
-    } catch (err) {
-      log.error({ gameId, error: (err as Error).message }, "Failed to rebuild game");
-    }
-
-    // Small delay to avoid RPC rate limits
-    await sleep(500);
-  }
-
-  // Save current block as sync point for future backfills
-  const finalBlock = await getHttpProvider().getBlockNumber();
-  setSyncState(SYNC_KEY_LAST_BLOCK, finalBlock.toString());
-
-  log.info({ gamesRebuilt: nextId - startId, currentBlock: finalBlock }, "DB rebuild complete");
-}
-
-/**
- * Find the approximate block number where a specific game was created.
- * Uses timestamp estimation from game config (no eth_getLogs needed).
- */
-async function findGameCreatedBlock(gameId: number): Promise<number | null> {
-  try {
-    const gameConfig = await fetchGameConfig(gameId);
-    if (!gameConfig.createdAt) return null;
-    return await estimateBlockForTimestamp(gameConfig.createdAt);
-  } catch {
-    return null;
-  }
+  log.info(
+    {
+      startId: result.startId,
+      nextId: result.nextId - 1,
+      gamesRebuilt: result.syncedGames,
+      failures: result.failures,
+      currentBlock: result.currentBlock,
+    },
+    "DB rebuild complete"
+  );
 }
 
 function saveBlock(blockNumber: number): void {
@@ -520,11 +735,48 @@ function saveBlock(blockNumber: number): void {
   }
 }
 
+export function getEventListenerStatus(nowMs = Date.now()): EventListenerStatus {
+  const wsReadyState = getWsReadyState();
+  const heartbeatAgeMs = lastHeartbeatAtMs > 0 ? nowMs - lastHeartbeatAtMs : null;
+  const lastBlockRaw = getSyncState(SYNC_KEY_LAST_BLOCK);
+  const parsedLastBlock = lastBlockRaw ? parseInt(lastBlockRaw, 10) : NaN;
+  const lastProcessedBlock = Number.isFinite(parsedLastBlock) ? parsedLastBlock : null;
+
+  return {
+    running: listenerRunning,
+    restarting: listenerRestarting,
+    wsReadyState: wsReadyState ?? null,
+    heartbeatMonitorActive: heartbeatCheckTimer != null,
+    lastHeartbeatAtMs: lastHeartbeatAtMs > 0 ? lastHeartbeatAtMs : null,
+    lastHeartbeatBlock: lastHeartbeatBlock > 0 ? lastHeartbeatBlock : null,
+    heartbeatAgeMs,
+    lastRestartAtMs: lastRestartAtMs > 0 ? lastRestartAtMs : null,
+    restartCount,
+    lastRestartReason,
+    lastRestartError,
+    lastProcessedBlock,
+  };
+}
+
 /**
  * Stop event listener and auto-start checker.
  */
-export function stopEventListener(): void {
-  const contract = getWsContract();
-  contract.removeAllListeners();
+export async function stopEventListener(): Promise<void> {
+  stopHeartbeatMonitor();
+  clearRestartRetryTimer();
+
+  if (wsProviderForListener && wsBlockHandler) {
+    wsProviderForListener.off("block", wsBlockHandler);
+  }
+  wsBlockHandler = null;
+  wsProviderForListener = null;
+
+  resetWsContract();
+  await resetWsProvider();
+
+  listenerRunning = false;
+  lastHeartbeatAtMs = 0;
+  lastHeartbeatBlock = 0;
+
   log.info("Event listener stopped");
 }

@@ -21,7 +21,7 @@ function loadAbi(): ethers.InterfaceAbi {
 let abi: ethers.InterfaceAbi;
 let readContract: ethers.Contract;
 let writeContract: ethers.Contract;
-let wsContract: ethers.Contract;
+let wsContract: ethers.Contract | null = null;
 
 export function getAbi(): ethers.InterfaceAbi {
   if (!abi) abi = loadAbi();
@@ -71,6 +71,16 @@ export function getWsContract(): ethers.Contract {
     log.info("WebSocket contract initialized for events");
   }
   return wsContract;
+}
+
+/**
+ * Remove listeners and clear cached WS contract instance.
+ */
+export function resetWsContract(): void {
+  if (!wsContract) return;
+  wsContract.removeAllListeners();
+  wsContract = null;
+  log.info("WebSocket contract reset");
 }
 
 // ============ Read Helpers ============
@@ -129,22 +139,6 @@ export async function fetchZoneShrinks(gameId: number): Promise<ZoneShrink[]> {
 export async function fetchNextGameId(): Promise<number> {
   const c = getReadContract();
   return Number(await c.nextGameId());
-}
-
-export async function fetchIsRegistered(
-  gameId: number,
-  address: string
-): Promise<boolean> {
-  const pNum = Number(await getReadContract().playerNumber(gameId, address));
-  return pNum !== 0;
-}
-
-export async function fetchIsAlive(
-  gameId: number,
-  address: string
-): Promise<boolean> {
-  const info = await fetchPlayerInfo(gameId, address);
-  return info.registered && info.killedAt === 0;
 }
 
 export async function fetchPlayer(

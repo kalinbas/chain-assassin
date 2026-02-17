@@ -56,24 +56,6 @@ fun CheckInScreen(
         }
     }
 
-    // Ensure server connection and start sending location for auto-seed
-    LaunchedEffect(Unit) {
-        val id = gameId.toIntOrNull() ?: config.id.toIntOrNull()
-        if (id != null) {
-            viewModel.connectToServer(id)
-        }
-        viewModel.startLocationTracking()
-        viewModel.startBleScanning()
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopBleScanning()
-            viewModel.stopLocationTracking()
-            viewModel.disconnectFromServer()
-        }
-    }
-
     // Navigate based on phase change
     LaunchedEffect(state.phase) {
         when (state.phase) {

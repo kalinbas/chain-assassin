@@ -2,11 +2,16 @@ package com.cryptohunt.app.domain.server
 
 import android.util.Log
 import com.cryptohunt.app.domain.wallet.WalletManager
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
@@ -59,6 +64,8 @@ class GameServerClient @Inject constructor(
     private var currentGameId: Int? = null
     private var reconnectAttempts = 0
     private var shouldReconnect = false
+    private var reconnectJob: Job? = null
+    private val reconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private val client = OkHttpClient.Builder()
         .pingInterval(ServerConfig.PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
@@ -74,7 +81,8 @@ class GameServerClient @Inject constructor(
         if (currentGameId == gameId &&
             (_connectionState.value == ConnectionState.CONNECTED ||
              _connectionState.value == ConnectionState.CONNECTING ||
-             _connectionState.value == ConnectionState.AUTHENTICATING)
+             _connectionState.value == ConnectionState.AUTHENTICATING ||
+             _connectionState.value == ConnectionState.RECONNECTING)
         ) {
             Log.d(TAG, "Already connected to game $gameId, ignoring")
             return
@@ -91,6 +99,7 @@ class GameServerClient @Inject constructor(
         currentGameId = gameId
         shouldReconnect = true
         reconnectAttempts = 0
+        cancelReconnectJob()
         Log.i(TAG, "Connecting to game $gameId via ${ServerConfig.SERVER_WS_URL} (api=${ServerConfig.SERVER_URL})")
         doConnect()
     }
@@ -101,6 +110,7 @@ class GameServerClient @Inject constructor(
     fun disconnect() {
         shouldReconnect = false
         currentGameId = null
+        cancelReconnectJob()
         _authState.value = null
         webSocket?.close(1000, "Client disconnect")
         webSocket = null
@@ -532,6 +542,7 @@ class GameServerClient @Inject constructor(
 
     private fun doConnect() {
         val gameId = currentGameId ?: return
+        cancelReconnectJob()
         _connectionState.value = ConnectionState.CONNECTING
         Log.d(TAG, "Connecting to ${ServerConfig.SERVER_WS_URL} for game $gameId")
 
@@ -610,6 +621,10 @@ class GameServerClient @Inject constructor(
     }
 
     private fun handleDisconnect() {
+        if (_connectionState.value == ConnectionState.RECONNECTING && reconnectJob?.isActive == true) {
+            return
+        }
+
         webSocket = null
         _authState.value = null
 
@@ -618,21 +633,27 @@ class GameServerClient @Inject constructor(
             val delay = calculateReconnectDelay()
             _connectionState.value = ConnectionState.RECONNECTING
             Log.d(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempts)")
-
-            // Schedule reconnect on a background thread
-            Thread {
-                try {
-                    Thread.sleep(delay)
-                    if (shouldReconnect) {
-                        doConnect()
-                    }
-                } catch (_: InterruptedException) {
-                    // Cancelled
-                }
-            }.start()
+            scheduleReconnect(delay, currentGameId!!)
         } else {
+            cancelReconnectJob()
             _connectionState.value = ConnectionState.DISCONNECTED
         }
+    }
+
+    private fun scheduleReconnect(delayMs: Long, gameId: Int) {
+        cancelReconnectJob()
+        reconnectJob = reconnectScope.launch {
+            delay(delayMs)
+            if (!shouldReconnect || currentGameId != gameId || webSocket != null) {
+                return@launch
+            }
+            doConnect()
+        }
+    }
+
+    private fun cancelReconnectJob() {
+        reconnectJob?.cancel()
+        reconnectJob = null
     }
 
     private fun calculateReconnectDelay(): Long {

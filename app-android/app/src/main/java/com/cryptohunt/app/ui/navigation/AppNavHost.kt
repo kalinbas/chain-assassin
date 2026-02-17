@@ -11,6 +11,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,8 +24,10 @@ import com.cryptohunt.app.ui.components.DebugStatusOverlay
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.screens.game.CheckInCameraScreen
 import com.cryptohunt.app.ui.screens.game.CheckInScreen
 import com.cryptohunt.app.ui.screens.game.PregameScreen
@@ -44,6 +49,7 @@ import com.cryptohunt.app.ui.screens.onboarding.WalletSetupScreen
 import com.cryptohunt.app.ui.screens.onboarding.WelcomeScreen
 import com.cryptohunt.app.ui.screens.postgame.EliminatedScreen
 import com.cryptohunt.app.ui.screens.postgame.ResultsScreen
+import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.ui.viewmodel.ScanDebugViewModel
 import com.cryptohunt.app.ui.viewmodel.WalletViewModel
 
@@ -57,6 +63,52 @@ fun AppNavHost(
     walletViewModel: WalletViewModel = hiltViewModel()
 ) {
     val navController = rememberNavController()
+    val gameViewModel: GameViewModel = hiltViewModel()
+    val gameState by gameViewModel.gameState.collectAsState()
+    val currentBackStackEntry by navController.currentBackStackEntryAsState()
+
+    val currentRoute = currentBackStackEntry?.destination?.route
+    val routeGameId = currentBackStackEntry?.arguments?.getString("gameId")?.toIntOrNull()
+    val activeGameId = routeGameId ?: gameState?.config?.id?.toIntOrNull()
+
+    val wsActiveRoutes = remember {
+        setOf(
+            NavRoutes.RegisteredDetail.route,
+            NavRoutes.CheckIn.route,
+            NavRoutes.CheckInCamera.route,
+            NavRoutes.Pregame.route,
+            NavRoutes.MainGame.route,
+            NavRoutes.HuntCamera.route
+        )
+    }
+    val sensorActiveRoutes = remember {
+        setOf(
+            NavRoutes.RegisteredDetail.route,
+            NavRoutes.CheckIn.route,
+            NavRoutes.CheckInCamera.route,
+            NavRoutes.MainGame.route,
+            NavRoutes.HuntCamera.route
+        )
+    }
+
+    LaunchedEffect(currentRoute, activeGameId, gameState?.config?.id) {
+        val keepWs = currentRoute in wsActiveRoutes
+        val keepSensors = currentRoute in sensorActiveRoutes
+
+        if (keepWs && activeGameId != null) {
+            gameViewModel.connectToServer(activeGameId)
+        } else {
+            gameViewModel.disconnectFromServer()
+        }
+
+        if (keepSensors) {
+            gameViewModel.startLocationTracking()
+            gameViewModel.startBleScanning()
+        } else {
+            gameViewModel.stopBleScanning()
+            gameViewModel.stopLocationTracking()
+        }
+    }
 
     // Compute start destination only once — don't react to wallet state changes
     // (creating a wallet during onboarding must not skip the setup screen)
@@ -65,6 +117,23 @@ fun AppNavHost(
             NavRoutes.GameBrowser.route
         } else {
             NavRoutes.Welcome.route
+        }
+    }
+
+    fun navigateToCurrentGameScreen(gameId: String, popToLobby: Boolean = false) {
+        val phaseForGame = gameState?.takeIf { it.config.id == gameId }?.phase
+        val route = when (phaseForGame) {
+            GamePhase.CHECK_IN -> NavRoutes.CheckIn.withId(gameId)
+            GamePhase.PREGAME -> NavRoutes.Pregame.withId(gameId)
+            GamePhase.ACTIVE -> NavRoutes.MainGame.route
+            GamePhase.ELIMINATED -> NavRoutes.Eliminated.route
+            else -> NavRoutes.RegisteredDetail.withId(gameId)
+        }
+        navController.navigate(route) {
+            if (popToLobby) {
+                popUpTo(NavRoutes.GameBrowser.route)
+            }
+            launchSingleTop = true
         }
     }
 
@@ -152,7 +221,7 @@ fun AppNavHost(
                     navController.navigate(NavRoutes.GameDetail.withId(gameId))
                 },
                 onRegisteredGameClick = { gameId ->
-                    navController.navigate(NavRoutes.RegisteredDetail.withId(gameId))
+                    navigateToCurrentGameScreen(gameId)
                 },
                 onActiveGameClick = {
                     navController.navigate(NavRoutes.MainGame.route)
@@ -188,14 +257,10 @@ fun AppNavHost(
             GameDetailScreen(
                 gameId = gameId,
                 onJoinGame = { id ->
-                    navController.navigate(NavRoutes.RegisteredDetail.withId(id)) {
-                        popUpTo(NavRoutes.GameBrowser.route)
-                    }
+                    navigateToCurrentGameScreen(id, popToLobby = true)
                 },
                 onViewRegistration = { id ->
-                    navController.navigate(NavRoutes.RegisteredDetail.withId(id)) {
-                        popUpTo(NavRoutes.GameBrowser.route)
-                    }
+                    navigateToCurrentGameScreen(id, popToLobby = true)
                 },
                 onBack = { navController.popBackStack() }
             )
@@ -239,6 +304,7 @@ fun AppNavHost(
             val gameId = backStackEntry.arguments?.getString("gameId") ?: ""
             CheckInScreen(
                 gameId = gameId,
+                viewModel = gameViewModel,
                 onScanPlayer = {
                     navController.navigate(NavRoutes.CheckInCamera.route)
                 },
@@ -268,6 +334,7 @@ fun AppNavHost(
             val gameId = backStackEntry.arguments?.getString("gameId") ?: ""
             PregameScreen(
                 gameId = gameId,
+                viewModel = gameViewModel,
                 onGameStart = {
                     navController.navigate(NavRoutes.MainGame.route) {
                         popUpTo(NavRoutes.GameBrowser.route) { inclusive = true }
@@ -284,6 +351,7 @@ fun AppNavHost(
 
         composable(NavRoutes.CheckInCamera.route) {
             CheckInCameraScreen(
+                viewModel = gameViewModel,
                 onVerified = { navController.popBackStack() },
                 onBack = { navController.popBackStack() }
             )
@@ -303,6 +371,7 @@ fun AppNavHost(
         // Game
         composable(NavRoutes.MainGame.route) {
             MainGameScreen(
+                viewModel = gameViewModel,
                 onScan = { navController.navigate(NavRoutes.HuntCamera.route) },
                 onPhoto = { navController.navigate(NavRoutes.PhotoCapture.route) },
                 onMap = { navController.navigate(NavRoutes.Map.route) },
@@ -322,6 +391,7 @@ fun AppNavHost(
 
         composable(NavRoutes.HuntCamera.route) {
             HuntCameraScreen(
+                viewModel = gameViewModel,
                 onKillConfirmed = { navController.popBackStack() },
                 onBack = { navController.popBackStack() }
             )

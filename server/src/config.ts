@@ -80,6 +80,11 @@ export const config = {
   // Rebuild — wipe DB and re-sync all game data from blockchain on startup
   rebuildDb: envBool("REBUILD_DB", false),
 
+  // WebSocket listener resilience
+  wsHeartbeatCheckIntervalMs: envInt("WS_HEARTBEAT_CHECK_INTERVAL_MS", 30_000),
+  wsHeartbeatStaleMs: envInt("WS_HEARTBEAT_STALE_MS", 120_000),
+  wsRestartCooldownMs: envInt("WS_RESTART_COOLDOWN_MS", 30_000),
+
   // Logging
   logLevel: optionalEnv("LOG_LEVEL", "info"),
 } as const;

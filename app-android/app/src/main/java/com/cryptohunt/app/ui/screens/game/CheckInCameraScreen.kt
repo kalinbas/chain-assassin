@@ -32,6 +32,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.model.CheckInResult
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.util.QrGenerator
@@ -53,23 +54,21 @@ fun CheckInCameraScreen(
 
     var verified by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-    val activeGameId = gameState?.config?.id?.toIntOrNull()
+    var autoNavigatedAway by remember { mutableStateOf(false) }
 
-    // Keep realtime side effects active while this scan route is visible.
-    LaunchedEffect(activeGameId) {
-        if (activeGameId != null) {
-            viewModel.connectToServer(activeGameId)
+    // Keep camera route aligned with authoritative server phase.
+    LaunchedEffect(gameState?.phase, gameState?.checkInVerified, autoNavigatedAway) {
+        if (autoNavigatedAway) return@LaunchedEffect
+        val state = gameState ?: return@LaunchedEffect
+
+        if (state.checkInVerified && !verified) {
+            verified = true
+            return@LaunchedEffect
         }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.startLocationTracking()
-        viewModel.startBleScanning()
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopBleScanning()
-            viewModel.stopLocationTracking()
-            viewModel.disconnectFromServer()
+
+        if (state.phase != GamePhase.CHECK_IN) {
+            autoNavigatedAway = true
+            onBack()
         }
     }
 

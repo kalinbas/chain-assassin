@@ -106,17 +106,6 @@ fun RegisteredDetailScreen(
         }
     }
 
-    // Connect to server so we receive phase transition messages (e.g. game:checkin_started)
-    LaunchedEffect(config.id) {
-        viewModel.connectToServer(config.id)
-    }
-    // Keep WS open only while this detail screen is visible.
-    DisposableEffect(config.id) {
-        onDispose {
-            viewModel.disconnectFromServer()
-        }
-    }
-
     val days = (timeRemainingMs / 86400000).coerceAtLeast(0)
     val hours = ((timeRemainingMs % 86400000) / 3600000).coerceAtLeast(0)
     val minutes = ((timeRemainingMs % 3600000) / 60000).coerceAtLeast(0)
@@ -381,7 +370,8 @@ fun RegisteredDetailScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(180.dp)
-                            .clip(MaterialTheme.shapes.medium),
+                            .clip(MaterialTheme.shapes.medium)
+                            .background(Background),
                         factory = { ctx ->
                             val cartoDark = object : OnlineTileSourceBase(
                                 "CartoDB_Dark", 0, 20, 256, ".png",
@@ -400,6 +390,7 @@ fun RegisteredDetailScreen(
                                 }
                             }
                             MapView(ctx).apply {
+                                setBackgroundColor(Background.toArgb())
                                 setTileSource(cartoDark)
                                 setMultiTouchControls(true)
                                 controller.setZoom(16.0)

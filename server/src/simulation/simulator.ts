@@ -181,7 +181,6 @@ export class GameSimulator {
   startedAtWall = 0; // wall-clock timestamp when active phase started
   private tickCount = 0;
   private tickTimer: ReturnType<typeof setInterval> | null = null;
-  private abortReason: string | null = null;
   private zoneShrinks: ZoneShrink[] = [];
   private simulatedAddressSet = new Set<string>(SIM_WALLET_ADDRESS_SET);
 
@@ -907,7 +906,6 @@ export class GameSimulator {
   }
 
   abort(reason: string): void {
-    this.abortReason = reason;
     this.phase = "aborted";
     this.cleanup();
     removeSimulatedGame(this.gameId);

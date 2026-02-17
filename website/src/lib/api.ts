@@ -18,10 +18,6 @@ function formatShortDate(timestamp: number): string {
   return `${months[d.getMonth()]} ${d.getDate()}, ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-export function truncAddr(addr: string): string {
-  return addr.slice(0, 6) + '...' + addr.slice(-4);
-}
-
 // Wei string → ETH number
 function weiToEth(wei: string): number {
   const bi = BigInt(wei);

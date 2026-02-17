@@ -1,28 +1,8 @@
 import { useEffect, useState } from 'react';
-import { MapContainer, TileLayer, Circle, CircleMarker, Polyline, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Circle, CircleMarker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import type { SpectatorState } from '../../hooks/useSpectatorSocket';
-
-// Simple deterministic hash for consistent jitter per player
-function simpleHash(s: string): number {
-  let h = 0;
-  for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h);
-}
-
-// Return a fuzzy position with ±30-70m offset, changing every 3s
-function fuzzyPosition(lat: number, lng: number, playerNumber: number, tick: number): [number, number] {
-  const bucket = Math.floor(tick / 3000);
-  const seed = simpleHash(`p${playerNumber}_${bucket}`);
-  const angle = (seed % 360) * (Math.PI / 180);
-  const jitterMeters = 30 + (seed % 40); // 30-70m jitter
-  const dlat = (jitterMeters * Math.cos(angle)) / 111320;
-  const dlng = (jitterMeters * Math.sin(angle)) / (111320 * Math.cos(lat * Math.PI / 180));
-  return [lat + dlat, lng + dlng];
-}
 
 function FitZone({ center, radius }: { center: [number, number]; radius: number }) {
   const map = useMap();
@@ -74,18 +54,10 @@ function KillFlashCircle({ lat, lng, timestamp }: { lat: number; lng: number; ti
 
 interface SpectatorMapProps {
   state: SpectatorState;
-  showHuntLines?: boolean;
 }
 
-export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps) {
+export function SpectatorMap({ state }: SpectatorMapProps) {
   const zone = state.zone;
-  const [tick, setTick] = useState(Date.now());
-
-  // Update tick every 3s for fuzzy position jitter
-  useEffect(() => {
-    const interval = setInterval(() => setTick(Date.now()), 3000);
-    return () => clearInterval(interval);
-  }, []);
 
   if (!zone) return null;
 
@@ -94,7 +66,7 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
 
   // Filter: only alive players with positions
   const visiblePlayers = state.players.filter(
-    (p) => p.lat != null && p.lng != null && p.isAlive
+    (p) => p.lat != null && p.lng != null
   );
 
   // Active ping circles
@@ -131,50 +103,12 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
           />
         )}
 
-        {/* Player trails (dashed green polylines) */}
-        {Object.entries(state.trails).map(([key, trail]) => {
-          if (trail.length < 2) return null;
-          const playerNum = Number(key);
-          const player = state.players.find((p) => p.playerNumber === playerNum);
-          if (!player?.isAlive) return null;
-
-          const positions = trail.map((t) =>
-            fuzzyPosition(t.lat, t.lng, playerNum, t.timestamp)
-          );
-
-          return (
-            <Polyline
-              key={`trail-${key}`}
-              positions={positions}
-              pathOptions={{ color: '#00FF88', weight: 2, opacity: 0.2, dashArray: '4 4' }}
-            />
-          );
-        })}
-
-        {/* Hunt lines (subtle red dashed lines from hunter to target) */}
-        {showHuntLines && state.huntLinks.map((link) => {
-          const hunter = visiblePlayers.find((p) => p.playerNumber === link.hunter);
-          const target = visiblePlayers.find((p) => p.playerNumber === link.target);
-          if (!hunter?.lat || !target?.lat) return null;
-
-          const hPos = fuzzyPosition(hunter.lat, hunter.lng!, hunter.playerNumber, tick);
-          const tPos = fuzzyPosition(target.lat, target.lng!, target.playerNumber, tick);
-
-          return (
-            <Polyline
-              key={`hunt-${link.hunter}`}
-              positions={[hPos, tPos]}
-              pathOptions={{ color: '#FF3B3B', weight: 1, opacity: 0.15, dashArray: '6 8' }}
-            />
-          );
-        })}
-
         {/* Anonymous player dots — glow circle behind each */}
-        {visiblePlayers.map((player) => {
-          const pos = fuzzyPosition(player.lat!, player.lng!, player.playerNumber, tick);
+        {visiblePlayers.map((player, index) => {
+          const pos: [number, number] = [player.lat!, player.lng!];
           return (
             <CircleMarker
-              key={`glow-${player.playerNumber}`}
+              key={`glow-${index}`}
               center={pos}
               radius={14}
               pathOptions={{
@@ -188,11 +122,11 @@ export function SpectatorMap({ state, showHuntLines = false }: SpectatorMapProps
         })}
 
         {/* Anonymous player dots — main dot */}
-        {visiblePlayers.map((player) => {
-          const pos = fuzzyPosition(player.lat!, player.lng!, player.playerNumber, tick);
+        {visiblePlayers.map((player, index) => {
+          const pos: [number, number] = [player.lat!, player.lng!];
           return (
             <CircleMarker
-              key={`player-${player.playerNumber}`}
+              key={`player-${index}`}
               center={pos}
               radius={7}
               pathOptions={{

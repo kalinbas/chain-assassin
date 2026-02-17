@@ -40,6 +40,7 @@ class GameViewModel @Inject constructor(
     private val _heartbeatSubmissionErrors = MutableSharedFlow<String>(extraBufferCapacity = 10)
     val heartbeatSubmissionErrors: SharedFlow<String> = _heartbeatSubmissionErrors.asSharedFlow()
     private var bleSessionActive = false
+    private var locationSessionActive = false
 
     init {
         // Forward game events to UI events
@@ -83,22 +84,31 @@ class GameViewModel @Inject constructor(
     }
 
     fun startLocationTracking() {
+        if (locationSessionActive) return
         val config = gameState.value?.config ?: return
         locationTracker.setZone(config.zoneCenterLat, config.zoneCenterLng, gameState.value?.currentZoneRadius ?: config.initialRadiusMeters)
         locationTracker.startTracking()
+        locationSessionActive = true
     }
 
     fun stopLocationTracking() {
+        if (!locationSessionActive) return
         locationTracker.stopTracking()
+        locationSessionActive = false
     }
 
     fun startBleScanning() {
+        if (bleSessionActive) {
+            syncBleAdvertising(gameState.value)
+            return
+        }
         bleSessionActive = true
         bleScanner.startScanning()
         syncBleAdvertising(gameState.value)
     }
 
     fun stopBleScanning() {
+        if (!bleSessionActive) return
         bleSessionActive = false
         bleScanner.stopScanning()
         bleAdvertiser.stopAdvertising()
@@ -221,9 +231,6 @@ class GameViewModel @Inject constructor(
     }
 
     override fun onCleared() {
-        bleAdvertiser.stopAdvertising()
-        bleScanner.stopScanning()
-        locationTracker.stopTracking()
         super.onCleared()
     }
 }

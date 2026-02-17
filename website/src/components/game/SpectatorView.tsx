@@ -4,7 +4,7 @@ import { useSpectatorSound } from '../../hooks/useSpectatorSound';
 import { SpectatorMap } from './SpectatorMap';
 import { SpectatorLeaderboard } from './SpectatorLeaderboard';
 import { SpectatorKillFeed } from './SpectatorKillFeed';
-import { EyeIcon, EyeOffIcon, SoundOnIcon, SoundOffIcon } from '../icons/Icons';
+import { SoundOnIcon, SoundOffIcon } from '../icons/Icons';
 
 function formatCountdown(nextShrinkAt: number | null | undefined): string | null {
   if (!nextShrinkAt) return null;
@@ -51,7 +51,6 @@ function formatPregameCountdown(pregameEndsAt: number | null): string | null {
 export function SpectatorView({ state }: { state: SpectatorState }) {
   const zone = state.zone;
   const countdown = formatCountdown(zone?.nextShrinkAt);
-  const [showHuntLines, setShowHuntLines] = useState(false);
   const [soundEnabled, setSoundEnabled] = useState(false);
   const { resumeAudio } = useSpectatorSound(state, soundEnabled);
   const aliveFlash = useAliveFlash(state.aliveCount);
@@ -87,37 +86,17 @@ export function SpectatorView({ state }: { state: SpectatorState }) {
     );
   }
 
-  // Show winners if game ended
-  if (state.phase === 'ended' && state.winners) {
+  // Show summary if game ended
+  if (state.phase === 'ended') {
     return (
       <div className="spectator">
         <div className="spectator__ended">
           <h3 className="spectator__ended-title">Game Over</h3>
-          <div className="spectator__winners">
-            {state.winners.winner1 !== 0 && (
-              <div className="spectator__winner spectator__winner--1st">
-                <span className="spectator__winner-rank">1st</span>
-                <span className="spectator__winner-addr">Player #{state.winners.winner1}</span>
-              </div>
-            )}
-            {state.winners.winner2 !== 0 && (
-              <div className="spectator__winner spectator__winner--2nd">
-                <span className="spectator__winner-rank">2nd</span>
-                <span className="spectator__winner-addr">Player #{state.winners.winner2}</span>
-              </div>
-            )}
-            {state.winners.winner3 !== 0 && (
-              <div className="spectator__winner spectator__winner--3rd">
-                <span className="spectator__winner-rank">3rd</span>
-                <span className="spectator__winner-addr">Player #{state.winners.winner3}</span>
-              </div>
-            )}
-          </div>
           <div className="spectator__final-stats">
             <span>Total Kills: <strong>{state.totalKills}</strong></span>
           </div>
         </div>
-        <SpectatorMap state={state} showHuntLines={false} />
+        <SpectatorMap state={state} />
         <div className="spectator__panels">
           <SpectatorLeaderboard state={state} />
           <SpectatorKillFeed events={state.events} />
@@ -157,14 +136,6 @@ export function SpectatorView({ state }: { state: SpectatorState }) {
 
       <div className="spectator__controls">
         <button
-          className={`spectator__toggle ${showHuntLines ? 'spectator__toggle--active' : ''}`}
-          onClick={() => setShowHuntLines(!showHuntLines)}
-          title="Toggle hunt assignment lines"
-        >
-          {showHuntLines ? <EyeIcon width={14} height={14} /> : <EyeOffIcon width={14} height={14} />}
-          Hunt Lines
-        </button>
-        <button
           className={`spectator__toggle ${soundEnabled ? 'spectator__toggle--active' : ''}`}
           onClick={() => { setSoundEnabled(!soundEnabled); resumeAudio(); }}
           title="Toggle sound effects"
@@ -174,7 +145,7 @@ export function SpectatorView({ state }: { state: SpectatorState }) {
         </button>
       </div>
 
-      <SpectatorMap state={state} showHuntLines={showHuntLines} />
+      <SpectatorMap state={state} />
 
       <div className="spectator__panels">
         <SpectatorLeaderboard state={state} />

@@ -40,6 +40,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.cryptohunt.app.domain.game.GameEvent
 import com.cryptohunt.app.domain.game.KillResult
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.domain.model.HeartbeatResult
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
@@ -72,23 +73,15 @@ fun HuntCameraScreen(
     var heartbeatSuccess by remember { mutableStateOf(false) }
     var heartbeatPlayerNumber by remember { mutableIntStateOf(0) }
     var heartbeatError by remember { mutableStateOf<String?>(null) }
-    val activeGameId = gameState?.config?.id?.toIntOrNull()
+    var autoNavigatedAway by remember { mutableStateOf(false) }
 
-    // Keep realtime side effects active while this scan route is visible.
-    LaunchedEffect(activeGameId) {
-        if (activeGameId != null) {
-            viewModel.connectToServer(activeGameId)
-        }
-    }
-    LaunchedEffect(Unit) {
-        viewModel.startLocationTracking()
-        viewModel.startBleScanning()
-    }
-    DisposableEffect(Unit) {
-        onDispose {
-            viewModel.stopBleScanning()
-            viewModel.stopLocationTracking()
-            viewModel.disconnectFromServer()
+    // Keep camera route aligned with authoritative server phase.
+    LaunchedEffect(gameState?.phase, autoNavigatedAway) {
+        if (autoNavigatedAway) return@LaunchedEffect
+        val phase = gameState?.phase ?: return@LaunchedEffect
+        if (phase != GamePhase.ACTIVE) {
+            autoNavigatedAway = true
+            onBack()
         }
     }
 

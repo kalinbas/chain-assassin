@@ -39,6 +39,13 @@ export function verifyKill(
   hunterLng: number,
   bleNearbyAddresses: string[]
 ): KillVerificationResult {
+  if (!Number.isFinite(hunterLat) || hunterLat < -90 || hunterLat > 90) {
+    return { valid: false, error: "Invalid hunter latitude" };
+  }
+  if (!Number.isFinite(hunterLng) || hunterLng < -180 || hunterLng > 180) {
+    return { valid: false, error: "Invalid hunter longitude" };
+  }
+
   // 1. Parse obfuscated numeric QR payload (server/client shared codec)
   const qr = parseKillQrPayload(qrPayload);
   if (!qr) {

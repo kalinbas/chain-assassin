@@ -675,17 +675,6 @@ export function getTargetAssignment(
   };
 }
 
-export function getAllTargetAssignments(gameId: number): TargetAssignment[] {
-  const rows = getDb()
-    .prepare("SELECT * FROM target_assignments WHERE game_id = ?")
-    .all(gameId) as Record<string, unknown>[];
-  return rows.map((r) => ({
-    hunterAddress: r.hunter_address as string,
-    targetAddress: r.target_address as string,
-    assignedAt: r.assigned_at as number,
-  }));
-}
-
 export function removeTargetAssignment(gameId: number, hunter: string): void {
   getDb()
     .prepare(

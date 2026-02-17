@@ -47,6 +47,7 @@ CHAIN_ID=84532                          # Chain ID (default: Base Sepolia)
 # Server
 PORT=3000
 HOST=0.0.0.0
+ENABLE_SIMULATION_API=false             # Enable debug simulation endpoints
 
 # Database
 DB_PATH=./data/chain-assassin.db       # SQLite file path
@@ -56,6 +57,28 @@ KILL_PROXIMITY_METERS=100              # Max GPS distance for kills
 ZONE_GRACE_SECONDS=60                  # Seconds before zone elimination
 GPS_PING_INTERVAL_SECONDS=5            # Expected client ping interval
 BLE_REQUIRED=true                      # Require Bluetooth proximity for kills
+
+# Heartbeat
+HEARTBEAT_INTERVAL_SECONDS=600         # Seconds between required heartbeat scans
+HEARTBEAT_PROXIMITY_METERS=100         # Max distance from scanned heartbeat QR target
+HEARTBEAT_DISABLE_THRESHOLD=4          # Disable heartbeat when alive players <= threshold
+
+# Check-in / pregame
+CHECKIN_DURATION_SECONDS=300           # Check-in window duration after registration closes
+PREGAME_DURATION_SECONDS=180           # Pregame countdown before hunt starts
+
+# Photos
+PHOTOS_DIR=./data/photos               # Upload destination for evidence photos
+MAX_PHOTO_SIZE_MB=5                    # Max image payload size
+
+# Sync / startup
+START_GAME_ID=1                        # Ignore chain games below this ID
+REBUILD_DB=false                       # Wipe DB and rebuild from chain on startup
+
+# WS listener resilience
+WS_HEARTBEAT_CHECK_INTERVAL_MS=30000   # How often to check listener heartbeat
+WS_HEARTBEAT_STALE_MS=120000           # Restart listener if heartbeat older than this
+WS_RESTART_COOLDOWN_MS=30000           # Minimum gap between restart attempts
 
 # Logging
 LOG_LEVEL=info                         # pino log level

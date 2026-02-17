@@ -1,24 +1,175 @@
-import { mkdirSync, writeFileSync } from "fs";
+import { mkdirSync, writeFileSync, statSync, readFileSync } from "fs";
 import { randomUUID } from "crypto";
 import { extname } from "path";
+import { hostname } from "os";
 import type { Request, Response } from "express";
 import type { AuthenticatedRequest } from "./middleware.js";
 import { getGameStatus, handleKillSubmission, handleCheckin, handleLocationUpdate, handleHeartbeatScan, checkAllRegistrationGames, getPregameDurationSeconds } from "../game/manager.js";
-import { getOperatorWallet } from "../blockchain/client.js";
-import { getPlayer, insertPhoto, getGamePhotos, getAllGames, getGame, getZoneShrinks, getGameActivity, getPlayers } from "../db/queries.js";
+import { getOperatorWallet, getHttpProvider } from "../blockchain/client.js";
+import { getDb, getPlayer, insertPhoto, getGamePhotos, getAllGames, getGame, getZoneShrinks, getGameActivity, getPlayers } from "../db/queries.js";
 import { getLeaderboard } from "../game/leaderboard.js";
 import { config } from "../config.js";
 import { createLogger } from "../utils/logger.js";
 import { contractCoordToDegrees } from "../utils/geo.js";
 import { parseKillQrPayload } from "../utils/crypto.js";
+import { getEventListenerStatus } from "../blockchain/listener.js";
+import { getWebSocketServerStats } from "../ws/server.js";
+import { getRoomStats } from "../ws/rooms.js";
 
 const log = createLogger("api");
+const HEALTH_RPC_TIMEOUT_MS = 1500;
+
+function resolveAppVersion(): string {
+  try {
+    const packageJsonPath = new URL("../../package.json", import.meta.url);
+    const raw = readFileSync(packageJsonPath, "utf8");
+    const parsed = JSON.parse(raw) as { version?: unknown };
+    if (typeof parsed.version === "string" && parsed.version.trim().length > 0) {
+      return parsed.version;
+    }
+  } catch {
+    // Best effort: fall through to unknown.
+  }
+  return "unknown";
+}
+
+const appVersion = resolveAppVersion();
 
 /**
  * GET /health
  */
-export function healthCheck(_req: Request, res: Response): void {
-  res.json({ status: "ok", timestamp: Date.now() });
+export async function healthCheck(_req: Request, res: Response): Promise<void> {
+  const nowMs = Date.now();
+  const uptimeSeconds = Math.floor(process.uptime());
+  const startedAtMs = nowMs - Math.floor(process.uptime() * 1000);
+  const listener = getEventListenerStatus(nowMs);
+  const wsServer = getWebSocketServerStats();
+  const roomStats = getRoomStats();
+  const gameCounts = {
+    total: 0,
+    registration: 0,
+    active: 0,
+    ended: 0,
+    cancelled: 0,
+  };
+
+  const activeSubPhaseCounts: Record<string, number> = {
+    checkin: 0,
+    pregame: 0,
+    game: 0,
+    unknown: 0,
+  };
+
+  const phaseRows = getDb()
+    .prepare("SELECT phase, sub_phase, COUNT(*) as count FROM games GROUP BY phase, sub_phase")
+    .all() as Array<{ phase: number; sub_phase: string | null; count: number }>;
+
+  for (const row of phaseRows) {
+    gameCounts.total += row.count;
+    if (row.phase === 0) {
+      gameCounts.registration += row.count;
+    } else if (row.phase === 1) {
+      gameCounts.active += row.count;
+      if (row.sub_phase === "checkin") activeSubPhaseCounts.checkin += row.count;
+      else if (row.sub_phase === "pregame") activeSubPhaseCounts.pregame += row.count;
+      else if (row.sub_phase === "game") activeSubPhaseCounts.game += row.count;
+      else activeSubPhaseCounts.unknown += row.count;
+    } else if (row.phase === 2) {
+      gameCounts.ended += row.count;
+    } else if (row.phase === 3) {
+      gameCounts.cancelled += row.count;
+    }
+  }
+
+  let dbFileSizeBytes: number | null = null;
+  try {
+    dbFileSizeBytes = statSync(config.dbPath).size;
+  } catch {
+    dbFileSizeBytes = null;
+  }
+
+  const rpcProbePromise: Promise<{ ok: true; block: number } | { ok: false; error: string }> = getHttpProvider()
+    .getBlockNumber()
+    .then((block) => ({ ok: true as const, block }))
+    .catch((err) => ({ ok: false as const, error: (err as Error).message }));
+  const rpcTimeoutPromise = new Promise<{ ok: false; error: string }>((resolve) => {
+    setTimeout(
+      () => resolve({ ok: false, error: `timeout_after_${HEALTH_RPC_TIMEOUT_MS}ms` }),
+      HEALTH_RPC_TIMEOUT_MS
+    );
+  });
+  const rpcProbe = await Promise.race([rpcProbePromise, rpcTimeoutPromise]);
+  const rpcLatestBlock = rpcProbe.ok ? rpcProbe.block : null;
+  const rpcError = rpcProbe.ok ? null : rpcProbe.error;
+  const syncLagBlocks =
+    rpcLatestBlock != null && listener.lastProcessedBlock != null
+      ? Math.max(0, rpcLatestBlock - listener.lastProcessedBlock)
+      : null;
+
+  const memory = process.memoryUsage();
+  const rssMb = Number((memory.rss / (1024 * 1024)).toFixed(2));
+  const heapUsedMb = Number((memory.heapUsed / (1024 * 1024)).toFixed(2));
+  const heapTotalMb = Number((memory.heapTotal / (1024 * 1024)).toFixed(2));
+
+  res.json({
+    status: "ok",
+    timestamp: nowMs,
+    timestampIso: new Date(nowMs).toISOString(),
+    startedAt: startedAtMs,
+    startedAtIso: new Date(startedAtMs).toISOString(),
+    uptimeSeconds,
+    app: {
+      name: "chain-assassin-server",
+      version: appVersion,
+      nodeEnv: process.env.NODE_ENV ?? "unknown",
+      nodeVersion: process.version,
+      pid: process.pid,
+      hostname: hostname(),
+      platform: process.platform,
+      arch: process.arch,
+    },
+    config: {
+      host: config.host,
+      port: config.port,
+      chainId: config.chainId,
+      contractAddress: config.contractAddress,
+      startGameId: config.startGameId,
+      enableSimulationApi: config.enableSimulationApi,
+      bleRequired: config.bleRequired,
+      killProximityMeters: config.killProximityMeters,
+      heartbeatIntervalSeconds: config.heartbeatIntervalSeconds,
+      checkinDurationSeconds: config.checkinDurationSeconds,
+      pregameDurationSeconds: config.pregameDurationSeconds,
+    },
+    blockchain: {
+      rpcReachable: rpcError == null,
+      rpcLatestBlock,
+      rpcProbeError: rpcError,
+      lastProcessedBlock: listener.lastProcessedBlock,
+      syncLagBlocks,
+      listener,
+    },
+    websocket: {
+      ...wsServer,
+      ...roomStats,
+    },
+    database: {
+      path: config.dbPath,
+      fileSizeBytes: dbFileSizeBytes,
+      games: gameCounts,
+      activeSubPhases: activeSubPhaseCounts,
+    },
+    runtime: {
+      rssBytes: memory.rss,
+      rssMb,
+      heapUsedBytes: memory.heapUsed,
+      heapUsedMb,
+      heapTotalBytes: memory.heapTotal,
+      heapTotalMb,
+      externalBytes: memory.external,
+      arrayBuffersBytes: memory.arrayBuffers,
+    },
+  });
 }
 
 /**
@@ -92,9 +243,19 @@ export async function submitKill(req: Request, res: Response): Promise<void> {
   }
 
   const { qrPayload, hunterLat, hunterLng, bleNearbyAddresses } = req.body;
+  const hunterLatNum = Number(hunterLat);
+  const hunterLngNum = Number(hunterLng);
 
   if (!qrPayload || hunterLat == null || hunterLng == null) {
     res.status(400).json({ error: "Missing required fields: qrPayload, hunterLat, hunterLng" });
+    return;
+  }
+  if (!Number.isFinite(hunterLatNum) || hunterLatNum < -90 || hunterLatNum > 90) {
+    res.status(400).json({ error: "Invalid hunter latitude" });
+    return;
+  }
+  if (!Number.isFinite(hunterLngNum) || hunterLngNum < -180 || hunterLngNum > 180) {
+    res.status(400).json({ error: "Invalid hunter longitude" });
     return;
   }
 
@@ -103,8 +264,8 @@ export async function submitKill(req: Request, res: Response): Promise<void> {
       gameId,
       authReq.playerAddress,
       qrPayload,
-      hunterLat,
-      hunterLng,
+      hunterLatNum,
+      hunterLngNum,
       bleNearbyAddresses || []
     );
 
@@ -133,12 +294,22 @@ export function submitLocation(req: Request, res: Response): void {
   }
 
   const { lat, lng } = req.body;
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
   if (lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: lat, lng" });
     return;
   }
+  if (!Number.isFinite(latNum) || latNum < -90 || latNum > 90) {
+    res.status(400).json({ error: "Invalid latitude" });
+    return;
+  }
+  if (!Number.isFinite(lngNum) || lngNum < -180 || lngNum > 180) {
+    res.status(400).json({ error: "Invalid longitude" });
+    return;
+  }
 
-  const result = handleLocationUpdate(gameId, authReq.playerAddress, lat, lng);
+  const result = handleLocationUpdate(gameId, authReq.playerAddress, latNum, lngNum);
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;
@@ -163,16 +334,26 @@ export function submitCheckin(req: Request, res: Response): void {
   }
 
   const { lat, lng, qrPayload, bluetoothId, bleNearbyAddresses } = req.body;
+  const latNum = Number(lat);
+  const lngNum = Number(lng);
   if (lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: lat, lng" });
+    return;
+  }
+  if (!Number.isFinite(latNum) || latNum < -90 || latNum > 90) {
+    res.status(400).json({ error: "Invalid latitude" });
+    return;
+  }
+  if (!Number.isFinite(lngNum) || lngNum < -180 || lngNum > 180) {
+    res.status(400).json({ error: "Invalid longitude" });
     return;
   }
 
   const result = handleCheckin(
     gameId,
     authReq.playerAddress,
-    lat,
-    lng,
+    latNum,
+    lngNum,
     qrPayload,
     bluetoothId,
     bleNearbyAddresses || []
