@@ -3,6 +3,7 @@ package com.cryptohunt.app.ui.viewmodel
 import android.os.Build
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.cryptohunt.app.domain.ble.BleAdvertiseState
 import com.cryptohunt.app.domain.ble.BleAdvertiser
 import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.domain.ble.BleScanner
@@ -49,42 +50,41 @@ class ScanDebugViewModel @Inject constructor(
 
     val locationState: StateFlow<LocationState> = locationTracker.state
     val bleState: StateFlow<BleScanState> = bleScanner.state
+    val bleAdvertiseState: StateFlow<BleAdvertiseState> = bleAdvertiser.state
 
     private val _uiState = MutableStateFlow(ScanDebugUiState())
     val uiState: StateFlow<ScanDebugUiState> = _uiState.asStateFlow()
 
     private val debugBleToken: String = generateDebugBleToken()
-    private var locationTrackingEnabled = false
-    private var bleScanningEnabled = false
-    private var bleAdvertisingEnabled = false
 
     fun syncSensors(locationPermissionGranted: Boolean, bluetoothPermissionGranted: Boolean) {
-        if (locationPermissionGranted && !locationTrackingEnabled) {
+        val isLocationTracking = locationTracker.state.value.isTracking
+        if (locationPermissionGranted && !isLocationTracking) {
             try {
                 locationTracker.startTracking()
-                locationTrackingEnabled = true
             } catch (_: SecurityException) {
-                locationTrackingEnabled = false
+                // Keep state unchanged when permission check races with resume.
             }
-        } else if (!locationPermissionGranted && locationTrackingEnabled) {
+        } else if (!locationPermissionGranted && isLocationTracking) {
             locationTracker.stopTracking()
-            locationTrackingEnabled = false
         }
 
-        if (bluetoothPermissionGranted && !bleScanningEnabled) {
-            bleScanner.startScanning()
-            bleScanningEnabled = true
-            bleAdvertisingEnabled = bleAdvertiser.startAdvertising(debugBleToken)
-        } else if (!bluetoothPermissionGranted && bleScanningEnabled) {
-            bleScanner.stopScanning()
-            bleScanningEnabled = false
-        }
-
-        if (bluetoothPermissionGranted && bleScanningEnabled && !bleAdvertisingEnabled) {
-            bleAdvertisingEnabled = bleAdvertiser.startAdvertising(debugBleToken)
-        } else if (!bluetoothPermissionGranted && bleAdvertisingEnabled) {
-            bleAdvertiser.stopAdvertising()
-            bleAdvertisingEnabled = false
+        val isBleScanning = bleScanner.state.value.isScanning
+        val isBleAdvertising = bleAdvertiser.state.value.isAdvertising
+        if (bluetoothPermissionGranted) {
+            if (!isBleScanning) {
+                bleScanner.startScanning()
+            }
+            if (bleScanner.state.value.isScanning && !isBleAdvertising) {
+                bleAdvertiser.startAdvertising(debugBleToken)
+            }
+        } else {
+            if (isBleScanning) {
+                bleScanner.stopScanning()
+            }
+            if (isBleAdvertising) {
+                bleAdvertiser.stopAdvertising()
+            }
         }
     }
 
@@ -108,7 +108,10 @@ class ScanDebugViewModel @Inject constructor(
 
         val location = locationState.value
         val ble = bleState.value
-        val bleTokens = ble.nearbyDevices.mapNotNull { it.token }.distinct()
+        val bleTokens = ble.nearbyDevices
+            .mapNotNull { it.token }
+            .distinct()
+            .filter { it != debugBleToken }
         val payload = buildPayload(
             mode = mode,
             scannedCode = scannedCode,
@@ -151,17 +154,14 @@ class ScanDebugViewModel @Inject constructor(
     }
 
     fun stopSensors() {
-        if (locationTrackingEnabled) {
+        if (locationTracker.state.value.isTracking) {
             locationTracker.stopTracking()
-            locationTrackingEnabled = false
         }
-        if (bleScanningEnabled) {
+        if (bleScanner.state.value.isScanning) {
             bleScanner.stopScanning()
-            bleScanningEnabled = false
         }
-        if (bleAdvertisingEnabled) {
+        if (bleAdvertiser.state.value.isAdvertising) {
             bleAdvertiser.stopAdvertising()
-            bleAdvertisingEnabled = false
         }
     }
 
@@ -214,11 +214,6 @@ class ScanDebugViewModel @Inject constructor(
         }
     }
 
-    private fun generateDebugBleToken(): String {
-        // Keep one stable random numeric token for the whole debug screen session.
-        return Random.nextLong(1_000_000_000L, 9_999_999_999L).toString()
-    }
-
     private fun prettifyJson(raw: String?): String? {
         if (raw.isNullOrBlank()) return raw
         return try {
@@ -230,5 +225,10 @@ class ScanDebugViewModel @Inject constructor(
                 raw
             }
         }
+    }
+
+    private fun generateDebugBleToken(): String {
+        // Keep debug payload compact and scanner-friendly.
+        return Random.nextLong(1_000_000_000L, 9_999_999_999L).toString()
     }
 }

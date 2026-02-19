@@ -32,7 +32,11 @@ import {
   pruneLocationPings,
   updateSubPhase,
   initPlayersHeartbeat,
+  initPlayersCompliance,
   updateLastHeartbeat,
+  updateLastLocation,
+  updateLastBleSeen,
+  updateLastNetworkSeen,
   getHeartbeatExpiredPlayers,
   insertHeartbeatScan,
   getTargetAssignment,
@@ -59,6 +63,17 @@ const OPERATOR_SYNC_MAX_ATTEMPTS = 4;
 const OPERATOR_SYNC_BASE_DELAY_MS = 1_000;
 const REGISTRATION_SWEEP_INTERVAL_MS = 30_000;
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+type ComplianceReason =
+  | "compliance_location_timeout"
+  | "compliance_ble_timeout"
+  | "compliance_network_timeout";
+
+interface ComplianceWarningSnapshot {
+  locationSecondsRemaining: number | null;
+  bleSecondsRemaining: number | null;
+  networkSecondsRemaining: number | null;
+}
 
 interface OperatorSyncTask {
   action: "recordKill" | "eliminatePlayer";
@@ -202,6 +217,9 @@ const preGameSpectatorIntervals = new Map<number, ReturnType<typeof setInterval>
 // Per-game auto-seed retry timers — retries every 60s until enough nearby players are seeded
 const autoSeedTimers = new Map<number, ReturnType<typeof setInterval>>();
 
+// Per-game per-player compliance warning state cache (avoid spamming duplicate WS payloads).
+const complianceWarningCache = new Map<number, Map<string, string>>();
+
 // Periodic safety sweep for registration-phase transitions (start/cancel retries).
 let registrationSweepTimer: ReturnType<typeof setInterval> | null = null;
 let registrationSweepInProgress = false;
@@ -335,6 +353,72 @@ export function broadcastToGame(gameId: number, message: Record<string, unknown>
 
 function sendToPlayer(gameId: number, address: string, message: Record<string, unknown>): void {
   if (sendToPlayerFn) sendToPlayerFn(gameId, address, message);
+}
+
+function buildComplianceWarningKey(warning: ComplianceWarningSnapshot): string {
+  const location = warning.locationSecondsRemaining ?? -1;
+  const ble = warning.bleSecondsRemaining ?? -1;
+  const network = warning.networkSecondsRemaining ?? -1;
+  return `${location}|${ble}|${network}`;
+}
+
+function clearComplianceWarningState(gameId: number, address: string): void {
+  const gameCache = complianceWarningCache.get(gameId);
+  if (!gameCache) return;
+  gameCache.delete(address.toLowerCase());
+  if (gameCache.size === 0) {
+    complianceWarningCache.delete(gameId);
+  }
+}
+
+function syncComplianceWarning(
+  gameId: number,
+  address: string,
+  warning: ComplianceWarningSnapshot | null
+): void {
+  const normalizedAddress = address.toLowerCase();
+  let gameCache = complianceWarningCache.get(gameId);
+  if (!gameCache) {
+    gameCache = new Map<string, string>();
+    complianceWarningCache.set(gameId, gameCache);
+  }
+
+  const nextKey = warning == null ? "ok" : buildComplianceWarningKey(warning);
+  const prevKey = gameCache.get(normalizedAddress);
+  if (prevKey === nextKey) return;
+
+  gameCache.set(normalizedAddress, nextKey);
+
+  if (warning == null) {
+    sendToPlayer(gameId, normalizedAddress, { type: "compliance:ok" });
+    return;
+  }
+
+  sendToPlayer(gameId, normalizedAddress, {
+    type: "compliance:warning",
+    locationSecondsRemaining: warning.locationSecondsRemaining,
+    bleSecondsRemaining: warning.bleSecondsRemaining,
+    networkSecondsRemaining: warning.networkSecondsRemaining,
+    warningThresholdSeconds: config.complianceWarningSeconds,
+    graceThresholdSeconds: config.complianceGraceSeconds,
+  });
+}
+
+function touchPlayerComplianceSignals(
+  gameId: number,
+  address: string,
+  now: number,
+  options?: { location?: boolean; network?: boolean; ble?: boolean }
+): void {
+  if (options?.location) {
+    updateLastLocation(gameId, address, now);
+  }
+  if (options?.network) {
+    updateLastNetworkSeen(gameId, address, now);
+  }
+  if (options?.ble) {
+    updateLastBleSeen(gameId, address, now);
+  }
 }
 
 function toNumberOrNull(value: unknown): number | null {
@@ -731,6 +815,7 @@ function completeCheckin(gameId: number): void {
   for (const player of players) {
     if (!player.checkedIn && player.isAlive) {
       dbEliminatePlayer(gameId, player.address, "no_checkin", now);
+      clearComplianceWarningState(gameId, player.address);
       log.info({ gameId, address: player.address }, "Eliminated for no check-in");
       broadcast(gameId, {
         type: "player:eliminated",
@@ -819,6 +904,7 @@ export function completePregame(gameId: number): void {
 
   // Initialize heartbeats for alive players
   initPlayersHeartbeat(gameId, now);
+  initPlayersCompliance(gameId, now);
 
   // Persist transition to in-game sub-phase only after setup succeeds.
   updateSubPhase(gameId, "game", now);
@@ -867,6 +953,13 @@ export async function handleKillSubmission(
     return { success: false, error: "Game has not started yet" };
   }
 
+  const now = Math.floor(Date.now() / 1000);
+  touchPlayerComplianceSignals(gameId, hunterAddress, now, {
+    location: true,
+    network: true,
+    ble: bleNearbyAddresses.length > 0,
+  });
+
   // Verify the kill
   const result = verifyKill(
     gameId,
@@ -882,7 +975,13 @@ export async function handleKillSubmission(
   }
 
   const targetAddress = result.targetAddress;
-  const now = Math.floor(Date.now() / 1000);
+  if (config.bleRequired) {
+    const targetPlayer = getPlayer(gameId, targetAddress);
+    const targetBluetoothId = normalizeBluetoothId(targetPlayer?.bluetoothId);
+    if (targetBluetoothId && hasBleMatch(targetBluetoothId, bleNearbyAddresses)) {
+      updateLastBleSeen(gameId, targetAddress, now);
+    }
+  }
 
   // Record kill in DB
   const killId = insertKill({
@@ -901,6 +1000,7 @@ export async function handleKillSubmission(
   // Update player states
   incrementPlayerKills(gameId, hunterAddress);
   dbEliminatePlayer(gameId, targetAddress, hunterAddress, now);
+  clearComplianceWarningState(gameId, targetAddress);
 
   // Update target chain
   const newTarget = processKill(gameId, hunterAddress, targetAddress);
@@ -987,7 +1087,8 @@ export function handleLocationUpdate(
   gameId: number,
   address: string,
   lat: number,
-  lng: number
+  lng: number,
+  bleOperational: boolean = false
 ): { success: boolean; error?: string } {
   if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
     return { success: false, error: "Invalid latitude" };
@@ -1004,6 +1105,11 @@ export function handleLocationUpdate(
   if (!player.isAlive) return { success: false, error: "Player is eliminated" };
 
   const now = Math.floor(Date.now() / 1000);
+  touchPlayerComplianceSignals(gameId, address, now, {
+    location: true,
+    network: true,
+    ble: bleOperational,
+  });
   const active = activeGames.get(gameId);
 
   if (!active) {
@@ -1077,7 +1183,13 @@ export function handleCheckin(
     return { success: false, error: "Check-in period has ended" };
   }
 
+  const normalizedBluetoothId = normalizeBluetoothId(bluetoothId);
   const now = Math.floor(Date.now() / 1000);
+  touchPlayerComplianceSignals(gameId, address, now, {
+    location: true,
+    network: true,
+    ble: bleNearbyAddresses.length > 0 || normalizedBluetoothId != null,
+  });
   if (now > game.expiryDeadline) {
     return { success: false, error: "Game has expired" };
   }
@@ -1098,8 +1210,6 @@ export function handleCheckin(
   if (dist > 5000) {
     return { success: false, error: "Too far from meeting point" };
   }
-
-  const normalizedBluetoothId = normalizeBluetoothId(bluetoothId);
 
   // Auto-seeded players can finalize their Bluetooth ID without scanning.
   if (player.checkedIn) {
@@ -1146,6 +1256,7 @@ export function handleCheckin(
         error: "Scanned player not detected via Bluetooth",
       };
     }
+    updateLastBleSeen(gameId, scannedPlayer.address, now);
   }
 
   setPlayerCheckedIn(gameId, address, normalizedBluetoothId ?? undefined);
@@ -1253,6 +1364,8 @@ async function gameTick(gameId: number): Promise<void> {
     }
   }
 
+  await handleComplianceTick(gameId, now);
+
   const aliveAfterChecks = getAlivePlayerCount(gameId);
   if (aliveAfterChecks <= 1) {
     await endGameWithWinners(gameId);
@@ -1295,6 +1408,8 @@ async function eliminateAndReassign(
   reason: string,
   reassignment: { reassignedHunter: string; newTarget: string } | null
 ): Promise<void> {
+  clearComplianceWarningState(gameId, address);
+
   // Clear zone tracking
   const active = activeGames.get(gameId);
   active?.zoneTracker.clearPlayer(address);
@@ -1384,6 +1499,98 @@ async function handleHeartbeatElimination(gameId: number, address: string): Prom
   await eliminateAndReassign(gameId, address, player, "heartbeat_timeout", reassignment);
 }
 
+function resolveComplianceTimeoutReason(player: Player, now: number): ComplianceReason | null {
+  const grace = config.complianceGraceSeconds;
+  const networkLag = player.lastNetworkSeenAt == null ? Number.POSITIVE_INFINITY : now - player.lastNetworkSeenAt;
+  if (networkLag > grace) return "compliance_network_timeout";
+
+  const locationLag = player.lastLocationAt == null ? Number.POSITIVE_INFINITY : now - player.lastLocationAt;
+  if (locationLag > grace) return "compliance_location_timeout";
+
+  const bleLag = player.lastBleSeenAt == null ? Number.POSITIVE_INFINITY : now - player.lastBleSeenAt;
+  if (bleLag > grace) return "compliance_ble_timeout";
+
+  return null;
+}
+
+function buildComplianceWarningSnapshot(player: Player, now: number): ComplianceWarningSnapshot | null {
+  const warningWindow = config.complianceWarningSeconds;
+  const grace = config.complianceGraceSeconds;
+
+  const locationRemaining = player.lastLocationAt == null ? 0 : Math.max(0, grace - (now - player.lastLocationAt));
+  const bleRemaining = player.lastBleSeenAt == null ? 0 : Math.max(0, grace - (now - player.lastBleSeenAt));
+  const networkRemaining = player.lastNetworkSeenAt == null ? 0 : Math.max(0, grace - (now - player.lastNetworkSeenAt));
+
+  const warning: ComplianceWarningSnapshot = {
+    locationSecondsRemaining: locationRemaining <= warningWindow ? locationRemaining : null,
+    bleSecondsRemaining: bleRemaining <= warningWindow ? bleRemaining : null,
+    networkSecondsRemaining: networkRemaining <= warningWindow ? networkRemaining : null,
+  };
+
+  if (
+    warning.locationSecondsRemaining == null &&
+    warning.bleSecondsRemaining == null &&
+    warning.networkSecondsRemaining == null
+  ) {
+    return null;
+  }
+
+  return warning;
+}
+
+async function handleComplianceElimination(
+  gameId: number,
+  address: string,
+  reason: ComplianceReason
+): Promise<void> {
+  const player = getPlayer(gameId, address);
+  if (!player || !player.isAlive) {
+    clearComplianceWarningState(gameId, address);
+    return;
+  }
+
+  const now = Math.floor(Date.now() / 1000);
+  log.info({ gameId, address, playerNumber: player.playerNumber, reason }, "Eliminating player for compliance timeout");
+  dbEliminatePlayer(gameId, address, "compliance", now);
+  const reassignment = removeFromChain(gameId, address);
+  clearComplianceWarningState(gameId, address);
+  await eliminateAndReassign(gameId, address, player, reason, reassignment);
+}
+
+async function handleComplianceTick(gameId: number, now: number): Promise<void> {
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "game") {
+    return;
+  }
+
+  const alivePlayers = getAlivePlayers(gameId);
+  const aliveAddresses = new Set(alivePlayers.map((p) => p.address.toLowerCase()));
+
+  for (const player of alivePlayers) {
+    const timeoutReason = resolveComplianceTimeoutReason(player, now);
+    if (timeoutReason) {
+      await handleComplianceElimination(gameId, player.address, timeoutReason);
+      continue;
+    }
+
+    const warning = buildComplianceWarningSnapshot(player, now);
+    syncComplianceWarning(gameId, player.address, warning);
+  }
+
+  const gameCache = complianceWarningCache.get(gameId);
+  if (!gameCache) return;
+
+  for (const address of Array.from(gameCache.keys())) {
+    if (!aliveAddresses.has(address)) {
+      gameCache.delete(address);
+    }
+  }
+
+  if (gameCache.size === 0) {
+    complianceWarningCache.delete(gameId);
+  }
+}
+
 /**
  * Process a heartbeat scan submission.
  * Only the scanned player (whose QR was read) gets their heartbeat refreshed.
@@ -1423,6 +1630,12 @@ export function handleHeartbeatScan(
   if (!scanner || !scanner.isAlive) {
     return { success: false, error: "Scanner is not alive" };
   }
+  const now = Math.floor(Date.now() / 1000);
+  touchPlayerComplianceSignals(gameId, scannerAddress, now, {
+    location: true,
+    network: true,
+    ble: bleNearbyAddresses.length > 0,
+  });
 
   // 4. Parse QR payload
   const qr = parseKillQrPayload(qrPayload);
@@ -1477,10 +1690,10 @@ export function handleHeartbeatScan(
     if (!hasBleMatch(scannedBluetoothId, bleNearbyAddresses)) {
       return { success: false, error: "Player not detected via Bluetooth" };
     }
+    updateLastBleSeen(gameId, scannedPlayer.address, now);
   }
 
   // 10. Refresh the SCANNED player's heartbeat (not the scanner's)
-  const now = Math.floor(Date.now() / 1000);
   updateLastHeartbeat(gameId, scannedPlayer.address, now);
 
   // 11. Record the scan
@@ -1932,6 +2145,7 @@ export function recoverGames(): void {
     } else if (fullGame.subPhase === "game") {
       // Recover active game with zone tracker and tick
       log.info({ gameId: game.gameId }, "Recovering active game");
+      initPlayersCompliance(game.gameId, Math.floor(Date.now() / 1000));
       const zoneTracker = ZoneTracker.fromDb(
         game.gameId,
         game.centerLat,
@@ -1981,6 +2195,7 @@ function cleanupActiveGame(gameId: number): void {
   clearMapTimer(autoSeedTimers, gameId, clearInterval);
   clearMapTimer(checkinTimers, gameId, clearInterval);
   clearMapTimer(pregameTimers, gameId);
+  complianceWarningCache.delete(gameId);
   log.info({ gameId }, "Active game cleaned up");
 }
 
@@ -2023,6 +2238,8 @@ export function cleanupAll(): void {
     clearInterval(interval);
   }
   autoSeedTimers.clear();
+
+  complianceWarningCache.clear();
 
   stopRegistrationSweep();
 }

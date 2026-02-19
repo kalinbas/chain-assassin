@@ -44,6 +44,12 @@
  *      1. Keep check-in open past fixed duration when required checked-ins are missing
  *      2. Auto-cancel ACTIVE/checkin game via triggerExpiry at expiry
  *
+ *   E) Compliance timers (location / BLE / network)
+ *      1. Force compliance warnings via DB timestamp shaping
+ *      2. Force compliance eliminations for all 3 timeout reasons
+ *      3. Verify WS warning payloads and player:eliminated broadcasts
+ *      4. Verify DB elimination flags for compliance removals
+ *
  * Usage: tsx test/e2e.ts <contractAddress>
  */
 
@@ -62,6 +68,12 @@ const RPC_URL = process.env.RPC_URL || "http://127.0.0.1:8545";
 const SERVER_URL = process.env.SERVER_URL || "http://127.0.0.1:3000";
 const WS_URL = process.env.WS_URL || "ws://127.0.0.1:3000/ws";
 const CONTRACT_ADDRESS = process.argv[2];
+const COMPLIANCE_WARNING_SECONDS = Number(
+  process.env.E2E_COMPLIANCE_WARNING_SECONDS || "30"
+);
+const COMPLIANCE_GRACE_SECONDS = Number(
+  process.env.E2E_COMPLIANCE_GRACE_SECONDS || "120"
+);
 
 if (!CONTRACT_ADDRESS) {
   console.error("Usage: tsx test/e2e.ts <contractAddress>");
@@ -103,6 +115,46 @@ const operatorContract = new ethers.Contract(CONTRACT_ADDRESS, abi, operatorWall
 const playerContracts = playerWallets.map(
   (w) => new ethers.Contract(CONTRACT_ADDRESS, abi, w)
 );
+
+/**
+ * Return a fresh signer-bound operator contract for writes.
+ * This avoids stale nonce state because the server uses the same operator account.
+ */
+function operatorWriteContract(): ethers.Contract {
+  const freshOperatorWallet = new ethers.Wallet(ANVIL_KEYS[0], provider);
+  return new ethers.Contract(CONTRACT_ADDRESS, abi, freshOperatorWallet);
+}
+
+/**
+ * Send an operator transaction with nonce-collision retries.
+ * Needed because server and test share the same operator key in e2e.
+ */
+async function sendOperatorTxWithRetry(
+  send: (contract: ethers.Contract) => Promise<ethers.TransactionResponse>,
+  maxRetries: number = 5
+): Promise<ethers.TransactionReceipt> {
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const tx = await send(operatorWriteContract());
+      const receipt = await tx.wait();
+      if (!receipt) {
+        throw new Error("Operator tx mined without receipt");
+      }
+      return receipt;
+    } catch (error) {
+      lastError = error;
+      if (attempt === maxRetries) {
+        throw error;
+      }
+
+      await sleep(250 * attempt);
+    }
+  }
+
+  throw lastError;
+}
 
 // ============ Helpers ============
 
@@ -284,6 +336,47 @@ function waitForWsMessage(
 }
 
 /**
+ * Wait for a WS message matching a predicate.
+ * Scans only messages appended after `fromIndex`.
+ */
+function waitForWsMessageMatching(
+  messages: Record<string, unknown>[],
+  predicate: (message: Record<string, unknown>, index: number) => boolean,
+  description: string,
+  timeoutMs: number = 15000,
+  fromIndex: number = messages.length
+): Promise<Record<string, unknown>> {
+  return new Promise((resolve, reject) => {
+    const existing = messages.find((m, i) => i >= fromIndex && predicate(m, i));
+    if (existing) {
+      resolve(existing);
+      return;
+    }
+
+    const interval = setInterval(() => {
+      const found = messages.find((m, i) => i >= fromIndex && predicate(m, i));
+      if (found) {
+        clearInterval(interval);
+        clearTimeout(timer);
+        resolve(found);
+      }
+    }, 100);
+
+    const timer = setTimeout(() => {
+      clearInterval(interval);
+      reject(
+        new Error(
+          `Timeout waiting for WS predicate: ${description} (types seen: ${messages
+            .slice(fromIndex)
+            .map((m) => String(m.type))
+            .join(", ")})`
+        )
+      );
+    }, timeoutMs);
+  });
+}
+
+/**
  * Encode a kill QR payload as an obfuscated numeric string.
  * Must match server's encodeKillQrPayload() logic.
  */
@@ -294,7 +387,7 @@ function encodeQr(gameId: number, playerNumber: number): string {
 }
 
 function playerBleId(playerIdx: number): string {
-  return `ble-player-${playerIdx + 1}`;
+  return String(7000000000 + playerIdx + 1);
 }
 
 /**
@@ -353,8 +446,9 @@ async function scenarioA_createGame(): Promise<number> {
     { atSecond: 1200, radiusMeters: 300 },
   ];
 
-  const tx = await operatorContract.createGame(params, shrinks);
-  const receipt = await tx.wait();
+  const receipt = await sendOperatorTxWithRetry((contract) =>
+    contract.createGame(params, shrinks)
+  );
 
   const iface = new ethers.Interface(abi);
   const createdLog = receipt.logs.find((l: ethers.Log) => {
@@ -1600,10 +1694,9 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
     const pInfo = await operatorContract.getPlayerInfo(gameId, playerWallets[w1Idx].address);
     assert(pInfo.claimed, "Winner1 claimed flag set on-chain");
 
-    // Double claim should revert
+    // Double claim should revert (static call avoids nonce side-effects)
     try {
-      const doubleClaim = await playerContracts[w1Idx].claimPrize(gameId);
-      await doubleClaim.wait();
+      await playerContracts[w1Idx].claimPrize.staticCall(gameId);
       fail("Double claim should have reverted");
     } catch {
       success("Double claim correctly reverted");
@@ -1658,8 +1751,7 @@ async function scenarioA_claimPrizes(gameId: number): Promise<void> {
     );
 
     try {
-      const nwTx = await playerContracts[nonWinnerIdx].claimPrize(gameId);
-      await nwTx.wait();
+      await playerContracts[nonWinnerIdx].claimPrize.staticCall(gameId);
       fail("Non-winner claim should have reverted");
     } catch {
       success("Non-winner claim correctly reverted");
@@ -1928,8 +2020,9 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
     { atSecond: 1200, radiusMeters: 300 },
   ];
 
-  const tx = await operatorContract.createGame(params, shrinks);
-  const receipt = await tx.wait();
+  const receipt = await sendOperatorTxWithRetry((contract) =>
+    contract.createGame(params, shrinks)
+  );
 
   const iface = new ethers.Interface(abi);
   const createdLog = receipt.logs.find((l: ethers.Log) => {
@@ -2017,19 +2110,17 @@ async function scenarioB_cancellationAndRefund(): Promise<void> {
   await refundTx2.wait();
   success("Player2 refund claimed");
 
-  // 7. Double refund should revert
+  // 7. Double refund should revert (static call avoids nonce side-effects)
   try {
-    const doubleRefund = await playerContracts[0].claimRefund(gameId);
-    await doubleRefund.wait();
+    await playerContracts[0].claimRefund.staticCall(gameId);
     fail("Double refund should have reverted");
   } catch {
     success("Double refund correctly reverted");
   }
 
-  // 8. Non-registered player refund should revert
+  // 8. Non-registered player refund should revert (static call avoids nonce side-effects)
   try {
-    const nonRegRefund = await playerContracts[3].claimRefund(gameId);
-    await nonRegRefund.wait();
+    await playerContracts[3].claimRefund.staticCall(gameId);
     fail("Non-registered player refund should have reverted");
   } catch {
     success("Non-registered player refund correctly reverted");
@@ -2108,8 +2199,9 @@ async function scenarioD_checkinMinimumAndExpiry(): Promise<void> {
     { atSecond: 300, radiusMeters: 1000 },
   ];
 
-  const tx = await operatorContract.createGame(params, shrinks);
-  const receipt = await tx.wait();
+  const receipt = await sendOperatorTxWithRetry((contract) =>
+    contract.createGame(params, shrinks)
+  );
   const iface = new ethers.Interface(abi);
   const createdLog = receipt.logs.find((l: ethers.Log) => {
     try {
@@ -2225,6 +2317,513 @@ async function scenarioD_checkinMinimumAndExpiry(): Promise<void> {
   }
 }
 
+// ============ Scenario E: Compliance Timers ============
+
+async function scenarioE_complianceTimers(): Promise<void> {
+  section("Scenario E: Compliance Timers");
+
+  const compliancePlayerIndexes = [0, 1, 2, 3];
+  const warningRemaining = Math.max(
+    1,
+    Math.floor(COMPLIANCE_WARNING_SECONDS / 2)
+  );
+  const warningAge = Math.max(1, COMPLIANCE_GRACE_SECONDS - warningRemaining);
+  const eliminationAge = COMPLIANCE_GRACE_SECONDS + 5;
+
+  // 1. Create game
+  log("E1", "Creating compliance timer test game...");
+  const now = (await provider.getBlock("latest"))!.timestamp;
+  const regDeadline = now + 60;
+  const gameDate = now + 120;
+  const maxDuration = 1200;
+
+  const params = {
+    title: "Compliance Timer Test Game",
+    entryFee: ethers.parseEther("0.01"),
+    minPlayers: 3,
+    maxPlayers: 6,
+    registrationDeadline: regDeadline,
+    gameDate,
+    maxDuration,
+    centerLat: 19435244,
+    centerLng: -99128056,
+    meetingLat: 19435244,
+    meetingLng: -99128056,
+    bps1st: 4000,
+    bps2nd: 2000,
+    bps3rd: 1000,
+    bpsKills: 1000,
+    bpsCreator: 1000,
+  };
+
+  const shrinks = [
+    { atSecond: 0, radiusMeters: 2000 },
+    { atSecond: 600, radiusMeters: 1000 },
+  ];
+
+  const createReceipt = await sendOperatorTxWithRetry((contract) =>
+    contract.createGame(params, shrinks)
+  );
+  const iface = new ethers.Interface(abi);
+  const createdLog = createReceipt.logs.find((l: ethers.Log) => {
+    try {
+      return (
+        iface.parseLog({ topics: l.topics as string[], data: l.data })?.name ===
+        "GameCreated"
+      );
+    } catch {
+      return false;
+    }
+  });
+  const parsed = iface.parseLog({
+    topics: createdLog!.topics as string[],
+    data: createdLog!.data,
+  });
+  const gameId = Number(parsed!.args[0]);
+  success(`Game E created with ID: ${gameId}`);
+
+  // 2. Register 4 players
+  const entryFee = ethers.parseEther("0.01");
+  for (const idx of compliancePlayerIndexes) {
+    const tx = await playerContracts[idx].register(gameId, { value: entryFee });
+    await tx.wait();
+  }
+  success("4 players registered for game E");
+
+  // 3. Wait for server sync
+  for (let i = 0; i < 25; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    if (statusData.playerCount === compliancePlayerIndexes.length) {
+      success("Server synced game E registrations");
+      break;
+    }
+    if (i === 24) fail("Server did not sync game E registrations");
+  }
+
+  // 4. Send initial locations (used by auto-seed and compliance initialization).
+  for (const idx of compliancePlayerIndexes) {
+    const coords = playerCoords(idx);
+    const res = await apiCall(
+      "POST",
+      `/api/games/${gameId}/location`,
+      playerWallets[idx],
+      {
+        lat: coords.lat,
+        lng: coords.lng,
+        bleOperational: true,
+        timestamp: Math.floor(Date.now() / 1000),
+      }
+    );
+    assert(res.ok, `Player${idx + 1} initial location accepted for game E`);
+  }
+
+  // 5. Warp to gameDate and auto-start.
+  await anvilWarpTime(130);
+  const triggerRes = await apiCall(
+    "POST",
+    "/api/admin/check-auto-start",
+    operatorWallet
+  );
+  assert(triggerRes.ok, "Admin check-auto-start for game E returned 200");
+
+  // 6. Wait for checkin.
+  for (let i = 0; i < 25; i++) {
+    await sleep(1000);
+    await provider.send("evm_mine", []);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    if (statusData.phase === 1 && statusData.subPhase === "checkin") {
+      success("Game E entered ACTIVE/checkin");
+      break;
+    }
+    if (i === 24) fail("Game E did not enter checkin");
+  }
+
+  // 7. Wait for auto-seed.
+  for (let i = 0; i < 20; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    if (statusData.checkedInCount >= 1) {
+      success("Game E auto-seeded at least one checked-in player");
+      break;
+    }
+    if (i === 19) fail("Game E auto-seed did not check in any player");
+  }
+
+  // 8. Complete check-ins for all 4 players.
+  const p1Coords = playerCoords(0);
+  const p2Coords = playerCoords(1);
+  const p3Coords = playerCoords(2);
+  const p4Coords = playerCoords(3);
+  const p1Qr = encodeQr(gameId, 1);
+  const p2Qr = encodeQr(gameId, 2);
+
+  const p1FinalizeRes = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[0],
+    {
+      lat: p1Coords.lat,
+      lng: p1Coords.lng,
+      bluetoothId: playerBleId(0),
+    }
+  );
+  const p1FinalizeData = await p1FinalizeRes.json();
+  assert(
+    p1FinalizeRes.ok && p1FinalizeData.success,
+    "Player1 finalized check-in Bluetooth token in game E"
+  );
+
+  const p2Res = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[1],
+    {
+      lat: p2Coords.lat,
+      lng: p2Coords.lng,
+      qrPayload: p1Qr,
+      bluetoothId: playerBleId(1),
+      bleNearbyAddresses: [playerBleId(0)],
+    }
+  );
+  const p2Data = await p2Res.json();
+  assert(
+    p2Res.ok && p2Data.success,
+    "Player2 checked in via Player1 QR in game E"
+  );
+
+  const p3Res = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[2],
+    {
+      lat: p3Coords.lat,
+      lng: p3Coords.lng,
+      qrPayload: p2Qr,
+      bluetoothId: playerBleId(2),
+      bleNearbyAddresses: [playerBleId(1)],
+    }
+  );
+  const p3Data = await p3Res.json();
+  assert(
+    p3Res.ok && p3Data.success,
+    "Player3 checked in via Player2 QR in game E"
+  );
+
+  const p4Res = await apiCall(
+    "POST",
+    `/api/games/${gameId}/checkin`,
+    playerWallets[3],
+    {
+      lat: p4Coords.lat,
+      lng: p4Coords.lng,
+      qrPayload: p2Qr,
+      bluetoothId: playerBleId(3),
+      bleNearbyAddresses: [playerBleId(1)],
+    }
+  );
+  const p4Data = await p4Res.json();
+  assert(
+    p4Res.ok && p4Data.success,
+    "Player4 checked in via Player2 QR in game E"
+  );
+
+  // 9. Connect WS for all 4 players.
+  const connections: { ws: WebSocket; messages: Record<string, unknown>[] }[] = [];
+  for (const idx of compliancePlayerIndexes) {
+    const conn = await connectWs(playerWallets[idx], gameId);
+    const authMsg = conn.messages.find((m) => m.type === "auth:success") as
+      | Record<string, unknown>
+      | undefined;
+    assert(!!authMsg, `Player${idx + 1} authenticated for game E`);
+    connections.push(conn);
+  }
+
+  // 10. Wait for sub-phase game.
+  for (let i = 0; i < 35; i++) {
+    await sleep(1000);
+    const statusRes = await fetch(`${SERVER_URL}/api/games/${gameId}/status`);
+    if (!statusRes.ok) continue;
+    const statusData = await statusRes.json();
+    if (statusData.phase === 1 && statusData.subPhase === "game") {
+      success("Game E entered ACTIVE/game");
+      break;
+    }
+    if (i === 34) fail("Game E did not enter ACTIVE/game");
+  }
+
+  const dbPath = resolve(__dirname, "../data/e2e-test.db");
+  const db = new Database(dbPath);
+  try {
+    const setComplianceTimestamps = (
+      playerIdx: number,
+      timestamps: {
+        lastLocationAt: number;
+        lastBleSeenAt: number;
+        lastNetworkSeenAt: number;
+      }
+    ) => {
+      const address = playerWallets[playerIdx].address.toLowerCase();
+      const result = db
+        .prepare(
+          `UPDATE players
+           SET last_location_at = ?, last_ble_seen_at = ?, last_network_seen_at = ?
+           WHERE game_id = ? AND address = ?`
+        )
+        .run(
+          timestamps.lastLocationAt,
+          timestamps.lastBleSeenAt,
+          timestamps.lastNetworkSeenAt,
+          gameId,
+          address
+        );
+      assert(
+        result.changes === 1,
+        `DB compliance timestamps updated for Player${playerIdx + 1}`
+      );
+    };
+
+    const assertEliminatedForCompliance = (
+      playerIdx: number
+    ) => {
+      const address = playerWallets[playerIdx].address.toLowerCase();
+      const row = db
+        .prepare(
+          `SELECT is_alive, eliminated_at, eliminated_by
+           FROM players
+           WHERE game_id = ? AND address = ?`
+        )
+        .get(gameId, address) as
+        | {
+            is_alive: number;
+            eliminated_at: number | null;
+            eliminated_by: string | null;
+          }
+        | undefined;
+      assert(!!row, `DB row exists for Player${playerIdx + 1}`);
+      assert(row!.is_alive === 0, `Player${playerIdx + 1} marked dead in DB`);
+      assert(
+        row!.eliminated_at !== null,
+        `Player${playerIdx + 1} has eliminated_at in DB`
+      );
+      assert(
+        row!.eliminated_by === "compliance",
+        `Player${playerIdx + 1} eliminated_by=compliance in DB`
+      );
+    };
+
+    const waitForBroadcastElimination = async (
+      startIndices: number[],
+      playerNumber: number,
+      reason: string
+    ) => {
+      await Promise.all(
+        connections.map((conn, idx) =>
+          waitForWsMessageMatching(
+            conn.messages,
+            (m, i) =>
+              i >= startIndices[idx] &&
+              m.type === "player:eliminated" &&
+              m.playerNumber === playerNumber &&
+              m.reason === reason,
+            `player:eliminated player=${playerNumber} reason=${reason} on connection ${idx + 1}`,
+            12000,
+            startIndices[idx]
+          )
+        )
+      );
+      success(
+        `All active sockets received player:eliminated for Player${playerNumber} (${reason})`
+      );
+    };
+
+    // Baseline all 4 players as fresh before force-shaping timeouts.
+    const baselineNow = Math.floor(Date.now() / 1000);
+    for (const idx of compliancePlayerIndexes) {
+      setComplianceTimestamps(idx, {
+        lastLocationAt: baselineNow,
+        lastBleSeenAt: baselineNow,
+        lastNetworkSeenAt: baselineNow,
+      });
+    }
+    await sleep(1300);
+
+    // E10: multi-signal warning + recovery (Player4 should not be eliminated).
+    log("E10", "Forcing multi-signal compliance warning/recovery for Player4...");
+    const p4WarnStart = connections[3].messages.length;
+    const p4WarnNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(3, {
+      lastLocationAt: p4WarnNow - warningAge,
+      lastBleSeenAt: p4WarnNow - warningAge,
+      lastNetworkSeenAt: p4WarnNow,
+    });
+    const p4Warning = await waitForWsMessageMatching(
+      connections[3].messages,
+      (m, i) =>
+        i >= p4WarnStart &&
+        m.type === "compliance:warning" &&
+        typeof m.locationSecondsRemaining === "number" &&
+        typeof m.bleSecondsRemaining === "number" &&
+        m.networkSecondsRemaining == null,
+      "Player4 multi-signal compliance warning",
+      12000,
+      p4WarnStart
+    );
+    assert(
+      p4Warning.warningThresholdSeconds === COMPLIANCE_WARNING_SECONDS,
+      "Player4 warning includes configured warning threshold"
+    );
+    assert(
+      p4Warning.graceThresholdSeconds === COMPLIANCE_GRACE_SECONDS,
+      "Player4 warning includes configured grace threshold"
+    );
+
+    const p4OkStart = connections[3].messages.length;
+    const p4OkNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(3, {
+      lastLocationAt: p4OkNow,
+      lastBleSeenAt: p4OkNow,
+      lastNetworkSeenAt: p4OkNow,
+    });
+    await waitForWsMessageMatching(
+      connections[3].messages,
+      (m, i) => i >= p4OkStart && m.type === "compliance:ok",
+      "Player4 compliance recovery ok",
+      12000,
+      p4OkStart
+    );
+    success("Player4 received compliance:ok after timer recovery");
+
+    // E11: location timeout path (Player3).
+    log("E11", "Forcing location compliance warning/elimination for Player3...");
+    const p3WarnStart = connections[2].messages.length;
+    const p3WarnNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(2, {
+      lastLocationAt: p3WarnNow - warningAge,
+      lastBleSeenAt: p3WarnNow,
+      lastNetworkSeenAt: p3WarnNow,
+    });
+    const p3Warning = await waitForWsMessageMatching(
+      connections[2].messages,
+      (m, i) =>
+        i >= p3WarnStart &&
+        m.type === "compliance:warning" &&
+        typeof m.locationSecondsRemaining === "number",
+      "Player3 location compliance warning",
+      12000,
+      p3WarnStart
+    );
+    assert(
+      p3Warning.bleSecondsRemaining == null &&
+        p3Warning.networkSecondsRemaining == null,
+      "Player3 compliance warning isolates location signal"
+    );
+
+    const p3ElimStarts = connections.map((conn) => conn.messages.length);
+    const p3ElimNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(2, {
+      lastLocationAt: p3ElimNow - eliminationAge,
+      lastBleSeenAt: p3ElimNow,
+      lastNetworkSeenAt: p3ElimNow,
+    });
+    await waitForBroadcastElimination(
+      p3ElimStarts,
+      3,
+      "compliance_location_timeout"
+    );
+    assertEliminatedForCompliance(2);
+
+    // E12: BLE timeout path (Player2).
+    log("E12", "Forcing BLE compliance warning/elimination for Player2...");
+    const p2WarnStart = connections[1].messages.length;
+    const p2WarnNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(1, {
+      lastLocationAt: p2WarnNow,
+      lastBleSeenAt: p2WarnNow - warningAge,
+      lastNetworkSeenAt: p2WarnNow,
+    });
+    const p2Warning = await waitForWsMessageMatching(
+      connections[1].messages,
+      (m, i) =>
+        i >= p2WarnStart &&
+        m.type === "compliance:warning" &&
+        typeof m.bleSecondsRemaining === "number",
+      "Player2 BLE compliance warning",
+      12000,
+      p2WarnStart
+    );
+    assert(
+      p2Warning.locationSecondsRemaining == null &&
+        p2Warning.networkSecondsRemaining == null,
+      "Player2 compliance warning isolates BLE signal"
+    );
+
+    const p2ElimStarts = connections.map((conn) => conn.messages.length);
+    const p2ElimNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(1, {
+      lastLocationAt: p2ElimNow,
+      lastBleSeenAt: p2ElimNow - eliminationAge,
+      lastNetworkSeenAt: p2ElimNow,
+    });
+    await waitForBroadcastElimination(
+      p2ElimStarts,
+      2,
+      "compliance_ble_timeout"
+    );
+    assertEliminatedForCompliance(1);
+
+    // E13: network timeout path (Player1).
+    log("E13", "Forcing network compliance warning/elimination for Player1...");
+    const p1WarnStart = connections[0].messages.length;
+    const p1WarnNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(0, {
+      lastLocationAt: p1WarnNow,
+      lastBleSeenAt: p1WarnNow,
+      lastNetworkSeenAt: p1WarnNow - warningAge,
+    });
+    const p1Warning = await waitForWsMessageMatching(
+      connections[0].messages,
+      (m, i) =>
+        i >= p1WarnStart &&
+        m.type === "compliance:warning" &&
+        typeof m.networkSecondsRemaining === "number",
+      "Player1 network compliance warning",
+      12000,
+      p1WarnStart
+    );
+    assert(
+      p1Warning.locationSecondsRemaining == null &&
+        p1Warning.bleSecondsRemaining == null,
+      "Player1 compliance warning isolates network signal"
+    );
+
+    const p1ElimStarts = connections.map((conn) => conn.messages.length);
+    const p1ElimNow = Math.floor(Date.now() / 1000);
+    setComplianceTimestamps(0, {
+      lastLocationAt: p1ElimNow,
+      lastBleSeenAt: p1ElimNow,
+      lastNetworkSeenAt: p1ElimNow - eliminationAge,
+    });
+    await waitForBroadcastElimination(
+      p1ElimStarts,
+      1,
+      "compliance_network_timeout"
+    );
+    assertEliminatedForCompliance(0);
+  } finally {
+    db.close();
+    for (const conn of connections) {
+      conn.ws.close();
+    }
+  }
+}
+
 // ============ Scenario C: Platform Fee Withdrawal ============
 
 async function scenarioC_platformFees(): Promise<void> {
@@ -2235,22 +2834,18 @@ async function scenarioC_platformFees(): Promise<void> {
   assert(fees > 0n, "Platform fees have been accrued");
 
   // Withdraw platform fees (only owner can do this)
-  const withdrawTx = await operatorContract.withdrawPlatformFees(
-    operatorWallet.address
+  await sendOperatorTxWithRetry((contract) =>
+    contract.withdrawPlatformFees(operatorWallet.address)
   );
-  await withdrawTx.wait();
   success("Platform fees withdrawn successfully");
 
   // Fees should now be 0
   const feesAfter = await operatorContract.platformFeesAccrued();
   assert(feesAfter === 0n, "Platform fees now 0 after withdrawal");
 
-  // Double withdrawal should revert (no fees left)
+  // Double withdrawal should revert (no fees left). Static call avoids nonce side-effects.
   try {
-    const doubleTx = await operatorContract.withdrawPlatformFees(
-      operatorWallet.address
-    );
-    await doubleTx.wait();
+    await operatorContract.withdrawPlatformFees.staticCall(operatorWallet.address);
     fail("Double withdrawal should have reverted");
   } catch {
     success("Double withdrawal correctly reverted (no fees)");
@@ -2336,14 +2931,17 @@ async function main() {
   await scenarioA_claimPrizes(gameId);
   await scenarioA_verifyDatabase(gameId, kills.length);
 
+  // ======== Scenario C: Platform Fees ========
+  await scenarioC_platformFees();
+
   // ======== Scenario B: Cancellation + Refund ========
   await scenarioB_cancellationAndRefund();
 
   // ======== Scenario D: Check-in Minimum + Expiry ========
   await scenarioD_checkinMinimumAndExpiry();
 
-  // ======== Scenario C: Platform Fees ========
-  await scenarioC_platformFees();
+  // ======== Scenario E: Compliance Timers ========
+  await scenarioE_complianceTimers();
 
   // ======== Summary ========
   console.log("\n" + "=".repeat(60));

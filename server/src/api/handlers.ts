@@ -35,6 +35,15 @@ function resolveAppVersion(): string {
 
 const appVersion = resolveAppVersion();
 
+function parseStringArray(value: unknown, maxItems = 64, maxLength = 64): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0 && entry.length <= maxLength)
+    .slice(0, maxItems);
+}
+
 /**
  * GET /health
  */
@@ -185,13 +194,8 @@ export function debugScanEcho(req: Request, res: Response): void {
   const scannedCode = typeof scannedCodeCandidate === "string" ? scannedCodeCandidate : "";
   const parsedQr = scannedCode ? parseKillQrPayload(scannedCode) : null;
 
-  const bleNearbyAddresses = Array.isArray(received.bleNearbyAddresses)
-    ? received.bleNearbyAddresses.filter((entry): entry is string => typeof entry === "string")
-    : [];
-
-  const nearbyBluetooth = Array.isArray(received.nearbyBluetooth)
-    ? received.nearbyBluetooth
-    : [];
+  const bleNearbyAddresses = parseStringArray(received.bleNearbyAddresses);
+  const nearbyBluetooth = parseStringArray(received.nearbyBluetooth);
 
   res.json({
     success: true,
@@ -245,6 +249,7 @@ export async function submitKill(req: Request, res: Response): Promise<void> {
   const { qrPayload, hunterLat, hunterLng, bleNearbyAddresses } = req.body;
   const hunterLatNum = Number(hunterLat);
   const hunterLngNum = Number(hunterLng);
+  const bleNearby = parseStringArray(bleNearbyAddresses);
 
   if (!qrPayload || hunterLat == null || hunterLng == null) {
     res.status(400).json({ error: "Missing required fields: qrPayload, hunterLat, hunterLng" });
@@ -266,7 +271,7 @@ export async function submitKill(req: Request, res: Response): Promise<void> {
       qrPayload,
       hunterLatNum,
       hunterLngNum,
-      bleNearbyAddresses || []
+      bleNearby
     );
 
     if (!result.success) {
@@ -293,7 +298,7 @@ export function submitLocation(req: Request, res: Response): void {
     return;
   }
 
-  const { lat, lng } = req.body;
+  const { lat, lng, bleOperational } = req.body;
   const latNum = Number(lat);
   const lngNum = Number(lng);
   if (lat == null || lng == null) {
@@ -309,7 +314,13 @@ export function submitLocation(req: Request, res: Response): void {
     return;
   }
 
-  const result = handleLocationUpdate(gameId, authReq.playerAddress, latNum, lngNum);
+  const result = handleLocationUpdate(
+    gameId,
+    authReq.playerAddress,
+    latNum,
+    lngNum,
+    bleOperational === true
+  );
   if (!result.success) {
     res.status(400).json({ error: result.error });
     return;
@@ -336,6 +347,8 @@ export function submitCheckin(req: Request, res: Response): void {
   const { lat, lng, qrPayload, bluetoothId, bleNearbyAddresses } = req.body;
   const latNum = Number(lat);
   const lngNum = Number(lng);
+  const normalizedBluetoothId = typeof bluetoothId === "string" ? bluetoothId : undefined;
+  const bleNearby = parseStringArray(bleNearbyAddresses);
   if (lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: lat, lng" });
     return;
@@ -355,8 +368,8 @@ export function submitCheckin(req: Request, res: Response): void {
     latNum,
     lngNum,
     qrPayload,
-    bluetoothId,
-    bleNearbyAddresses || []
+    normalizedBluetoothId,
+    bleNearby
   );
   if (!result.success) {
     res.status(400).json({ error: result.error });
@@ -381,6 +394,7 @@ export function submitHeartbeat(req: Request, res: Response): void {
   const { qrPayload, lat, lng, bleNearbyAddresses } = req.body;
   const latNum = Number(lat);
   const lngNum = Number(lng);
+  const bleNearby = parseStringArray(bleNearbyAddresses);
 
   if (!qrPayload || lat == null || lng == null) {
     res.status(400).json({ error: "Missing required fields: qrPayload, lat, lng" });
@@ -401,7 +415,7 @@ export function submitHeartbeat(req: Request, res: Response): void {
     qrPayload,
     latNum,
     lngNum,
-    bleNearbyAddresses || []
+    bleNearby
   );
 
   if (!result.success) {

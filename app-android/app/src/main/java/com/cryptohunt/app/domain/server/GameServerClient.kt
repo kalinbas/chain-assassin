@@ -129,12 +129,13 @@ class GameServerClient @Inject constructor(
     /**
      * Send a location update to the server.
      */
-    fun sendLocation(lat: Double, lng: Double) {
+    fun sendLocation(lat: Double, lng: Double, bleOperational: Boolean = false) {
         if (_connectionState.value != ConnectionState.CONNECTED) return
         val json = JSONObject().apply {
             put("type", "location")
             put("lat", lat)
             put("lng", lng)
+            put("bleOperational", bleOperational)
             put("timestamp", System.currentTimeMillis() / 1000)
         }
         send(json.toString())
@@ -149,6 +150,7 @@ class GameServerClient @Inject constructor(
         qrPayload: String,
         lat: Double,
         lng: Double,
+        bluetoothId: String? = null,
         bleAddresses: List<String> = emptyList()
     ): Boolean {
         val address = walletManager.getAddress()
@@ -160,6 +162,9 @@ class GameServerClient @Inject constructor(
             put("qrPayload", qrPayload)
             put("hunterLat", lat)
             put("hunterLng", lng)
+            if (bluetoothId != null) {
+                put("bluetoothId", bluetoothId)
+            }
             if (bleAddresses.isNotEmpty()) {
                 put("bleNearbyAddresses", JSONArray(bleAddresses))
             }
@@ -255,6 +260,7 @@ class GameServerClient @Inject constructor(
         qrPayload: String,
         lat: Double,
         lng: Double,
+        bluetoothId: String? = null,
         bleAddresses: List<String> = emptyList()
     ): HeartbeatSubmitResult {
         val address = walletManager.getAddress()
@@ -266,6 +272,9 @@ class GameServerClient @Inject constructor(
             put("qrPayload", qrPayload)
             put("lat", lat)
             put("lng", lng)
+            if (bluetoothId != null) {
+                put("bluetoothId", bluetoothId)
+            }
             if (bleAddresses.isNotEmpty()) {
                 put("bleNearbyAddresses", JSONArray(bleAddresses))
             }

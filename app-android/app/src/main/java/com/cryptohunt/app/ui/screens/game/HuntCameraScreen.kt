@@ -1,5 +1,7 @@
 package com.cryptohunt.app.ui.screens.game
 
+import android.Manifest
+import android.os.Build
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -45,11 +47,15 @@ import com.cryptohunt.app.domain.model.HeartbeatResult
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.util.QrGenerator
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun HuntCameraScreen(
     onKillConfirmed: () -> Unit,
@@ -59,6 +65,44 @@ fun HuntCameraScreen(
     val gameState by viewModel.gameState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
+
+    val permissions = remember {
+        buildList {
+            add(Manifest.permission.CAMERA)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+    }
+    val permissionsState = rememberMultiplePermissionsState(permissions)
+    val cameraGranted = permissionsState.permissions
+        .firstOrNull { it.permission == Manifest.permission.CAMERA }
+        ?.status?.isGranted == true
+    val locationGranted = permissionsState.permissions
+        .firstOrNull { it.permission == Manifest.permission.ACCESS_FINE_LOCATION }
+        ?.status?.isGranted == true
+    val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        permissionsState.permissions
+            .filter {
+                it.permission == Manifest.permission.BLUETOOTH_SCAN ||
+                    it.permission == Manifest.permission.BLUETOOTH_ADVERTISE ||
+                    it.permission == Manifest.permission.BLUETOOTH_CONNECT
+            }
+            .all { it.status.isGranted }
+    } else {
+        locationGranted
+    }
+    val allScannerPermissionsGranted = cameraGranted && locationGranted && bluetoothGranted
+
+    LaunchedEffect(allScannerPermissionsGranted) {
+        if (allScannerPermissionsGranted) {
+            viewModel.startLocationTracking()
+            viewModel.startBleScanning()
+        }
+    }
 
     // Kill scan state
     var scannedTarget by remember { mutableStateOf(false) }
@@ -182,126 +226,128 @@ fun HuntCameraScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Camera preview
-        AndroidView(
-            factory = { ctx ->
-                val previewView = PreviewView(ctx)
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+        if (allScannerPermissionsGranted) {
+            // Camera preview
+            AndroidView(
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx)
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                    cameraProviderFuture.addListener({
+                        val cameraProvider = cameraProviderFuture.get()
 
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
 
-                    val imageAnalysis = ImageAnalysis.Builder()
-                        .setTargetResolution(Size(1280, 720))
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
+                        val imageAnalysis = ImageAnalysis.Builder()
+                            .setTargetResolution(Size(1280, 720))
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .build()
 
-                    val scanner = BarcodeScanning.getClient()
+                        val scanner = BarcodeScanning.getClient()
 
-                    imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
-                        @androidx.camera.core.ExperimentalGetImage
-                        val mediaImage = imageProxy.image
-                        if (mediaImage != null) {
-                            val inputImage = InputImage.fromMediaImage(
-                                mediaImage,
-                                imageProxy.imageInfo.rotationDegrees
-                            )
-                            scanner.process(inputImage)
-                                .addOnSuccessListener { barcodes ->
-                                    for (barcode in barcodes) {
-                                        if (barcode.format == Barcode.FORMAT_QR_CODE) {
-                                            val raw = barcode.rawValue ?: continue
-                                            if (!scannedTarget && !killConfirmed && !heartbeatSuccess && !heartbeatPending) {
-                                                val parsed = QrGenerator.parsePayload(raw)
-                                                if (parsed != null) {
-                                                    val scannedGameId = parsed.first
-                                                    val scannedPlayerNumber = parsed.second.toIntOrNull()
-                                                    val gameId = gameState?.config?.id
-                                                    val targetNumber = gameState?.currentTarget?.player?.number
-                                                    if (scannedGameId == gameId &&
-                                                        scannedPlayerNumber != null &&
-                                                        scannedPlayerNumber == targetNumber
-                                                    ) {
-                                                        // It's the target → kill flow
-                                                        lastScannedPayload = raw
-                                                        scannedTarget = true
-                                                    } else {
-                                                        if (scannedGameId == gameId) {
-                                                            // Not the target (same game) → try heartbeat
-                                                            val hbResult = viewModel.processHeartbeatScan(raw)
-                                                            when (hbResult) {
-                                                                is HeartbeatResult.Success -> {
-                                                                    heartbeatPending = true
-                                                                    heartbeatPlayerNumber = hbResult.scannedPlayerNumber
-                                                                }
-                                                                is HeartbeatResult.ScanYourself -> {
-                                                                    heartbeatError = "You can\u2019t scan yourself!"
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                is HeartbeatResult.ScanTarget -> {
-                                                                    // Shouldn't reach here since we check target above,
-                                                                    // but handle gracefully
-                                                                    wrongTarget = true
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                is HeartbeatResult.ScanHunter -> {
-                                                                    heartbeatError = "That\u2019s your hunter!"
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                is HeartbeatResult.PlayerNotAlive -> {
-                                                                    heartbeatError = "This player is eliminated"
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                is HeartbeatResult.UnknownPlayer -> {
-                                                                    heartbeatError = "Unknown player"
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                is HeartbeatResult.HeartbeatDisabled -> {
-                                                                    heartbeatError = "Heartbeat is disabled in endgame"
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                                else -> {
-                                                                    wrongTarget = true
-                                                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                                }
-                                                            }
+                        imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                            @androidx.camera.core.ExperimentalGetImage
+                            val mediaImage = imageProxy.image
+                            if (mediaImage != null) {
+                                val inputImage = InputImage.fromMediaImage(
+                                    mediaImage,
+                                    imageProxy.imageInfo.rotationDegrees
+                                )
+                                scanner.process(inputImage)
+                                    .addOnSuccessListener { barcodes ->
+                                        for (barcode in barcodes) {
+                                            if (barcode.format == Barcode.FORMAT_QR_CODE) {
+                                                val raw = barcode.rawValue ?: continue
+                                                if (!scannedTarget && !killConfirmed && !heartbeatSuccess && !heartbeatPending) {
+                                                    val parsed = QrGenerator.parsePayload(raw)
+                                                    if (parsed != null) {
+                                                        val scannedGameId = parsed.first
+                                                        val scannedPlayerNumber = parsed.second.toIntOrNull()
+                                                        val gameId = gameState?.config?.id
+                                                        val targetNumber = gameState?.currentTarget?.player?.number
+                                                        if (scannedGameId == gameId &&
+                                                            scannedPlayerNumber != null &&
+                                                            scannedPlayerNumber == targetNumber
+                                                        ) {
+                                                            // It's the target -> kill flow
+                                                            lastScannedPayload = raw
+                                                            scannedTarget = true
                                                         } else {
-                                                            wrongTarget = true
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            if (scannedGameId == gameId) {
+                                                                // Not the target (same game) -> try heartbeat
+                                                                val hbResult = viewModel.processHeartbeatScan(raw)
+                                                                when (hbResult) {
+                                                                    is HeartbeatResult.Success -> {
+                                                                        heartbeatPending = true
+                                                                        heartbeatPlayerNumber = hbResult.scannedPlayerNumber
+                                                                    }
+                                                                    is HeartbeatResult.ScanYourself -> {
+                                                                        heartbeatError = "You can't scan yourself!"
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    is HeartbeatResult.ScanTarget -> {
+                                                                        // Shouldn't reach here since we check target above,
+                                                                        // but handle gracefully
+                                                                        wrongTarget = true
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    is HeartbeatResult.ScanHunter -> {
+                                                                        heartbeatError = "That's your hunter!"
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    is HeartbeatResult.PlayerNotAlive -> {
+                                                                        heartbeatError = "This player is eliminated"
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    is HeartbeatResult.UnknownPlayer -> {
+                                                                        heartbeatError = "Unknown player"
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    is HeartbeatResult.HeartbeatDisabled -> {
+                                                                        heartbeatError = "Heartbeat is disabled in endgame"
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                    else -> {
+                                                                        wrongTarget = true
+                                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                                    }
+                                                                }
+                                                            } else {
+                                                                wrongTarget = true
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
                                                         }
                                                     }
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                .addOnCompleteListener {
-                                    imageProxy.close()
-                                }
-                        } else {
-                            imageProxy.close()
+                                    .addOnCompleteListener {
+                                        imageProxy.close()
+                                    }
+                            } else {
+                                imageProxy.close()
+                            }
                         }
-                    }
 
-                    try {
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview,
-                            imageAnalysis
-                        )
-                    } catch (e: Exception) {
-                        // Camera binding failed
-                    }
-                }, ContextCompat.getMainExecutor(ctx))
-                previewView
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                        try {
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                imageAnalysis
+                            )
+                        } catch (_: Exception) {
+                            // Camera binding failed
+                        }
+                    }, ContextCompat.getMainExecutor(ctx))
+                    previewView
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Reticle overlay
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -403,6 +449,18 @@ fun HuntCameraScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when {
+                !allScannerPermissionsGranted -> {
+                    Text(
+                        text = "Camera, location, and Bluetooth permissions required",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Danger,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
+                        Text("Grant Permissions")
+                    }
+                }
                 killConfirmed -> {
                     Text(
                         "KILL CONFIRMED",

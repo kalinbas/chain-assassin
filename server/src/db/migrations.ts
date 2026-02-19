@@ -124,4 +124,12 @@ export function runMigrations(db: Database.Database): void {
     db.prepare("UPDATE schema_version SET version = ?").run(10);
     log.info("Migrated to v10: added sub_phase_started_at column to games");
   }
+
+  if (currentVersion < 11 && currentVersion > 0) {
+    db.exec(`ALTER TABLE players ADD COLUMN last_location_at INTEGER`);
+    db.exec(`ALTER TABLE players ADD COLUMN last_ble_seen_at INTEGER`);
+    db.exec(`ALTER TABLE players ADD COLUMN last_network_seen_at INTEGER`);
+    db.prepare("UPDATE schema_version SET version = ?").run(11);
+    log.info("Migrated to v11: added compliance timestamp columns to players");
+  }
 }

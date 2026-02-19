@@ -15,7 +15,7 @@ import { handleLocationUpdate, handleHeartbeatScan, getGameStatus, getPregameDur
 import { joinRoom, joinSpectator, getConnection } from "./rooms.js";
 import { createLogger } from "../utils/logger.js";
 import { approximateSpectatorPosition } from "../utils/spectator.js";
-import type { WsClientMessage } from "../utils/types.js";
+import type { WsClientMessage, WsLocationMessage } from "../utils/types.js";
 import { GamePhase } from "../utils/types.js";
 import { config } from "../config.js";
 
@@ -146,7 +146,7 @@ function handleAuth(
  */
 function handleLocation(
   ws: WebSocket,
-  msg: { type: "location"; lat: number; lng: number; timestamp: number }
+  msg: WsLocationMessage
 ): void {
   const conn = getConnection(ws);
   if (!conn) {
@@ -154,7 +154,13 @@ function handleLocation(
     return;
   }
 
-  const result = handleLocationUpdate(conn.gameId, conn.address, msg.lat, msg.lng);
+  const result = handleLocationUpdate(
+    conn.gameId,
+    conn.address,
+    msg.lat,
+    msg.lng,
+    msg.bleOperational === true
+  );
   if (!result.success) {
     sendError(ws, result.error ?? "Location update failed");
   }

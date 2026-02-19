@@ -1,4 +1,4 @@
-export const SCHEMA_VERSION = 10;
+export const SCHEMA_VERSION = 11;
 
 export const CREATE_TABLES = `
 -- Schema version tracking
@@ -63,6 +63,9 @@ CREATE TABLE IF NOT EXISTS players (
   eliminated_at INTEGER,
   eliminated_by TEXT,
   last_heartbeat_at INTEGER,
+  last_location_at INTEGER,
+  last_ble_seen_at INTEGER,
+  last_network_seen_at INTEGER,
   has_claimed   INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (game_id, address)
 );

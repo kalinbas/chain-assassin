@@ -65,9 +65,20 @@ enum class EliminationReason {
     HUNTED,
     ZONE_VIOLATION,
     HEARTBEAT_TIMEOUT,
+    COMPLIANCE_LOCATION_TIMEOUT,
+    COMPLIANCE_BLE_TIMEOUT,
+    COMPLIANCE_NETWORK_TIMEOUT,
     NO_CHECKIN,
     UNKNOWN
 }
+
+data class ComplianceWarningStatus(
+    val locationSecondsRemaining: Int? = null,
+    val bleSecondsRemaining: Int? = null,
+    val networkSecondsRemaining: Int? = null,
+    val warningThresholdSeconds: Int = 30,
+    val graceThresholdSeconds: Int = 120
+)
 
 data class GameState(
     val phase: GamePhase = GamePhase.NOT_JOINED,
@@ -98,6 +109,7 @@ data class GameState(
     val heartbeatIntervalSeconds: Int = 600,
     val heartbeatDisableThreshold: Int = 4,
     val heartbeatDisabled: Boolean = false,
+    val complianceWarning: ComplianceWarningStatus? = null,
     val eliminationReason: EliminationReason? = null,
     val eliminatedByPlayerNumber: Int? = null
 )

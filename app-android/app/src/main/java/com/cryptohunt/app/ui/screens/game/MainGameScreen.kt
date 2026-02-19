@@ -22,6 +22,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.model.ComplianceWarningStatus
 import com.cryptohunt.app.domain.model.LeaderboardEntry
 import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.components.*
@@ -105,6 +106,8 @@ fun MainGameScreen(
 
     val state = gameState ?: return
     val isSpectator = state.spectatorMode
+    val complianceWarning = state.complianceWarning
+    val complianceLines = complianceWarning?.let { buildComplianceWarningLines(it) } ?: emptyList()
 
     // Compute zone shrink countdown from server timestamp
     var nextShrinkSeconds by remember { mutableIntStateOf(0) }
@@ -494,6 +497,46 @@ fun MainGameScreen(
             }
         }
 
+        AnimatedVisibility(
+            visible = complianceWarning != null && complianceLines.isNotEmpty() && !isSpectator,
+            enter = fadeIn(tween(200)),
+            exit = fadeOut(tween(300)),
+            modifier = Modifier.align(Alignment.BottomCenter)
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 160.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = Danger.copy(alpha = 0.92f)
+                ),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .padding(horizontal = 14.dp, vertical = 12.dp)
+                        .fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "COMPLIANCE WARNING",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = TextPrimary,
+                        fontWeight = FontWeight.Black,
+                        textAlign = TextAlign.Center
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    Text(
+                        complianceLines.joinToString(separator = "\n"),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = TextPrimary,
+                        textAlign = TextAlign.Center
+                    )
+                }
+            }
+        }
+
         // GPS lost warning overlay (>10 seconds, only for active players)
         AnimatedVisibility(
             visible = locationState.gpsLostSeconds >= 10 && !isSpectator,
@@ -541,6 +584,17 @@ fun MainGameScreen(
         }
 
     }
+}
+
+private fun buildComplianceWarningLines(status: ComplianceWarningStatus): List<String> {
+    val lines = mutableListOf<String>()
+    status.locationSecondsRemaining?.let { lines += "Location updates missing ($it s left)" }
+    status.bleSecondsRemaining?.let { lines += "Bluetooth proximity not detected ($it s left)" }
+    status.networkSecondsRemaining?.let { lines += "Network updates missing ($it s left)" }
+    if (lines.isNotEmpty()) {
+        lines += "Restore all signals before timeout to avoid elimination."
+    }
+    return lines
 }
 
 @Composable

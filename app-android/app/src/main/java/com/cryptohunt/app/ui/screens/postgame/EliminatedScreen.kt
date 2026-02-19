@@ -271,6 +271,21 @@ private fun eliminationUiCopy(reason: EliminationReason?, eliminatorNumber: Int?
             "MISSED",
             "No valid scan happened before your heartbeat deadline."
         )
+        EliminationReason.COMPLIANCE_LOCATION_TIMEOUT -> EliminationCopy(
+            "LOCATION",
+            "TIMEOUT",
+            "Location updates stopped for too long."
+        )
+        EliminationReason.COMPLIANCE_BLE_TIMEOUT -> EliminationCopy(
+            "BLUETOOTH",
+            "TIMEOUT",
+            "Bluetooth proximity signal was missing for too long."
+        )
+        EliminationReason.COMPLIANCE_NETWORK_TIMEOUT -> EliminationCopy(
+            "NETWORK",
+            "TIMEOUT",
+            "Network updates stopped for too long."
+        )
         EliminationReason.NO_CHECKIN -> EliminationCopy(
             "CHECK-IN",
             "MISSED",

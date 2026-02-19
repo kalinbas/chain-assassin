@@ -78,6 +78,9 @@ export interface Player {
   eliminatedAt: number | null;
   eliminatedBy: string | null;
   lastHeartbeatAt: number | null;
+  lastLocationAt: number | null;
+  lastBleSeenAt: number | null;
+  lastNetworkSeenAt: number | null;
   hasClaimed: boolean;
 }
 
@@ -137,6 +140,7 @@ export interface WsLocationMessage {
   lat: number;
   lng: number;
   timestamp: number;
+  bleOperational?: boolean;
 }
 
 export interface WsSpectateMessage {
@@ -176,6 +180,7 @@ export interface LocationSubmission {
   lat: number;
   lng: number;
   timestamp: number;
+  bleOperational?: boolean;
 }
 
 export interface CheckinSubmission {

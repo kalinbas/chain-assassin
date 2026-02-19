@@ -65,6 +65,16 @@ fun parseServerMessage(json: String): ServerMessage? {
                 inZone = obj.optBoolean("inZone", false)
             )
 
+            "compliance:warning" -> ServerMessage.ComplianceWarning(
+                locationSecondsRemaining = obj.optIntOrNull("locationSecondsRemaining"),
+                bleSecondsRemaining = obj.optIntOrNull("bleSecondsRemaining"),
+                networkSecondsRemaining = obj.optIntOrNull("networkSecondsRemaining"),
+                warningThresholdSeconds = obj.optInt("warningThresholdSeconds", 30),
+                graceThresholdSeconds = obj.optInt("graceThresholdSeconds", 120)
+            )
+
+            "compliance:ok" -> ServerMessage.ComplianceOk
+
             "leaderboard:update" -> ServerMessage.LeaderboardUpdate(
                 entries = parseLeaderboard(obj)
             )

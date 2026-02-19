@@ -1,6 +1,8 @@
 package com.cryptohunt.app.domain.server
 
 import com.cryptohunt.app.domain.game.GameEngine
+import com.cryptohunt.app.domain.ble.BleAdvertiser
+import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.location.LocationTracker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -18,7 +20,9 @@ import javax.inject.Singleton
 class GameRealtimeSync @Inject constructor(
     private val serverClient: GameServerClient,
     private val gameEngine: GameEngine,
-    private val locationTracker: LocationTracker
+    private val locationTracker: LocationTracker,
+    private val bleScanner: BleScanner,
+    private val bleAdvertiser: BleAdvertiser
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -36,7 +40,19 @@ class GameRealtimeSync @Inject constructor(
                     locState.lat != 0.0 &&
                     locState.lng != 0.0
                 ) {
-                    serverClient.sendLocation(locState.lat, locState.lng)
+                    val scanState = bleScanner.state.value
+                    val advertiseState = bleAdvertiser.state.value
+                    val bleOperational =
+                        scanState.isScanning &&
+                            scanState.isBluetoothEnabled &&
+                            scanState.errorMessage == null &&
+                            advertiseState.isAdvertising &&
+                            advertiseState.errorMessage == null
+                    serverClient.sendLocation(
+                        lat = locState.lat,
+                        lng = locState.lng,
+                        bleOperational = bleOperational
+                    )
                 }
             }
         }

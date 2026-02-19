@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
 import android.content.Context
+import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,22 +51,29 @@ class BleScanner @Inject constructor(
     private var scanner: BluetoothLeScanner? = null
 
     private val devices = mutableMapOf<String, NearbyDevice>()
-    private var scanJob: Job? = null
     private var pruneJob: Job? = null
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     companion object {
+        private const val TAG = "BleScanner"
         private const val STALE_THRESHOLD_MS = 8_000L // Remove devices not seen for 8s
         private const val PRUNE_INTERVAL_MS = 3_000L  // Prune every 3s
     }
 
     private val scanCallback = object : ScanCallback() {
         override fun onScanResult(callbackType: Int, result: ScanResult) {
-            val address = result.device.address ?: return
+            val address = try {
+                result.device.address
+            } catch (e: SecurityException) {
+                Log.e(TAG, "Failed to read scan result device address", e)
+                _state.value = _state.value.copy(errorMessage = "Failed to read BLE scan result (permission denied)")
+                null
+            } ?: return
             @SuppressLint("MissingPermission")
             val name = try { result.device.name } catch (_: SecurityException) { null }
+            val scanRecord = result.scanRecord
             val token = BleTokenProtocol.decodeToken(
-                result.scanRecord?.getServiceData(BleTokenProtocol.serviceParcelUuid)
+                scanRecord?.getManufacturerSpecificData(BleTokenProtocol.manufacturerId)
             )
             val device = NearbyDevice(
                 address = address,
@@ -88,7 +96,16 @@ class BleScanner @Inject constructor(
                 SCAN_FAILED_INTERNAL_ERROR -> "Internal error"
                 else -> "Scan failed ($errorCode)"
             }
-            _state.value = _state.value.copy(isScanning = false, errorMessage = msg)
+            Log.e(TAG, "BLE scan failed: $msg")
+            scanner = null
+            pruneJob?.cancel()
+            pruneJob = null
+            synchronized(devices) { devices.clear() }
+            _state.value = BleScanState(
+                isScanning = false,
+                isBluetoothEnabled = isBluetoothEnabled(),
+                errorMessage = msg
+            )
         }
     }
 
@@ -96,16 +113,33 @@ class BleScanner @Inject constructor(
     fun startScanning() {
         val adapter = bluetoothAdapter
         if (adapter == null) {
+            Log.e(TAG, "Cannot start BLE scan: Bluetooth adapter unavailable")
             _state.value = BleScanState(errorMessage = "Bluetooth not available")
             return
         }
-        if (!adapter.isEnabled) {
+
+        val adapterEnabled = try {
+            adapter.isEnabled
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Cannot read Bluetooth enabled state (permission denied)", e)
+            _state.value = BleScanState(errorMessage = "BLE permission denied")
+            return
+        }
+        if (!adapterEnabled) {
+            Log.e(TAG, "Cannot start BLE scan: Bluetooth is off")
             _state.value = BleScanState(isBluetoothEnabled = false, errorMessage = "Bluetooth is off")
             return
         }
 
-        scanner = adapter.bluetoothLeScanner
+        scanner = try {
+            adapter.bluetoothLeScanner
+        } catch (e: SecurityException) {
+            Log.e(TAG, "Cannot obtain BLE scanner (permission denied)", e)
+            _state.value = BleScanState(errorMessage = "BLE permission denied")
+            return
+        }
         if (scanner == null) {
+            Log.e(TAG, "Cannot start BLE scan: scanner unavailable")
             _state.value = BleScanState(isBluetoothEnabled = true, errorMessage = "BLE scanner unavailable")
             return
         }
@@ -117,9 +151,15 @@ class BleScanner @Inject constructor(
             .setScanMode(ScanSettings.SCAN_MODE_LOW_LATENCY)
             .setReportDelay(0)
             .build()
+        val filters = listOf(
+            ScanFilter.Builder()
+                .setServiceUuid(BleTokenProtocol.serviceParcelUuid)
+                .build()
+        )
 
         try {
-            scanner?.startScan(null, settings, scanCallback)
+            scanner?.startScan(filters, settings, scanCallback)
+            Log.i(TAG, "BLE scan started")
             _state.value = BleScanState(isScanning = true, isBluetoothEnabled = true)
 
             // Start pruning stale devices
@@ -131,7 +171,11 @@ class BleScanner @Inject constructor(
                 }
             }
         } catch (e: SecurityException) {
+            Log.e(TAG, "BLE scan start blocked by permission", e)
             _state.value = BleScanState(errorMessage = "BLE permission denied")
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "BLE scan start failed due to invalid filter/settings", e)
+            _state.value = BleScanState(errorMessage = "BLE scan configuration error")
         }
     }
 
@@ -139,12 +183,28 @@ class BleScanner @Inject constructor(
     fun stopScanning() {
         try {
             scanner?.stopScan(scanCallback)
-        } catch (_: Exception) { }
+        } catch (e: Exception) {
+            Log.w(TAG, "BLE stopScan failed", e)
+            _state.value = BleScanState(
+                isScanning = false,
+                isBluetoothEnabled = isBluetoothEnabled(),
+                errorMessage = "Failed to stop BLE scan: ${e.message}"
+            )
+            scanner = null
+            pruneJob?.cancel()
+            pruneJob = null
+            synchronized(devices) { devices.clear() }
+            return
+        }
         scanner = null
         pruneJob?.cancel()
         pruneJob = null
         synchronized(devices) { devices.clear() }
-        _state.value = BleScanState(isScanning = false, isBluetoothEnabled = bluetoothAdapter?.isEnabled == true)
+        Log.i(TAG, "BLE scan stopped")
+        _state.value = BleScanState(
+            isScanning = false,
+            isBluetoothEnabled = isBluetoothEnabled()
+        )
     }
 
     private fun pruneStaleDevices() {
@@ -183,13 +243,24 @@ class BleScanner @Inject constructor(
             if (address != null && address != "02:00:00:00:00:00") {
                 return address
             }
-        } catch (_: SecurityException) { }
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Failed to read local Bluetooth adapter address", e)
+        }
         return null
     }
 
     fun getNearbyTokens(): List<String> {
         return synchronized(devices) {
             devices.values.mapNotNull { BleTokenProtocol.normalizeToken(it.token) }.distinct()
+        }
+    }
+
+    private fun isBluetoothEnabled(): Boolean {
+        val adapter = bluetoothAdapter ?: return false
+        return try {
+            adapter.isEnabled
+        } catch (_: SecurityException) {
+            false
         }
     }
 

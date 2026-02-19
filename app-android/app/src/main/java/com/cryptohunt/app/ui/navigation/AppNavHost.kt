@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -27,6 +28,9 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.screens.game.CheckInCameraScreen
 import com.cryptohunt.app.ui.screens.game.CheckInScreen
@@ -66,6 +70,7 @@ fun AppNavHost(
     val gameViewModel: GameViewModel = hiltViewModel()
     val gameState by gameViewModel.gameState.collectAsState()
     val currentBackStackEntry by navController.currentBackStackEntryAsState()
+    val lifecycleOwner = LocalLifecycleOwner.current
 
     val currentRoute = currentBackStackEntry?.destination?.route
     val routeGameId = currentBackStackEntry?.arguments?.getString("gameId")?.toIntOrNull()
@@ -90,11 +95,10 @@ fun AppNavHost(
             NavRoutes.HuntCamera.route
         )
     }
+    val keepWs = currentRoute in wsActiveRoutes
+    val keepSensors = currentRoute in sensorActiveRoutes
 
-    LaunchedEffect(currentRoute, activeGameId, gameState?.config?.id) {
-        val keepWs = currentRoute in wsActiveRoutes
-        val keepSensors = currentRoute in sensorActiveRoutes
-
+    LaunchedEffect(keepWs, keepSensors, activeGameId, gameState?.config?.id) {
         if (keepWs && activeGameId != null) {
             gameViewModel.connectToServer(activeGameId)
         } else {
@@ -107,6 +111,28 @@ fun AppNavHost(
         } else {
             gameViewModel.stopBleScanning()
             gameViewModel.stopLocationTracking()
+        }
+    }
+    DisposableEffect(lifecycleOwner, keepWs, keepSensors, activeGameId) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                if (keepWs && activeGameId != null) {
+                    gameViewModel.connectToServer(activeGameId)
+                } else {
+                    gameViewModel.disconnectFromServer()
+                }
+                if (keepSensors) {
+                    gameViewModel.startLocationTracking()
+                    gameViewModel.startBleScanning()
+                } else {
+                    gameViewModel.stopBleScanning()
+                    gameViewModel.stopLocationTracking()
+                }
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 

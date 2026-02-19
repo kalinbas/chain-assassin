@@ -59,7 +59,10 @@ fun PermissionsScreen(onAllGranted: () -> Unit) {
                 Manifest.permission.BLUETOOTH_CONNECT
             ) }
             .all { it.status.isGranted }
-    } else true
+    } else {
+        // On pre-Android 12, BLE scans require location permission at runtime.
+        locationGranted
+    }
 
     // Auto-navigate if all already granted
     LaunchedEffect(permissionsState.allPermissionsGranted) {

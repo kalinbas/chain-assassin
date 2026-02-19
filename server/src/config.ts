@@ -64,6 +64,10 @@ export const config = {
   heartbeatProximityMeters: envInt("HEARTBEAT_PROXIMITY_METERS", 100),
   heartbeatDisableThreshold: envInt("HEARTBEAT_DISABLE_THRESHOLD", 4),  // disable when ≤ this many alive
 
+  // Device compliance (location + BLE + network freshness)
+  complianceWarningSeconds: envInt("COMPLIANCE_WARNING_SECONDS", 30),
+  complianceGraceSeconds: envInt("COMPLIANCE_GRACE_SECONDS", 120),
+
   // Check-in (after startGame, before pregame)
   checkinDurationSeconds: envInt("CHECKIN_DURATION_SECONDS", 300),  // 5 minutes
 

@@ -87,8 +87,12 @@ class GameViewModel @Inject constructor(
         if (locationSessionActive) return
         val config = gameState.value?.config ?: return
         locationTracker.setZone(config.zoneCenterLat, config.zoneCenterLng, gameState.value?.currentZoneRadius ?: config.initialRadiusMeters)
-        locationTracker.startTracking()
-        locationSessionActive = true
+        try {
+            locationTracker.startTracking()
+            locationSessionActive = true
+        } catch (_: SecurityException) {
+            locationSessionActive = false
+        }
     }
 
     fun stopLocationTracking() {
@@ -98,12 +102,12 @@ class GameViewModel @Inject constructor(
     }
 
     fun startBleScanning() {
-        if (bleSessionActive) {
-            syncBleAdvertising(gameState.value)
-            return
+        if (!bleSessionActive) {
+            bleSessionActive = true
         }
-        bleSessionActive = true
-        bleScanner.startScanning()
+        if (!bleScanner.state.value.isScanning) {
+            bleScanner.startScanning()
+        }
         syncBleAdvertising(gameState.value)
     }
 
@@ -118,10 +122,19 @@ class GameViewModel @Inject constructor(
         val result = gameEngine.processKill(qrPayload)
         if (result is KillResult.Confirmed) {
             val loc = locationTracker.state.value
-            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
-            val bleAddresses = getNearbyBleTokens()
+            val state = gameState.value ?: return result
+            val gameId = state.config.id.toIntOrNull() ?: return result
+            val ownBleToken = buildOwnBleToken(state)
+            val bleAddresses = getNearbyBleTokens(excludeToken = ownBleToken)
             val submitted = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
-                serverClient.submitKill(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
+                serverClient.submitKill(
+                    gameId = gameId,
+                    qrPayload = qrPayload,
+                    lat = loc.lat,
+                    lng = loc.lng,
+                    bluetoothId = ownBleToken,
+                    bleAddresses = bleAddresses
+                )
             }
             if (!submitted) return KillResult.ServerRejected
         }
@@ -165,10 +178,19 @@ class GameViewModel @Inject constructor(
         val result = gameEngine.processHeartbeatScan(qrPayload)
         if (result is HeartbeatResult.Success) {
             val loc = locationTracker.state.value
-            val gameId = gameState.value?.config?.id?.toIntOrNull() ?: return result
-            val bleAddresses = getNearbyBleTokens()
+            val state = gameState.value ?: return result
+            val gameId = state.config.id.toIntOrNull() ?: return result
+            val ownBleToken = buildOwnBleToken(state)
+            val bleAddresses = getNearbyBleTokens(excludeToken = ownBleToken)
             viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
-                val submitResult = serverClient.submitHeartbeat(gameId, qrPayload, loc.lat, loc.lng, bleAddresses)
+                val submitResult = serverClient.submitHeartbeat(
+                    gameId = gameId,
+                    qrPayload = qrPayload,
+                    lat = loc.lat,
+                    lng = loc.lng,
+                    bluetoothId = ownBleToken,
+                    bleAddresses = bleAddresses
+                )
                 if (!submitResult.success) {
                     _heartbeatSubmissionErrors.emit(submitResult.error ?: "Heartbeat rejected by server")
                 }
@@ -226,8 +248,9 @@ class GameViewModel @Inject constructor(
         return QrGenerator.buildPayload(gameId, playerNumber)
     }
 
-    private fun getNearbyBleTokens(): List<String> {
-        return bleScanner.getNearbyTokens()
+    private fun getNearbyBleTokens(excludeToken: String? = null): List<String> {
+        val nearby = bleScanner.getNearbyTokens()
+        return if (excludeToken == null) nearby else nearby.filter { it != excludeToken }
     }
 
     override fun onCleared() {

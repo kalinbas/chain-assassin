@@ -160,6 +160,18 @@ sealed class ServerMessage {
         val inZone: Boolean
     ) : ServerMessage()
 
+    /** Compliance warning for stale location/BLE/network signals. */
+    data class ComplianceWarning(
+        val locationSecondsRemaining: Int?,
+        val bleSecondsRemaining: Int?,
+        val networkSecondsRemaining: Int?,
+        val warningThresholdSeconds: Int,
+        val graceThresholdSeconds: Int
+    ) : ServerMessage()
+
+    /** Compliance status recovered (all required signals are fresh again). */
+    data object ComplianceOk : ServerMessage()
+
     /** Leaderboard updated. */
     data class LeaderboardUpdate(
         val entries: List<ServerLeaderboardEntry>

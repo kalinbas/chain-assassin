@@ -229,6 +229,8 @@ class GameEngine @Inject constructor() {
                 _events.tryEmit(GameEvent.HeartbeatError(msg.error))
             }
             is ServerMessage.ZoneWarning -> handleZoneWarning(msg)
+            is ServerMessage.ComplianceWarning -> handleComplianceWarning(msg)
+            is ServerMessage.ComplianceOk -> handleComplianceOk()
             is ServerMessage.Error -> Log.e(TAG, "Server error: ${msg.error}")
         }
     }
@@ -261,11 +263,11 @@ class GameEngine @Inject constructor() {
 
         // Determine phase from server subPhase
         val phase = when (msg.subPhase) {
-            "checkin" -> GamePhase.CHECK_IN
-            "pregame" -> GamePhase.PREGAME
-            "game" -> GamePhase.ACTIVE
             "ended" -> GamePhase.ENDED
             "cancelled" -> GamePhase.CANCELLED
+            "checkin" -> if (msg.isAlive) GamePhase.CHECK_IN else GamePhase.ELIMINATED
+            "pregame" -> if (msg.isAlive) GamePhase.PREGAME else GamePhase.ELIMINATED
+            "game" -> if (msg.isAlive) GamePhase.ACTIVE else GamePhase.ELIMINATED
             else -> if (!msg.isAlive) GamePhase.ELIMINATED else current.phase
         }
         val syncedPlayersRemaining = when (phase) {
@@ -295,6 +297,11 @@ class GameEngine @Inject constructor() {
             pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt,
             playersRemaining = syncedPlayersRemaining,
             checkedInCount = msg.checkedInCount ?: current.checkedInCount,
+            complianceWarning = if (phase == GamePhase.ACTIVE || phase == GamePhase.ELIMINATED) {
+                current.complianceWarning
+            } else {
+                null
+            },
             eliminationReason = if (phase == GamePhase.ELIMINATED) {
                 current.eliminationReason ?: EliminationReason.UNKNOWN
             } else {
@@ -330,12 +337,16 @@ class GameEngine @Inject constructor() {
             val eliminationReason = when (msg.reason) {
                 "zone_violation" -> EliminationReason.ZONE_VIOLATION
                 "heartbeat_timeout" -> EliminationReason.HEARTBEAT_TIMEOUT
+                "compliance_location_timeout" -> EliminationReason.COMPLIANCE_LOCATION_TIMEOUT
+                "compliance_ble_timeout" -> EliminationReason.COMPLIANCE_BLE_TIMEOUT
+                "compliance_network_timeout" -> EliminationReason.COMPLIANCE_NETWORK_TIMEOUT
                 "no_checkin" -> EliminationReason.NO_CHECKIN
                 "killed" -> EliminationReason.HUNTED
                 else -> EliminationReason.UNKNOWN
             }
             _state.value = current.copy(
                 phase = GamePhase.ELIMINATED,
+                complianceWarning = null,
                 eliminationReason = eliminationReason,
                 eliminatedByPlayerNumber = if (eliminationReason == EliminationReason.HUNTED && msg.eliminatorNumber > 0) {
                     msg.eliminatorNumber
@@ -447,7 +458,8 @@ class GameEngine @Inject constructor() {
             heartbeatDisabled = msg.heartbeatDisabled,
             currentZoneRadius = msg.zone?.currentRadiusMeters ?: current.currentZoneRadius,
             nextShrinkAt = msg.zone?.nextShrinkAt,
-            gameStartTime = System.currentTimeMillis() / 1000
+            gameStartTime = System.currentTimeMillis() / 1000,
+            complianceWarning = null
         )
 
         _events.tryEmit(GameEvent.GameStarted)
@@ -525,6 +537,25 @@ class GameEngine @Inject constructor() {
         // Could show a UI warning — for now just update zone status
         val current = _state.value ?: return
         _state.value = current.copy(isInZone = msg.inZone)
+    }
+
+    private fun handleComplianceWarning(msg: ServerMessage.ComplianceWarning) {
+        val current = _state.value ?: return
+        _state.value = current.copy(
+            complianceWarning = ComplianceWarningStatus(
+                locationSecondsRemaining = msg.locationSecondsRemaining,
+                bleSecondsRemaining = msg.bleSecondsRemaining,
+                networkSecondsRemaining = msg.networkSecondsRemaining,
+                warningThresholdSeconds = msg.warningThresholdSeconds,
+                graceThresholdSeconds = msg.graceThresholdSeconds
+            )
+        )
+    }
+
+    private fun handleComplianceOk() {
+        val current = _state.value ?: return
+        if (current.complianceWarning == null) return
+        _state.value = current.copy(complianceWarning = null)
     }
 
     private fun parseScannedPlayerNumberForCurrentGame(

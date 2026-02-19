@@ -1,5 +1,7 @@
 package com.cryptohunt.app.ui.screens.game
 
+import android.Manifest
+import android.os.Build
 import android.util.Size
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.ImageAnalysis
@@ -23,7 +25,6 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
@@ -36,11 +37,15 @@ import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import com.cryptohunt.app.util.QrGenerator
+import com.google.accompanist.permissions.ExperimentalPermissionsApi
+import com.google.accompanist.permissions.isGranted
+import com.google.accompanist.permissions.rememberMultiplePermissionsState
 import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalPermissionsApi::class)
 @Composable
 fun CheckInCameraScreen(
     onVerified: () -> Unit,
@@ -48,13 +53,50 @@ fun CheckInCameraScreen(
     viewModel: GameViewModel = hiltViewModel()
 ) {
     val gameState by viewModel.gameState.collectAsState()
-    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
+
+    val permissions = remember {
+        buildList {
+            add(Manifest.permission.CAMERA)
+            add(Manifest.permission.ACCESS_FINE_LOCATION)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
+                add(Manifest.permission.BLUETOOTH_CONNECT)
+            }
+        }
+    }
+    val permissionsState = rememberMultiplePermissionsState(permissions)
+    val cameraGranted = permissionsState.permissions
+        .firstOrNull { it.permission == Manifest.permission.CAMERA }
+        ?.status?.isGranted == true
+    val locationGranted = permissionsState.permissions
+        .firstOrNull { it.permission == Manifest.permission.ACCESS_FINE_LOCATION }
+        ?.status?.isGranted == true
+    val bluetoothGranted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+        permissionsState.permissions
+            .filter {
+                it.permission == Manifest.permission.BLUETOOTH_SCAN ||
+                    it.permission == Manifest.permission.BLUETOOTH_ADVERTISE ||
+                    it.permission == Manifest.permission.BLUETOOTH_CONNECT
+            }
+            .all { it.status.isGranted }
+    } else {
+        locationGranted
+    }
+    val allScannerPermissionsGranted = cameraGranted && locationGranted && bluetoothGranted
 
     var verified by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var autoNavigatedAway by remember { mutableStateOf(false) }
+
+    LaunchedEffect(allScannerPermissionsGranted) {
+        if (allScannerPermissionsGranted) {
+            viewModel.startLocationTracking()
+            viewModel.startBleScanning()
+        }
+    }
 
     // Keep camera route aligned with authoritative server phase.
     LaunchedEffect(gameState?.phase, gameState?.checkInVerified, autoNavigatedAway) {
@@ -89,94 +131,96 @@ fun CheckInCameraScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Camera preview
-        AndroidView(
-            factory = { ctx ->
-                val previewView = PreviewView(ctx)
-                val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
-                cameraProviderFuture.addListener({
-                    val cameraProvider = cameraProviderFuture.get()
+        if (allScannerPermissionsGranted) {
+            // Camera preview
+            AndroidView(
+                factory = { ctx ->
+                    val previewView = PreviewView(ctx)
+                    val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
+                    cameraProviderFuture.addListener({
+                        val cameraProvider = cameraProviderFuture.get()
 
-                    val preview = Preview.Builder().build().also {
-                        it.setSurfaceProvider(previewView.surfaceProvider)
-                    }
+                        val preview = Preview.Builder().build().also {
+                            it.setSurfaceProvider(previewView.surfaceProvider)
+                        }
 
-                    val imageAnalysis = ImageAnalysis.Builder()
-                        .setTargetResolution(Size(1280, 720))
-                        .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                        .build()
+                        val imageAnalysis = ImageAnalysis.Builder()
+                            .setTargetResolution(Size(1280, 720))
+                            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                            .build()
 
-                    val scanner = BarcodeScanning.getClient()
+                        val scanner = BarcodeScanning.getClient()
 
-                    imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
-                        @androidx.camera.core.ExperimentalGetImage
-                        val mediaImage = imageProxy.image
-                        if (mediaImage != null) {
-                            val inputImage = InputImage.fromMediaImage(
-                                mediaImage,
-                                imageProxy.imageInfo.rotationDegrees
-                            )
-                            scanner.process(inputImage)
-                                .addOnSuccessListener { barcodes ->
-                                    for (barcode in barcodes) {
-                                        if (barcode.format == Barcode.FORMAT_QR_CODE) {
-                                            val raw = barcode.rawValue ?: continue
-                                            if (!verified && QrGenerator.parsePayload(raw) != null) {
-                                                val result = viewModel.processCheckInScan(raw)
-                                                when (result) {
-                                                    is CheckInResult.Verified -> {
-                                                        verified = true
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        imageAnalysis.setAnalyzer(ContextCompat.getMainExecutor(ctx)) { imageProxy ->
+                            @androidx.camera.core.ExperimentalGetImage
+                            val mediaImage = imageProxy.image
+                            if (mediaImage != null) {
+                                val inputImage = InputImage.fromMediaImage(
+                                    mediaImage,
+                                    imageProxy.imageInfo.rotationDegrees
+                                )
+                                scanner.process(inputImage)
+                                    .addOnSuccessListener { barcodes ->
+                                        for (barcode in barcodes) {
+                                            if (barcode.format == Barcode.FORMAT_QR_CODE) {
+                                                val raw = barcode.rawValue ?: continue
+                                                if (!verified && QrGenerator.parsePayload(raw) != null) {
+                                                    val result = viewModel.processCheckInScan(raw)
+                                                    when (result) {
+                                                        is CheckInResult.Verified -> {
+                                                            verified = true
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        }
+                                                        is CheckInResult.AlreadyVerified -> {
+                                                            verified = true
+                                                        }
+                                                        is CheckInResult.PlayerNotCheckedIn -> {
+                                                            errorMessage = "This player hasn't checked in yet"
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        }
+                                                        is CheckInResult.ScanYourself -> {
+                                                            errorMessage = "You can't scan yourself!"
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        }
+                                                        is CheckInResult.UnknownPlayer -> {
+                                                            errorMessage = "Unknown player"
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        }
+                                                        is CheckInResult.TooFar -> {
+                                                            errorMessage = "Too far from meeting point"
+                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                        }
+                                                        else -> {}
                                                     }
-                                                    is CheckInResult.AlreadyVerified -> {
-                                                        verified = true
-                                                    }
-                                                    is CheckInResult.PlayerNotCheckedIn -> {
-                                                        errorMessage = "This player hasn\u2019t checked in yet"
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    }
-                                                    is CheckInResult.ScanYourself -> {
-                                                        errorMessage = "You can\u2019t scan yourself!"
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    }
-                                                    is CheckInResult.UnknownPlayer -> {
-                                                        errorMessage = "Unknown player"
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    }
-                                                    is CheckInResult.TooFar -> {
-                                                        errorMessage = "Too far from meeting point"
-                                                        haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                    }
-                                                    else -> {}
                                                 }
                                             }
                                         }
                                     }
-                                }
-                                .addOnCompleteListener {
-                                    imageProxy.close()
-                                }
-                        } else {
-                            imageProxy.close()
+                                    .addOnCompleteListener {
+                                        imageProxy.close()
+                                    }
+                            } else {
+                                imageProxy.close()
+                            }
                         }
-                    }
 
-                    try {
-                        cameraProvider.unbindAll()
-                        cameraProvider.bindToLifecycle(
-                            lifecycleOwner,
-                            CameraSelector.DEFAULT_BACK_CAMERA,
-                            preview,
-                            imageAnalysis
-                        )
-                    } catch (e: Exception) {
-                        // Camera binding failed
-                    }
-                }, ContextCompat.getMainExecutor(ctx))
-                previewView
-            },
-            modifier = Modifier.fillMaxSize()
-        )
+                        try {
+                            cameraProvider.unbindAll()
+                            cameraProvider.bindToLifecycle(
+                                lifecycleOwner,
+                                CameraSelector.DEFAULT_BACK_CAMERA,
+                                preview,
+                                imageAnalysis
+                            )
+                        } catch (_: Exception) {
+                            // Camera binding failed
+                        }
+                    }, ContextCompat.getMainExecutor(ctx))
+                    previewView
+                },
+                modifier = Modifier.fillMaxSize()
+            )
+        }
 
         // Reticle overlay
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -253,6 +297,18 @@ fun CheckInCameraScreen(
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             when {
+                !allScannerPermissionsGranted -> {
+                    Text(
+                        "Camera, location, and Bluetooth permissions required",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = Danger,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { permissionsState.launchMultiplePermissionRequest() }) {
+                        Text("Grant Permissions")
+                    }
+                }
                 verified -> {
                     Text(
                         "\u2705 VERIFIED",
@@ -271,7 +327,7 @@ fun CheckInCameraScreen(
                 }
                 else -> {
                     Text(
-                        "Scan any checked-in player\u2019s QR code",
+                        "Scan any checked-in player's QR code",
                         style = MaterialTheme.typography.bodyMedium,
                         color = Color.White.copy(alpha = 0.7f)
                     )

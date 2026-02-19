@@ -18,6 +18,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.cryptohunt.app.domain.ble.BleAdvertiser
+import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.server.ConnectionState
 import com.cryptohunt.app.domain.server.GameServerClient
@@ -32,6 +34,8 @@ import dagger.hilt.components.SingletonComponent
 interface DebugStatusEntryPoint {
     fun gameServerClient(): GameServerClient
     fun locationTracker(): LocationTracker
+    fun bleScanner(): BleScanner
+    fun bleAdvertiser(): BleAdvertiser
 }
 
 @Composable
@@ -43,18 +47,27 @@ fun DebugStatusOverlay() {
 
     val serverClient = remember { entryPoint.gameServerClient() }
     val locationTracker = remember { entryPoint.locationTracker() }
+    val bleScanner = remember { entryPoint.bleScanner() }
+    val bleAdvertiser = remember { entryPoint.bleAdvertiser() }
 
     val connectionState by serverClient.connectionState.collectAsState()
     val locationState by locationTracker.state.collectAsState()
+    val bleScanState by bleScanner.state.collectAsState()
+    val bleAdvertiseState by bleAdvertiser.state.collectAsState()
 
     // Check if Bluetooth adapter is enabled
-    val btEnabled = remember {
+    val btEnabled = run {
         val btManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
-        btManager?.adapter?.isEnabled == true
+        val adapter = btManager?.adapter ?: return@run false
+        try {
+            adapter.isEnabled
+        } catch (_: SecurityException) {
+            false
+        }
     }
 
     // Check if location services are enabled
-    val gpsEnabled = remember {
+    val gpsEnabled = run {
         val lm = context.getSystemService(Context.LOCATION_SERVICE) as? LocationManager
         lm?.isProviderEnabled(LocationManager.GPS_PROVIDER) == true
     }
@@ -65,7 +78,12 @@ fun DebugStatusOverlay() {
 
     val gpsColor = if (locationState.isTracking && locationState.gpsLostSeconds == 0) Primary else off
 
-    val bleColor = if (btEnabled) Primary else off
+    val bleColor = when {
+        !btEnabled -> off
+        bleScanState.isScanning && bleAdvertiseState.isAdvertising -> Primary
+        btEnabled && (bleScanState.errorMessage != null || bleAdvertiseState.errorMessage != null) -> Danger
+        else -> Warning
+    }
 
     Row(
         modifier = Modifier

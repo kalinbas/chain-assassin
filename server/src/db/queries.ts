@@ -424,6 +424,9 @@ export function insertPlayer(
     eliminatedAt?: number | null;
     eliminatedBy?: string | null;
     lastHeartbeatAt?: number | null;
+    lastLocationAt?: number | null;
+    lastBleSeenAt?: number | null;
+    lastNetworkSeenAt?: number | null;
     hasClaimed?: boolean;
   }
 ): void {
@@ -462,6 +465,18 @@ export function insertPlayer(
     if (options?.lastHeartbeatAt !== undefined) {
       sets.push("last_heartbeat_at = ?");
       params.push(options.lastHeartbeatAt);
+    }
+    if (options?.lastLocationAt !== undefined) {
+      sets.push("last_location_at = ?");
+      params.push(options.lastLocationAt);
+    }
+    if (options?.lastBleSeenAt !== undefined) {
+      sets.push("last_ble_seen_at = ?");
+      params.push(options.lastBleSeenAt);
+    }
+    if (options?.lastNetworkSeenAt !== undefined) {
+      sets.push("last_network_seen_at = ?");
+      params.push(options.lastNetworkSeenAt);
     }
     if (options?.hasClaimed !== undefined) {
       sets.push("has_claimed = ?");
@@ -638,6 +653,9 @@ function mapPlayer(row: Record<string, unknown>): Player {
     eliminatedAt: row.eliminated_at as number | null,
     eliminatedBy: row.eliminated_by as string | null,
     lastHeartbeatAt: row.last_heartbeat_at as number | null,
+    lastLocationAt: row.last_location_at as number | null,
+    lastBleSeenAt: row.last_ble_seen_at as number | null,
+    lastNetworkSeenAt: row.last_network_seen_at as number | null,
     hasClaimed: (row.has_claimed as number) === 1,
   };
 }
@@ -885,10 +903,46 @@ export function initPlayersHeartbeat(gameId: number, timestamp: number): void {
     .run(timestamp, gameId, ZERO_ADDRESS);
 }
 
+export function initPlayersCompliance(gameId: number, timestamp: number): void {
+  getDb()
+    .prepare(
+      `UPDATE players
+       SET last_location_at = ?,
+           last_ble_seen_at = ?,
+           last_network_seen_at = ?
+       WHERE game_id = ? AND address != ? AND is_alive = 1`
+    )
+    .run(timestamp, timestamp, timestamp, gameId, ZERO_ADDRESS);
+}
+
 export function updateLastHeartbeat(gameId: number, address: string, timestamp: number): void {
   getDb()
     .prepare(
       "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND address = ?"
+    )
+    .run(timestamp, gameId, address.toLowerCase());
+}
+
+export function updateLastLocation(gameId: number, address: string, timestamp: number): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET last_location_at = ? WHERE game_id = ? AND address = ?"
+    )
+    .run(timestamp, gameId, address.toLowerCase());
+}
+
+export function updateLastBleSeen(gameId: number, address: string, timestamp: number): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET last_ble_seen_at = ? WHERE game_id = ? AND address = ?"
+    )
+    .run(timestamp, gameId, address.toLowerCase());
+}
+
+export function updateLastNetworkSeen(gameId: number, address: string, timestamp: number): void {
+  getDb()
+    .prepare(
+      "UPDATE players SET last_network_seen_at = ? WHERE game_id = ? AND address = ?"
     )
     .run(timestamp, gameId, address.toLowerCase());
 }

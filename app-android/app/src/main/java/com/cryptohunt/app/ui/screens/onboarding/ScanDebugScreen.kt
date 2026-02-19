@@ -93,6 +93,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.Danger
 import com.cryptohunt.app.ui.theme.Primary
@@ -121,7 +123,10 @@ fun ScanDebugScreen(
     viewModel: ScanDebugViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val bleScanState by viewModel.bleState.collectAsState()
+    val bleAdvertiseState by viewModel.bleAdvertiseState.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val view = LocalView.current
     val haptic = LocalHapticFeedback.current
 
@@ -131,6 +136,7 @@ fun ScanDebugScreen(
             add(Manifest.permission.ACCESS_FINE_LOCATION)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 add(Manifest.permission.BLUETOOTH_SCAN)
+                add(Manifest.permission.BLUETOOTH_ADVERTISE)
                 add(Manifest.permission.BLUETOOTH_CONNECT)
             }
         }
@@ -149,12 +155,14 @@ fun ScanDebugScreen(
         permissionsState.permissions
             .filter {
                 it.permission == Manifest.permission.BLUETOOTH_SCAN ||
+                    it.permission == Manifest.permission.BLUETOOTH_ADVERTISE ||
                     it.permission == Manifest.permission.BLUETOOTH_CONNECT
             }
             .all { it.status.isGranted }
     } else {
         locationGranted
     }
+    val allScannerPermissionsGranted = cameraGranted && locationGranted && bluetoothGranted
 
     val lensPrefs = remember(context) {
         context.getSharedPreferences(SCAN_DEBUG_PREFS, Context.MODE_PRIVATE)
@@ -180,6 +188,21 @@ fun ScanDebugScreen(
             locationPermissionGranted = locationGranted,
             bluetoothPermissionGranted = bluetoothGranted
         )
+    }
+
+    val latestLocationGranted by rememberUpdatedState(locationGranted)
+    val latestBluetoothGranted by rememberUpdatedState(bluetoothGranted)
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.syncSensors(
+                    locationPermissionGranted = latestLocationGranted,
+                    bluetoothPermissionGranted = latestBluetoothGranted
+                )
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     DisposableEffect(Unit) {
@@ -275,15 +298,16 @@ fun ScanDebugScreen(
         }
     }
 
-    val scanEnabled = cameraGranted && !uiState.isSubmitting && !uiState.scanLocked
+    val scanEnabled = allScannerPermissionsGranted && !uiState.isSubmitting && !uiState.scanLocked
     val lensToggleEnabled = !uiState.scanLocked && !uiState.isSubmitting
+    val bleIssueMessage = bleScanState.errorMessage ?: bleAdvertiseState.errorMessage
 
     Box(
         modifier = Modifier
             .fillMaxSize()
             .testTag(TestTags.SCAN_DEBUG_SCREEN)
     ) {
-        if (cameraGranted) {
+        if (allScannerPermissionsGranted) {
             DebugScanCameraPreview(
                 isScanEnabled = scanEnabled,
                 scanLocked = uiState.scanLocked,
@@ -361,7 +385,7 @@ fun ScanDebugScreen(
             )
         }
 
-        if (cameraGranted) {
+        if (allScannerPermissionsGranted) {
             IconButton(
                 enabled = lensToggleEnabled,
                 onClick = {
@@ -418,10 +442,19 @@ fun ScanDebugScreen(
                 .padding(bottom = 76.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            if (!bleIssueMessage.isNullOrBlank() && allScannerPermissionsGranted) {
+                Text(
+                    text = "Bluetooth issue: $bleIssueMessage",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Danger,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
             when {
-                !cameraGranted -> {
+                !allScannerPermissionsGranted -> {
                     Text(
-                        text = "Grant camera permission",
+                        text = "Camera, location, and Bluetooth permissions required",
                         style = MaterialTheme.typography.titleMedium,
                         color = Danger,
                         fontWeight = FontWeight.Bold
