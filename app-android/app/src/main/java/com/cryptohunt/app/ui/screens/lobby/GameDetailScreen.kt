@@ -8,7 +8,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +31,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
@@ -87,7 +88,7 @@ fun GameDetailScreen(
                     title = { Text("Loading...", style = MaterialTheme.typography.titleLarge) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, "Back")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(containerColor = Background)
@@ -123,7 +124,7 @@ fun GameDetailScreen(
                 title = { Text(config.name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Background)
@@ -267,7 +268,7 @@ fun GameDetailScreen(
                             setMultiTouchControls(true)
                             controller.setZoom(15.0)
                             controller.setCenter(GeoPoint(config.zoneCenterLat, config.zoneCenterLng))
-                            setBuiltInZoomControls(false)
+                            zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
                         }
                     },
                     update = { mapView ->

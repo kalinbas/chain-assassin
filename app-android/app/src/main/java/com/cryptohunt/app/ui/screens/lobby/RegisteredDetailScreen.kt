@@ -2,6 +2,7 @@ package com.cryptohunt.app.ui.screens.lobby
 
 import android.graphics.Canvas
 import android.graphics.Paint
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -9,7 +10,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -25,7 +27,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.cryptohunt.app.domain.model.GamePhase
+import com.cryptohunt.app.ui.screens.onboarding.isDeviceGameReady
 import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
@@ -35,6 +40,7 @@ import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.util.MapTileIndex
+import org.osmdroid.views.CustomZoomButtonsController
 import org.osmdroid.views.MapView
 import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
@@ -49,14 +55,17 @@ fun RegisteredDetailScreen(
     onPregameStart: (String) -> Unit,
     onGameStart: () -> Unit,
     onEliminated: () -> Unit,
+    onOpenReadiness: () -> Unit,
     onBack: () -> Unit,
     viewModel: LobbyViewModel = hiltViewModel()
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val selectedGame by viewModel.selectedGame.collectAsState()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var isRefreshing by remember { mutableStateOf(false) }
     var refreshError by remember { mutableStateOf<String?>(null) }
+    var deviceReady by remember { mutableStateOf(isDeviceGameReady(context)) }
 
     LaunchedEffect(gameId) {
         if (gameId.isNotEmpty()) {
@@ -68,6 +77,18 @@ fun RegisteredDetailScreen(
     LaunchedEffect(selectedGame?.config?.id) {
         if (gameId.isNotEmpty()) {
             viewModel.ensureRegisteredState(gameId)
+        }
+    }
+
+    DisposableEffect(lifecycleOwner, context) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                deviceReady = isDeviceGameReady(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
         }
     }
 
@@ -121,7 +142,7 @@ fun RegisteredDetailScreen(
                 title = { Text(config.name, style = MaterialTheme.typography.titleLarge) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, "Back", tint = TextPrimary)
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = TextPrimary)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Background)
@@ -273,6 +294,67 @@ fun RegisteredDetailScreen(
 
             Spacer(Modifier.height(16.dp))
 
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .then(
+                        if (deviceReady) {
+                            Modifier
+                        } else {
+                            Modifier.clickable { onOpenReadiness() }
+                        }
+                    ),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (deviceReady) {
+                        Primary.copy(alpha = 0.12f)
+                    } else {
+                        Warning.copy(alpha = 0.12f)
+                    }
+                ),
+                shape = MaterialTheme.shapes.medium
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (deviceReady) Icons.Default.CheckCircle else Icons.Default.Warning,
+                        contentDescription = null,
+                        tint = if (deviceReady) Primary else Warning
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (deviceReady) "Device Ready" else "Device Not Ready",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(Modifier.height(2.dp))
+                        Text(
+                            text = if (deviceReady) {
+                                "All gameplay checks are currently passing."
+                            } else {
+                                "Tap to open device readiness and fix missing requirements."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = TextSecondary
+                        )
+                    }
+                    if (!deviceReady) {
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = TextSecondary
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
             // Print QR Code button (only when player number is assigned)
             if (player != null) {
                 Button(
@@ -395,7 +477,7 @@ fun RegisteredDetailScreen(
                                 setMultiTouchControls(true)
                                 controller.setZoom(16.0)
                                 controller.setCenter(GeoPoint(config.meetingLat, config.meetingLng))
-                                setBuiltInZoomControls(false)
+                                zoomController.setVisibility(CustomZoomButtonsController.Visibility.NEVER)
 
                                 // Meeting point marker
                                 val meetingGeo = GeoPoint(config.meetingLat, config.meetingLng)

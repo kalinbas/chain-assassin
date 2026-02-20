@@ -176,7 +176,7 @@ fun WalletSetupScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Divider(color = DividerColor)
+            HorizontalDivider(color = DividerColor)
 
             Spacer(modifier = Modifier.height(24.dp))
 
@@ -295,7 +295,7 @@ fun WalletSetupScreen(
                             }
                         }
 
-                        Divider(
+                        HorizontalDivider(
                             modifier = Modifier.padding(vertical = 16.dp),
                             color = DividerColor
                         )

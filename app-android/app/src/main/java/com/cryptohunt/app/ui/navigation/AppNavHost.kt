@@ -319,6 +319,9 @@ fun AppNavHost(
                         popUpTo(NavRoutes.GameBrowser.route)
                     }
                 },
+                onOpenReadiness = {
+                    navController.navigate(NavRoutes.DeviceReadiness.route)
+                },
                 onBack = { navController.popBackStack() }
             )
         }

@@ -257,7 +257,7 @@ fun CheckInScreen(
                     Spacer(Modifier.height(12.dp))
 
                     LinearProgressIndicator(
-                        progress = if (totalPlayers > 0) checkedInCount.toFloat() / totalPlayers else 0f,
+                        progress = { if (totalPlayers > 0) checkedInCount.toFloat() / totalPlayers else 0f },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(8.dp)

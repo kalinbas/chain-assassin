@@ -18,7 +18,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Bluetooth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.GpsFixed
@@ -90,6 +90,11 @@ private enum class RequirementAction {
     OPEN_BLUETOOTH_SETTINGS,
     OPEN_DEVICE_SETTINGS,
     OPEN_NETWORK_SETTINGS
+}
+
+fun isDeviceGameReady(context: Context): Boolean {
+    val requirements = evaluateRequirements(context)
+    return requirements.isNotEmpty() && requirements.all { it.available }
 }
 
 @Composable
@@ -207,7 +212,7 @@ fun DeviceReadinessScreen(onBack: () -> Unit) {
             ) {
                 IconButton(onClick = onBack) {
                     Icon(
-                        imageVector = Icons.Default.ArrowBack,
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                         contentDescription = "Back",
                         tint = TextPrimary
                     )

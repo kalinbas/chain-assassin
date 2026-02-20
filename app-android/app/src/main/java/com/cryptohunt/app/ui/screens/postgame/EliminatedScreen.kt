@@ -4,7 +4,7 @@ import android.content.Intent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ExitToApp
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.RemoveRedEye
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
@@ -101,7 +101,7 @@ fun EliminatedScreen(
                     value = TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L)
                 )
 
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
                     color = DividerColor
                 )
@@ -113,7 +113,7 @@ fun EliminatedScreen(
                     valueColor = Primary
                 )
 
-                Divider(
+                HorizontalDivider(
                     modifier = Modifier.padding(vertical = 12.dp),
                     color = DividerColor
                 )
@@ -211,7 +211,7 @@ fun EliminatedScreen(
                 .fillMaxWidth()
                 .testTag(TestTags.ELIMINATED_LEAVE_BUTTON)
         ) {
-            Icon(Icons.Default.ExitToApp, null, modifier = Modifier.size(20.dp), tint = TextDim)
+            Icon(Icons.AutoMirrored.Filled.ExitToApp, null, modifier = Modifier.size(20.dp), tint = TextDim)
             Spacer(Modifier.width(8.dp))
             Text("Leave Game", style = MaterialTheme.typography.bodyMedium, color = TextDim)
         }

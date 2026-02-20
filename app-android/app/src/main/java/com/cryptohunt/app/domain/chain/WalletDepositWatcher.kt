@@ -90,7 +90,7 @@ class WalletDepositWatcher @Inject constructor(
             .build()
 
         webSocket = wsClient.newWebSocket(request, object : WebSocketListener() {
-            override fun onOpen(ws: WebSocket, response: Response) {
+            override fun onOpen(webSocket: WebSocket, response: Response) {
                 reconnectAttempts = 0
                 val subscribe = JSONObject().apply {
                     put("id", 1)
@@ -98,11 +98,11 @@ class WalletDepositWatcher @Inject constructor(
                     put("method", "eth_subscribe")
                     put("params", org.json.JSONArray().put("newHeads"))
                 }
-                ws.send(subscribe.toString())
+                webSocket.send(subscribe.toString())
                 Log.d(TAG, "Subscribed to newHeads for deposit monitoring")
             }
 
-            override fun onMessage(ws: WebSocket, text: String) {
+            override fun onMessage(webSocket: WebSocket, text: String) {
                 try {
                     val json = JSONObject(text)
                     val method = json.optString("method", "")
@@ -117,15 +117,15 @@ class WalletDepositWatcher @Inject constructor(
                 }
             }
 
-            override fun onClosing(ws: WebSocket, code: Int, reason: String) {
-                ws.close(code, reason)
+            override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
+                webSocket.close(code, reason)
             }
 
-            override fun onClosed(ws: WebSocket, code: Int, reason: String) {
+            override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
                 scheduleReconnect()
             }
 
-            override fun onFailure(ws: WebSocket, t: Throwable, response: Response?) {
+            override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
                 onError?.invoke("Deposit watcher connection failed: ${t.message ?: "unknown error"}")
                 scheduleReconnect()
             }

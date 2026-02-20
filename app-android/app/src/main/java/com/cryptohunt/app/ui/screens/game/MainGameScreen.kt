@@ -202,7 +202,7 @@ fun MainGameScreen(
                                 Text("KILLS", style = MaterialTheme.typography.labelSmall, color = TextDim, modifier = Modifier.width(48.dp), textAlign = TextAlign.Center)
                                 Text("STATUS", style = MaterialTheme.typography.labelSmall, color = TextDim, modifier = Modifier.width(64.dp), textAlign = TextAlign.End)
                             }
-                            Divider(color = DividerColor, thickness = 0.5.dp)
+                            HorizontalDivider(color = DividerColor, thickness = 0.5.dp)
 
                             LazyColumn {
                                 items(state.leaderboard) { entry ->

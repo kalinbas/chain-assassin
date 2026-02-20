@@ -398,7 +398,7 @@ private fun GameCard(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 LinearProgressIndicator(
-                    progress = game.currentPlayers.toFloat() / game.config.maxPlayers,
+                    progress = { game.currentPlayers.toFloat() / game.config.maxPlayers },
                     modifier = Modifier
                         .weight(1f)
                         .height(6.dp),
