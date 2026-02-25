@@ -89,44 +89,55 @@ export function verifyKill(
   let targetLat: number | undefined;
   let targetLng: number | undefined;
 
-  if (targetPing) {
-    distanceMeters = haversineDistance(
-      hunterLat,
-      hunterLng,
-      targetPing.lat,
-      targetPing.lng
-    );
-    targetLat = targetPing.lat;
-    targetLng = targetPing.lng;
-
-    if (distanceMeters > config.killProximityMeters) {
-      return {
-        valid: false,
-        error: `Too far from target (${Math.round(distanceMeters)}m, max ${config.killProximityMeters}m)`,
-        targetAddress,
-        distanceMeters,
-        targetLat,
-        targetLng,
-      };
-    }
-  } else {
+  if (!targetPing) {
     log.warn(
       { gameId, target: targetAddress },
-      "No location ping for target, skipping GPS check"
+      "No location ping for target, rejecting kill"
     );
+    return {
+      valid: false,
+      error: "Target location is unavailable",
+      targetAddress,
+    };
+  }
+
+  distanceMeters = haversineDistance(
+    hunterLat,
+    hunterLng,
+    targetPing.lat,
+    targetPing.lng
+  );
+  targetLat = targetPing.lat;
+  targetLng = targetPing.lng;
+
+  if (distanceMeters > config.killProximityMeters) {
+    return {
+      valid: false,
+      error: `Too far from target (${Math.round(distanceMeters)}m, max ${config.killProximityMeters}m)`,
+      targetAddress,
+      distanceMeters,
+      targetLat,
+      targetLng,
+    };
   }
 
   // 7. Check BLE proximity (if required)
   if (config.bleRequired) {
     const targetBluetoothId = normalizeBluetoothId(targetPlayer.bluetoothId);
 
-    // Auto-seeded/legacy players may not have a bluetooth_id yet.
-    // In that case we cannot enforce BLE reliably for this target.
     if (!targetBluetoothId) {
       log.warn(
         { gameId, target: targetAddress },
-        "Target has no bluetooth_id; skipping BLE check"
+        "Target has no bluetooth_id; rejecting kill"
       );
+      return {
+        valid: false,
+        error: "Target Bluetooth token is unavailable",
+        targetAddress,
+        distanceMeters,
+        targetLat,
+        targetLng,
+      };
     } else if (!hasBleMatch(targetBluetoothId, bleNearbyAddresses)) {
       return {
         valid: false,

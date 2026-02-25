@@ -3,7 +3,7 @@ import type { LeaderboardEntry } from "../utils/types.js";
 
 /**
  * Get the current leaderboard for a game.
- * Sorted: alive players first (by kills desc), then eliminated (by eliminatedAt desc).
+ * Sorted: alive players first, then by elimination timing desc, kills desc, player number asc.
  */
 export function getLeaderboard(gameId: number): LeaderboardEntry[] {
   return dbGetLeaderboard(gameId);
@@ -13,9 +13,8 @@ export function getLeaderboard(gameId: number): LeaderboardEntry[] {
  * Determine the game winners from the final player state.
  *
  * Winner determination:
- * 1. winner1: Last alive player. If multiple survive (expiry), highest kills wins.
- * 2. winner2: Second-to-last eliminated (or second-highest kills if tie).
- * 3. winner3: Third-to-last eliminated (or third-highest kills).
+ * 1. winner1: Last alive player.
+ * 2. Remaining order: eliminatedAt desc, then kills desc, then playerNumber asc.
  * 4. topKiller: Highest kill count overall (can overlap with winners).
  *
  * Returns address(0) for slots where BPS is 0 in the game config.
@@ -38,20 +37,20 @@ export function determineWinners(
     return { winner1: ZERO, winner2: ZERO, winner3: ZERO, topKiller: ZERO };
   }
 
-  // Sort by: alive first, then by kills descending, then by elimination time descending
+  // Sort by: alive first, then eliminatedAt descending, kills descending, playerNumber ascending.
   const ranked = [...players].sort((a, b) => {
     // Alive players come first
     if (a.isAlive !== b.isAlive) return a.isAlive ? -1 : 1;
 
-    // If both alive or both dead, sort by kills descending
-    if (a.kills !== b.kills) return b.kills - a.kills;
-
-    // If same kills and both dead, later elimination = better placement
+    // For eliminated players, later elimination = better placement.
     if (!a.isAlive && !b.isAlive) {
-      return (b.eliminatedAt ?? 0) - (a.eliminatedAt ?? 0);
+      const byEliminatedAt = (b.eliminatedAt ?? 0) - (a.eliminatedAt ?? 0);
+      if (byEliminatedAt !== 0) return byEliminatedAt;
     }
 
-    return 0;
+    // Tie-breakers
+    if (a.kills !== b.kills) return b.kills - a.kills;
+    return a.playerNumber - b.playerNumber;
   });
 
   const winner1 = ranked[0]?.address ?? ZERO;

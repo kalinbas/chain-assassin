@@ -1,6 +1,6 @@
 import { ethers } from "ethers";
 import { createLogger } from "../utils/logger.js";
-import { contractCoordToDegrees, degreesToContractCoord } from "../utils/geo.js";
+import { contractCoordToDegrees, degreesToContractCoord, haversineDistance } from "../utils/geo.js";
 import { encodeKillQrPayload } from "../utils/crypto.js";
 import { config } from "../config.js";
 import {
@@ -14,6 +14,7 @@ import {
   getPlayerByNumber,
   getPlayers,
   setPlayerCheckedIn,
+  setPlayerBluetoothId,
   updateLastHeartbeat,
   getZoneShrinks,
 } from "../db/queries.js";
@@ -36,6 +37,7 @@ import type { ItemId } from "./types.js";
 import * as operator from "../blockchain/operator.js";
 import { GamePhase } from "../utils/types.js";
 import type { ZoneShrink } from "../utils/types.js";
+import { normalizeBluetoothId } from "../game/ble.js";
 
 const log = createLogger("simulator");
 
@@ -202,6 +204,58 @@ export class GameSimulator {
   /** Override zone shrinks (used by attach mode with DB-sourced shrinks). */
   setZoneShrinks(shrinks: ZoneShrink[]): void {
     this.zoneShrinks = shrinks;
+  }
+
+  /** Use numeric IDs so BLE normalization/verification matches real app format. */
+  private simulatedBluetoothId(playerNumber: number): string {
+    return String(9_000_000_000 + playerNumber);
+  }
+
+  private ensureBluetoothId(address: string, playerNumber: number, bluetoothId: string | null | undefined): string {
+    const normalized = normalizeBluetoothId(bluetoothId);
+    if (normalized) return normalized;
+
+    const fallback = this.simulatedBluetoothId(playerNumber);
+    setPlayerBluetoothId(this.gameId, address, fallback);
+    return fallback;
+  }
+
+  /** Build a realistic nearby BLE list around the hunter position. */
+  private buildNearbyBluetoothIds(
+    hunterAddress: string,
+    hunterLat: number,
+    hunterLng: number,
+    requiredBluetoothId?: string | null
+  ): string[] {
+    const ids = new Set<string>();
+    const dbPlayers = getPlayers(this.gameId);
+    const nearbyRadiusMeters = Math.max(config.killProximityMeters * 2, 150);
+
+    for (const player of dbPlayers) {
+      if (player.address === ZERO_ADDRESS) continue;
+      if (player.address.toLowerCase() === hunterAddress.toLowerCase()) continue;
+
+      let bluetoothId = normalizeBluetoothId(player.bluetoothId);
+      if (!bluetoothId && this.simulatedAddressSet.has(player.address.toLowerCase())) {
+        bluetoothId = this.ensureBluetoothId(player.address, player.playerNumber, player.bluetoothId);
+      }
+      if (!bluetoothId) continue;
+
+      const ping = getLatestLocationPing(this.gameId, player.address);
+      if (!ping) continue;
+
+      const distance = haversineDistance(hunterLat, hunterLng, ping.lat, ping.lng);
+      if (distance <= nearbyRadiusMeters) {
+        ids.add(bluetoothId);
+      }
+    }
+
+    const required = normalizeBluetoothId(requiredBluetoothId);
+    if (required) {
+      ids.add(required);
+    }
+
+    return Array.from(ids);
   }
 
   /**
@@ -420,11 +474,6 @@ export class GameSimulator {
       handleLocationUpdate(this.gameId, p.address, p.lat, p.lng);
     }
 
-    const simBluetoothIds = this.players.map(() => {
-      const hex = () => Math.floor(Math.random() * 256).toString(16).padStart(2, "0").toUpperCase();
-      return `SIM:${hex()}:${hex()}:${hex()}:${hex()}:${hex()}`;
-    });
-
     // Keep retrying until all simulated players are checked in (or checkin ends).
     const checkinWallDeadline = Date.now() + 180_000;
     let bootstrapSeeded = false;
@@ -443,7 +492,8 @@ export class GameSimulator {
       const checkedInAddresses = new Set(
         eligiblePlayers.filter((p) => p.checkedIn).map((p) => p.address.toLowerCase())
       );
-      if (checkedInAddresses.size >= eligiblePlayers.length && eligiblePlayers.length > 0) {
+      const allHaveBluetooth = eligiblePlayers.every((player) => normalizeBluetoothId(player.bluetoothId) != null);
+      if (checkedInAddresses.size >= eligiblePlayers.length && eligiblePlayers.length > 0 && allHaveBluetooth) {
         break;
       }
 
@@ -452,7 +502,7 @@ export class GameSimulator {
       // Bootstrap check-in chain when no seed exists yet (equivalent to server auto-seed).
       if (checkedInAddresses.size === 0 && !bootstrapSeeded && this.players.length > 0) {
         const seedPlayer = this.players[0];
-        const seedBleId = simBluetoothIds[0];
+        const seedBleId = this.simulatedBluetoothId(seedPlayer.playerNumber);
         setPlayerCheckedIn(this.gameId, seedPlayer.address, seedBleId);
         const updatedPlayers = getPlayers(this.gameId).filter((p) => p.address !== ZERO_ADDRESS);
         const checkedInCount = updatedPlayers.filter((p) => p.checkedIn).length;
@@ -480,14 +530,14 @@ export class GameSimulator {
 
       for (let i = 0; i < this.players.length; i++) {
         const p = this.players[i];
-        const bleId = simBluetoothIds[i];
         const dbPlayer = eligiblePlayers.find((db) => db.address.toLowerCase() === p.address);
         if (!dbPlayer) continue;
+        const hadBluetooth = normalizeBluetoothId(dbPlayer.bluetoothId) != null;
+        const bleId = this.ensureBluetoothId(dbPlayer.address, dbPlayer.playerNumber, dbPlayer.bluetoothId);
 
         if (checkedInAddresses.has(p.address)) {
           // If this player was auto-seeded without bluetooth_id, finalize it.
-          if (!dbPlayer.bluetoothId) {
-            handleCheckin(this.gameId, p.address, p.lat, p.lng, undefined, bleId, []);
+          if (!hadBluetooth) {
             progress = true;
           }
           continue;
@@ -498,8 +548,13 @@ export class GameSimulator {
         );
         if (!checkedInPlayer) continue;
 
+        const scannedBluetoothId = this.ensureBluetoothId(
+          checkedInPlayer.address,
+          checkedInPlayer.playerNumber,
+          checkedInPlayer.bluetoothId
+        );
         const qrPayload = encodeKillQrPayload(this.gameId, checkedInPlayer.playerNumber);
-        const nearbyBle = checkedInPlayer.bluetoothId ? [checkedInPlayer.bluetoothId] : [];
+        const nearbyBle = this.buildNearbyBluetoothIds(p.address, p.lat, p.lng, scannedBluetoothId);
         const result = handleCheckin(this.gameId, p.address, p.lat, p.lng, qrPayload, bleId, nearbyBle);
         if (result.success) progress = true;
       }
@@ -508,8 +563,10 @@ export class GameSimulator {
       // This avoids real-device testers being eliminated in hybrid rounds where most
       // other participants are simulated and no practical scan partner exists.
       for (const player of eligiblePlayers) {
-        if (player.checkedIn) continue;
-        const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
+        const autoBle = this.ensureBluetoothId(player.address, player.playerNumber, player.bluetoothId);
+        if (player.checkedIn) {
+          continue;
+        }
         setPlayerCheckedIn(this.gameId, player.address, autoBle);
         checkedInAddresses.add(player.address.toLowerCase());
         progress = true;
@@ -668,8 +725,8 @@ export class GameSimulator {
     let checkedInCount = dbPlayers.filter((p) => p.checkedIn).length;
     for (const player of dbPlayers) {
       if (player.address === ZERO_ADDRESS) continue;
+      const autoBle = this.ensureBluetoothId(player.address, player.playerNumber, player.bluetoothId);
       if (player.checkedIn) continue;
-      const autoBle = player.bluetoothId || `SIM-AUTO:${player.playerNumber}`;
       setPlayerCheckedIn(this.gameId, player.address, autoBle);
       checkedInCount += 1;
       broadcastToGame(this.gameId, {
@@ -779,8 +836,18 @@ export class GameSimulator {
           handleLocationUpdate(this.gameId, target.address, target.lat, target.lng);
         }
 
+        const targetBluetoothId = this.ensureBluetoothId(
+          targetPlayer.address,
+          targetPlayer.playerNumber,
+          targetPlayer.bluetoothId
+        );
         const qrPayload = encodeKillQrPayload(this.gameId, target.playerNumber);
-        const nearbyBle = targetPlayer.bluetoothId ? [targetPlayer.bluetoothId] : [];
+        const nearbyBle = this.buildNearbyBluetoothIds(
+          hunter.address,
+          hunter.lat,
+          hunter.lng,
+          targetBluetoothId
+        );
 
         try {
           const result = await handleKillSubmission(

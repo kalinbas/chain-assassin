@@ -1,7 +1,12 @@
 package com.cryptohunt.app.domain.server
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
 import android.util.Log
 import com.cryptohunt.app.domain.wallet.WalletManager
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,7 +51,8 @@ data class DebugScanEchoResult(
 
 @Singleton
 class GameServerClient @Inject constructor(
-    private val walletManager: WalletManager
+    private val walletManager: WalletManager,
+    @ApplicationContext private val context: Context
 ) {
     private val _connectionState = MutableStateFlow(ConnectionState.DISCONNECTED)
     val connectionState: StateFlow<ConnectionState> = _connectionState
@@ -66,12 +72,46 @@ class GameServerClient @Inject constructor(
     private var shouldReconnect = false
     private var reconnectJob: Job? = null
     private val reconnectScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+    @Volatile private var networkAvailable = true
+    private var networkCallbackRegistered = false
 
     private val client = OkHttpClient.Builder()
         .pingInterval(ServerConfig.PING_INTERVAL_SECONDS, TimeUnit.SECONDS)
         .connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MINUTES) // No read timeout for WebSocket
         .build()
+
+    private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            networkAvailable = true
+            tryImmediateReconnect("network became available")
+        }
+
+        override fun onLost(network: Network) {
+            networkAvailable = isNetworkAvailable()
+            if (networkAvailable) return
+            Log.w(TAG, "Network lost")
+
+            // Force socket teardown to avoid waiting for long failure detection.
+            if (webSocket != null) {
+                webSocket?.cancel()
+                webSocket = null
+            }
+
+            if (shouldReconnect && currentGameId != null) {
+                cancelReconnectJob()
+                _connectionState.value = ConnectionState.RECONNECTING
+            } else {
+                _connectionState.value = ConnectionState.DISCONNECTED
+            }
+        }
+    }
+
+    init {
+        networkAvailable = isNetworkAvailable()
+        registerNetworkCallback()
+    }
 
     /**
      * Connect to the game server WebSocket and authenticate.
@@ -101,6 +141,11 @@ class GameServerClient @Inject constructor(
         reconnectAttempts = 0
         cancelReconnectJob()
         Log.i(TAG, "Connecting to game $gameId via ${ServerConfig.SERVER_WS_URL} (api=${ServerConfig.SERVER_URL})")
+        if (!networkAvailable) {
+            _connectionState.value = ConnectionState.RECONNECTING
+            Log.w(TAG, "Device offline, waiting for network to connect game $gameId")
+            return
+        }
         doConnect()
     }
 
@@ -512,6 +557,20 @@ class GameServerClient @Inject constructor(
             }
         }
 
+        val activityArray = obj.optJSONArray("activity")
+        val activity = mutableListOf<ServerActivityEntry>()
+        if (activityArray != null) {
+            for (i in 0 until activityArray.length()) {
+                val entry = activityArray.getJSONObject(i)
+                activity.add(
+                    ServerActivityEntry(
+                        type = entry.optString("type"),
+                        timestamp = entry.optLong("timestamp")
+                    )
+                )
+            }
+        }
+
         return ServerGame(
             gameId = obj.optInt("gameId"),
             title = obj.optString("title", ""),
@@ -543,7 +602,8 @@ class GameServerClient @Inject constructor(
             winner3 = obj.optInt("winner3"),
             topKiller = obj.optInt("topKiller"),
             zoneShrinks = shrinks,
-            leaderboard = leaderboard
+            leaderboard = leaderboard,
+            activity = activity
         )
     }
 
@@ -630,6 +690,7 @@ class GameServerClient @Inject constructor(
     }
 
     private fun handleDisconnect() {
+        networkAvailable = isNetworkAvailable()
         if (_connectionState.value == ConnectionState.RECONNECTING && reconnectJob?.isActive == true) {
             return
         }
@@ -639,10 +700,15 @@ class GameServerClient @Inject constructor(
 
         if (shouldReconnect && currentGameId != null) {
             reconnectAttempts++
-            val delay = calculateReconnectDelay()
+            if (!networkAvailable) {
+                _connectionState.value = ConnectionState.RECONNECTING
+                Log.d(TAG, "Offline, waiting for network before reconnect (attempt $reconnectAttempts)")
+                return
+            }
+            val delayMs = calculateReconnectDelay()
             _connectionState.value = ConnectionState.RECONNECTING
-            Log.d(TAG, "Reconnecting in ${delay}ms (attempt $reconnectAttempts)")
-            scheduleReconnect(delay, currentGameId!!)
+            Log.d(TAG, "Reconnecting in ${delayMs}ms (attempt $reconnectAttempts)")
+            scheduleReconnect(delayMs, currentGameId!!)
         } else {
             cancelReconnectJob()
             _connectionState.value = ConnectionState.DISCONNECTED
@@ -656,7 +722,48 @@ class GameServerClient @Inject constructor(
             if (!shouldReconnect || currentGameId != gameId || webSocket != null) {
                 return@launch
             }
+            networkAvailable = isNetworkAvailable()
+            if (!networkAvailable) {
+                _connectionState.value = ConnectionState.RECONNECTING
+                return@launch
+            }
             doConnect()
+        }
+    }
+
+    private fun registerNetworkCallback() {
+        if (networkCallbackRegistered) return
+        val cm = connectivityManager ?: return
+        try {
+            cm.registerDefaultNetworkCallback(networkCallback)
+            networkCallbackRegistered = true
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Missing ACCESS_NETWORK_STATE permission; network callback disabled", e)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to register network callback", e)
+        }
+    }
+
+    private fun tryImmediateReconnect(reason: String) {
+        val gameId = currentGameId ?: return
+        if (!shouldReconnect || webSocket != null || !networkAvailable) return
+        if (_connectionState.value == ConnectionState.CONNECTING || _connectionState.value == ConnectionState.AUTHENTICATING) {
+            return
+        }
+        reconnectAttempts = 0
+        Log.i(TAG, "Immediate reconnect for game $gameId: $reason")
+        doConnect()
+    }
+
+    private fun isNetworkAvailable(): Boolean {
+        val cm = connectivityManager ?: return true
+        return try {
+            val activeNetwork = cm.activeNetwork ?: return false
+            val capabilities = cm.getNetworkCapabilities(activeNetwork) ?: return false
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Cannot query network state (permission denied)", e)
+            true
         }
     }
 

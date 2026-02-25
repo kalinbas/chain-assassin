@@ -5,7 +5,7 @@ import {
   getGame,
   getTargetAssignment,
   findHunterOf,
-  getAlivePlayers,
+  getPlayers,
   getAlivePlayerCount,
   getLatestLocationPing,
   getPlayerCount,
@@ -183,8 +183,8 @@ function handleSpectate(
 
   joinSpectator(gameId, ws);
 
-  const alivePlayers = getAlivePlayers(gameId);
-  const players = alivePlayers.flatMap((p) => {
+  const allPlayers = getPlayers(gameId);
+  const players = allPlayers.flatMap((p) => {
     const ping = getLatestLocationPing(gameId, p.address);
     if (!ping) return [];
     const approx = approximateSpectatorPosition(ping.lat, ping.lng);

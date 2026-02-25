@@ -1,9 +1,14 @@
 package com.cryptohunt.app.domain.ble
 
 import android.annotation.SuppressLint
+import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.bluetooth.le.*
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.*
@@ -49,6 +54,8 @@ class BleScanner @Inject constructor(
     private val bluetoothManager = context.getSystemService(Context.BLUETOOTH_SERVICE) as? BluetoothManager
     private val bluetoothAdapter get() = bluetoothManager?.adapter
     private var scanner: BluetoothLeScanner? = null
+    private var shouldScan = false
+    private var receiverRegistered = false
 
     private val devices = mutableMapOf<String, NearbyDevice>()
     private var pruneJob: Job? = null
@@ -106,11 +113,57 @@ class BleScanner @Inject constructor(
                 isBluetoothEnabled = isBluetoothEnabled(),
                 errorMessage = msg
             )
+            if (shouldScan && isBluetoothEnabled()) {
+                startScanningInternal()
+            }
         }
+    }
+
+    private val adapterStateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action != BluetoothAdapter.ACTION_STATE_CHANGED) return
+            when (intent.getIntExtra(BluetoothAdapter.EXTRA_STATE, BluetoothAdapter.ERROR)) {
+                BluetoothAdapter.STATE_ON -> {
+                    if (shouldScan) {
+                        startScanningInternal()
+                    } else {
+                        _state.value = _state.value.copy(
+                            isBluetoothEnabled = true,
+                            errorMessage = null
+                        )
+                    }
+                }
+                BluetoothAdapter.STATE_OFF -> {
+                    stopScanningInternal(clearDesired = false, reason = "Bluetooth is off")
+                }
+            }
+        }
+    }
+
+    init {
+        registerAdapterStateReceiver()
+    }
+
+    private fun registerAdapterStateReceiver() {
+        if (receiverRegistered) return
+        val filter = IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(adapterStateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(adapterStateReceiver, filter)
+        }
+        receiverRegistered = true
     }
 
     @SuppressLint("MissingPermission")
     fun startScanning() {
+        shouldScan = true
+        startScanningInternal()
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun startScanningInternal() {
+        if (_state.value.isScanning) return
         val adapter = bluetoothAdapter
         if (adapter == null) {
             Log.e(TAG, "Cannot start BLE scan: Bluetooth adapter unavailable")
@@ -181,6 +234,14 @@ class BleScanner @Inject constructor(
 
     @SuppressLint("MissingPermission")
     fun stopScanning() {
+        stopScanningInternal(clearDesired = true)
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun stopScanningInternal(clearDesired: Boolean, reason: String? = null) {
+        if (clearDesired) {
+            shouldScan = false
+        }
         try {
             scanner?.stopScan(scanCallback)
         } catch (e: Exception) {
@@ -203,7 +264,8 @@ class BleScanner @Inject constructor(
         Log.i(TAG, "BLE scan stopped")
         _state.value = BleScanState(
             isScanning = false,
-            isBluetoothEnabled = isBluetoothEnabled()
+            isBluetoothEnabled = isBluetoothEnabled(),
+            errorMessage = reason
         )
     }
 
@@ -266,6 +328,10 @@ class BleScanner @Inject constructor(
 
     fun cleanup() {
         stopScanning()
+        if (receiverRegistered) {
+            context.unregisterReceiver(adapterStateReceiver)
+            receiverRegistered = false
+        }
         scope.cancel()
     }
 }

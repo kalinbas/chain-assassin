@@ -119,8 +119,17 @@ fun EliminatedScreen(
                 )
 
                 // Final rank
-                val totalPlayers = state?.config?.maxPlayers ?: 100
-                val rank = (state?.playersRemaining ?: 1) + 1
+                val totalPlayers = when {
+                    state == null -> 1
+                    state.registeredPlayerCount > 0 -> state.registeredPlayerCount
+                    state.leaderboard.isNotEmpty() -> state.leaderboard.size
+                    else -> (state.playersRemaining + 1).coerceAtLeast(1)
+                }
+                val rankFromLeaderboard = state?.leaderboard
+                    ?.firstOrNull { it.isCurrentPlayer }
+                    ?.rank
+                val fallbackRank = ((state?.playersRemaining ?: 1) + 1).coerceAtLeast(1)
+                val rank = (rankFromLeaderboard ?: fallbackRank).coerceAtMost(totalPlayers)
                 StatRow(
                     label = "FINAL RANK",
                     value = "#$rank / $totalPlayers"
@@ -174,8 +183,17 @@ fun EliminatedScreen(
             onClick = {
                 val kills = state?.currentPlayer?.killCount ?: 0
                 val survived = TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L)
-                val totalPlayers = state?.config?.maxPlayers ?: 100
-                val rank = (state?.playersRemaining ?: 1) + 1
+                val totalPlayers = when {
+                    state == null -> 1
+                    state.registeredPlayerCount > 0 -> state.registeredPlayerCount
+                    state.leaderboard.isNotEmpty() -> state.leaderboard.size
+                    else -> (state.playersRemaining + 1).coerceAtLeast(1)
+                }
+                val rankFromLeaderboard = state?.leaderboard
+                    ?.firstOrNull { it.isCurrentPlayer }
+                    ?.rank
+                val fallbackRank = ((state?.playersRemaining ?: 1) + 1).coerceAtLeast(1)
+                val rank = (rankFromLeaderboard ?: fallbackRank).coerceAtMost(totalPlayers)
                 val gameName = state?.config?.name ?: "CryptoHunt"
 
                 val shareText = "I was hunted in $gameName!\n" +

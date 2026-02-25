@@ -83,7 +83,10 @@ fun AppNavHost(
             NavRoutes.CheckInCamera.route,
             NavRoutes.Pregame.route,
             NavRoutes.MainGame.route,
-            NavRoutes.HuntCamera.route
+            NavRoutes.HuntCamera.route,
+            NavRoutes.Map.route,
+            NavRoutes.Intel.route,
+            NavRoutes.PhotoCapture.route
         )
     }
     val sensorActiveRoutes = remember {
@@ -92,7 +95,10 @@ fun AppNavHost(
             NavRoutes.CheckIn.route,
             NavRoutes.CheckInCamera.route,
             NavRoutes.MainGame.route,
-            NavRoutes.HuntCamera.route
+            NavRoutes.HuntCamera.route,
+            NavRoutes.Map.route,
+            NavRoutes.Intel.route,
+            NavRoutes.PhotoCapture.route
         )
     }
     val keepWs = currentRoute in wsActiveRoutes

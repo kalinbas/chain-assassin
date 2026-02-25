@@ -9,6 +9,7 @@ import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.model.*
 import com.cryptohunt.app.domain.server.GameServerClient
 import com.cryptohunt.app.domain.server.ServerConfig
+import com.cryptohunt.app.domain.server.ServerLeaderboardEntry
 import com.cryptohunt.app.domain.server.ServerMapper
 import com.cryptohunt.app.domain.server.ServerGame
 import com.cryptohunt.app.domain.server.ServerPlayerInfo
@@ -16,6 +17,8 @@ import com.cryptohunt.app.domain.wallet.WalletManager
 import android.util.Log
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,6 +43,7 @@ data class GameHistoryItem(
     val phase: GamePhase,
     val kills: Int,
     val rank: Int,
+    val playerNumber: Int,
     val survivalSeconds: Long,
     val playersTotal: Int,
     val leaderboard: List<LeaderboardEntry>,
@@ -92,6 +96,8 @@ class LobbyViewModel @Inject constructor(
     val txPending: StateFlow<Boolean> = _txPending.asStateFlow()
 
     private var lastSavedGameId: String? = null
+    private var detailRefreshJob: Job? = null
+    private var detailRefreshGameId: String? = null
 
     init {
         loadGames()
@@ -234,10 +240,15 @@ class LobbyViewModel @Inject constructor(
                             else -> 0
                         }
                     } else 0
+                    val survivalSeconds = calculateSurvivalSeconds(
+                        game = sourceGame,
+                        playerInfo = playerInfo
+                    )
 
                     val leaderboard = sourceGame.leaderboard
                         .sortedWith(
                             compareByDescending<com.cryptohunt.app.domain.server.ServerLeaderboardEntry> { it.isAlive }
+                                .thenByDescending { if (it.isAlive) 0L else (it.eliminatedAt ?: 0L) }
                                 .thenByDescending { it.kills }
                                 .thenBy { it.playerNumber }
                         )
@@ -257,7 +268,8 @@ class LobbyViewModel @Inject constructor(
                             phase = gamePhase,
                             kills = playerInfo.kills,
                             rank = rank,
-                            survivalSeconds = 0L,
+                            playerNumber = pNum,
+                            survivalSeconds = survivalSeconds,
                             playersTotal = sourceGame.playerCount,
                             leaderboard = leaderboard,
                             playedAt = sourceGame.gameDate * 1000,
@@ -283,6 +295,32 @@ class LobbyViewModel @Inject constructor(
         } catch (_: Exception) {
             // Silently fail — history stays empty
         }
+    }
+
+    private fun calculateSurvivalSeconds(
+        game: ServerGame,
+        playerInfo: ServerPlayerInfo
+    ): Long {
+        if (!playerInfo.registered) return 0L
+        val startSec = game.gameDate
+        if (startSec <= 0L) return 0L
+
+        val ownEntry = game.leaderboard.firstOrNull { it.playerNumber == playerInfo.playerNumber }
+        val ownEliminatedAt = ownEntry?.eliminatedAt
+        if (ownEliminatedAt != null && ownEliminatedAt > 0L) {
+            return (ownEliminatedAt - startSec).coerceAtLeast(0L)
+        }
+
+        val endFromActivity = game.activity
+            .firstOrNull { it.type == "end" && it.timestamp > 0L }
+            ?.timestamp
+        val endFromLeaderboard = game.leaderboard
+            .mapNotNull(ServerLeaderboardEntry::eliminatedAt)
+            .maxOrNull()
+        val fallbackEnd = if (game.maxDuration > 0L) startSec + game.maxDuration else startSec
+        val endSec = endFromActivity ?: endFromLeaderboard ?: fallbackEnd
+
+        return (endSec - startSec).coerceAtLeast(0L)
     }
 
     private fun saveGameToHistory(state: GameState) {
@@ -392,9 +430,6 @@ class LobbyViewModel @Inject constructor(
         onSuccess: () -> Unit = {},
         onError: (String) -> Unit = {}
     ) {
-        val game = _games.value.find { it.config.id == gameId }
-            ?: _selectedGame.value?.takeIf { it.config.id == gameId }
-            ?: return
         val credentials = walletManager.getCredentials()
         if (credentials == null) {
             onError("Wallet not connected")
@@ -402,12 +437,27 @@ class LobbyViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
-            _txPending.value = true
             try {
-                val gameIdInt = gameId.toInt()
+                val gameIdInt = gameId.toIntOrNull() ?: run {
+                    onError("Invalid game ID")
+                    return@launch
+                }
+                val latest = fetchSelectedGameFromServer(gameIdInt) ?: run {
+                    onError("Game not found")
+                    return@launch
+                }
+                _selectedGame.value = latest
+                _games.value = _games.value.map { if (it.config.id == gameId) latest else it }
+
+                if (latest.onChainPhase != OnChainPhase.REGISTRATION) {
+                    onError("Registration is closed for this game")
+                    return@launch
+                }
+
+                _txPending.value = true
                 val txHash = contractService.register(
                     gameId = gameIdInt,
-                    entryFeeWei = game.config.entryFeeWei,
+                    entryFeeWei = latest.config.entryFeeWei,
                     credentials = credentials
                 )
                 val receipt = contractService.waitForReceipt(txHash, timeoutMs = 120_000)
@@ -424,21 +474,21 @@ class LobbyViewModel @Inject constructor(
 
                     val assignedNumber = playerInfo?.playerNumber ?: 0
                     val currentPlayers = try {
-                        serverClient.fetchGameDetail(gameIdInt)?.playerCount ?: (game.currentPlayers + 1)
+                        serverClient.fetchGameDetail(gameIdInt)?.playerCount ?: (latest.currentPlayers + 1)
                     } catch (_: Exception) {
-                        game.currentPlayers + 1
+                        latest.currentPlayers + 1
                     }
 
                     // Register in local game engine for gameplay simulation
                     gameEngine.registerForGame(
-                        game.config,
+                        latest.config,
                         address,
-                        game.startTime,
+                        latest.startTime,
                         assignedPlayerNumber = assignedNumber
                     )
 
                     // Update selected game immediately so UI reflects registration
-                    _selectedGame.value = game.copy(
+                    _selectedGame.value = latest.copy(
                         isPlayerRegistered = true,
                         playerNumber = assignedNumber,
                         currentPlayers = currentPlayers
@@ -455,6 +505,37 @@ class LobbyViewModel @Inject constructor(
                 _txPending.value = false
             }
         }
+    }
+
+    fun startDetailAutoRefresh(gameId: String, intervalMs: Long = 10_000L) {
+        if (gameId.isBlank()) return
+        if (detailRefreshGameId == gameId && detailRefreshJob?.isActive == true) return
+
+        stopDetailAutoRefresh()
+        detailRefreshGameId = gameId
+        detailRefreshJob = viewModelScope.launch {
+            while (isActive && detailRefreshGameId == gameId) {
+                try {
+                    val gameIdInt = gameId.toIntOrNull()
+                    if (gameIdInt != null) {
+                        val selected = fetchSelectedGameFromServer(gameIdInt)
+                        if (selected != null) {
+                            _selectedGame.value = selected
+                            _games.value = _games.value.map { if (it.config.id == gameId) selected else it }
+                        }
+                    }
+                } catch (_: Exception) {
+                    // Keep existing state on transient failures.
+                }
+                delay(intervalMs)
+            }
+        }
+    }
+
+    fun stopDetailAutoRefresh() {
+        detailRefreshJob?.cancel()
+        detailRefreshJob = null
+        detailRefreshGameId = null
     }
 
     /**
@@ -644,5 +725,10 @@ class LobbyViewModel @Inject constructor(
 
     fun clearError() {
         _error.value = null
+    }
+
+    override fun onCleared() {
+        stopDetailAutoRefresh()
+        super.onCleared()
     }
 }

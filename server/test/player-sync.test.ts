@@ -103,4 +103,46 @@ describe("player sync safeguards", () => {
     expect(leaderboard[0].kills).toBe(3);
     expect(leaderboard[0].isAlive).toBe(false);
   });
+
+  it("does not refresh heartbeat timestamps for eliminated players", () => {
+    const addr = "0x9d9e9f9000000000000000000000000000000001";
+    queries.insertPlayer(1, addr, 9, {
+      isAlive: false,
+      lastHeartbeatAt: 100,
+    });
+
+    const updated = queries.updateLastHeartbeat(1, addr, 200);
+    expect(updated).toBe(false);
+    expect(queries.getPlayer(1, addr)?.lastHeartbeatAt).toBe(100);
+  });
+
+  it("orders leaderboard the same way as winner logic", () => {
+    queries.insertPlayer(1, "0x1000000000000000000000000000000000000001", 1, {
+      isAlive: false,
+      kills: 3,
+      eliminatedAt: 1000,
+    });
+    queries.insertPlayer(1, "0x2000000000000000000000000000000000000002", 2, {
+      isAlive: false,
+      kills: 2,
+      eliminatedAt: 3000,
+    });
+    queries.insertPlayer(1, "0x3000000000000000000000000000000000000003", 3, {
+      isAlive: false,
+      kills: 3,
+      eliminatedAt: 2000,
+    });
+    queries.insertPlayer(1, "0x4000000000000000000000000000000000000004", 4, {
+      isAlive: false,
+      kills: 1,
+      eliminatedAt: 500,
+    });
+    queries.insertPlayer(1, "0x5000000000000000000000000000000000000005", 5, {
+      isAlive: true,
+      kills: 2,
+    });
+
+    const ordered = queries.getLeaderboard(1).map((entry) => entry.playerNumber);
+    expect(ordered).toEqual([5, 2, 3, 1, 4]);
+  });
 });

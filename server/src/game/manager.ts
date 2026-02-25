@@ -562,7 +562,10 @@ export function getPregameDurationSeconds(gameId: number): number {
 
 export function getPregameEndsAt(gameId: number, subPhaseStartedAt: number | null): number | null {
   if (subPhaseStartedAt == null) return null;
-  return subPhaseStartedAt + getPregameDurationSeconds(gameId);
+  const nominalEndsAt = subPhaseStartedAt + getPregameDurationSeconds(gameId);
+  const game = getGame(gameId);
+  if (!game) return nominalEndsAt;
+  return Math.min(nominalEndsAt, game.expiryDeadline);
 }
 
 export function getPregameRemainingSeconds(gameId: number, subPhaseStartedAt: number | null, nowSec: number): number {
@@ -621,9 +624,29 @@ async function evaluateCheckinState(gameId: number): Promise<void> {
   if (now <= game.expiryDeadline) return;
 
   clearMapTimer(autoSeedTimers, gameId, clearInterval);
+  await triggerExpiryCancellation(gameId, {
+    reason: "checkin_expired",
+    checkedInCount,
+    requiredCheckedIn,
+    expiryDeadline: game.expiryDeadline,
+  });
+}
+
+async function triggerExpiryCancellation(
+  gameId: number,
+  context?: {
+    reason?: string;
+    checkedInCount?: number;
+    requiredCheckedIn?: number;
+    expiryDeadline?: number;
+  }
+): Promise<void> {
+  const game = getGame(gameId);
+  if (!game) return;
+  if (game.phase !== GamePhase.ACTIVE && game.phase !== GamePhase.REGISTRATION) return;
 
   if (isSimulatedGame(gameId) && !isHybridSimulatedGame(gameId)) {
-    log.info({ gameId }, "Pure simulated game expired during checkin; cancelling off-chain");
+    log.info({ gameId, reason: context?.reason ?? "expiry" }, "Pure simulated game expired; cancelling off-chain");
     onGameCancelled(gameId);
     return;
   }
@@ -633,12 +656,21 @@ async function evaluateCheckinState(gameId: number): Promise<void> {
 
   try {
     log.info(
-      { gameId, checkedInCount, requiredCheckedIn, expiryDeadline: game.expiryDeadline },
-      "Checkin requirements not met by expiry; triggering on-chain expiry cancellation"
+      {
+        gameId,
+        reason: context?.reason ?? "expiry",
+        checkedInCount: context?.checkedInCount,
+        requiredCheckedIn: context?.requiredCheckedIn,
+        expiryDeadline: context?.expiryDeadline ?? game.expiryDeadline,
+      },
+      "Game expired; triggering on-chain expiry cancellation"
     );
     await operator.triggerExpiry(gameId);
   } catch (err) {
-    log.error({ gameId, error: (err as Error).message }, "Failed to trigger expiry cancellation");
+    log.error(
+      { gameId, reason: context?.reason ?? "expiry", error: (err as Error).message },
+      "Failed to trigger expiry cancellation"
+    );
   } finally {
     expiryTriggerInFlight.delete(gameId);
   }
@@ -840,8 +872,12 @@ function completeCheckin(gameId: number): void {
   }
 
   const pregameNow = Math.floor(Date.now() / 1000);
-  const pregameDurationSeconds = getPregameDurationSeconds(gameId);
-  const pregameEndsAt = getPregameEndsAt(gameId, pregameNow);
+  const nominalPregameDurationSeconds = getPregameDurationSeconds(gameId);
+  const pregameEndsAt = Math.min(
+    pregameNow + nominalPregameDurationSeconds,
+    game.expiryDeadline
+  );
+  const pregameDurationSeconds = Math.max(0, pregameEndsAt - pregameNow);
 
   // Transition to pregame and persist when this sub-phase started.
   updateSubPhase(gameId, "pregame", pregameNow);
@@ -878,6 +914,13 @@ export function completePregame(gameId: number): void {
   }
 
   const now = Math.floor(Date.now() / 1000);
+  if (now > game.expiryDeadline) {
+    void triggerExpiryCancellation(gameId, {
+      reason: "pregame_expired",
+      expiryDeadline: game.expiryDeadline,
+    });
+    return;
+  }
 
   // Stop pre-game spectator broadcast (gameTick will take over)
   stopPreGameSpectatorBroadcast(gameId);
@@ -947,13 +990,20 @@ export async function handleKillSubmission(
   hunterLng: number,
   bleNearbyAddresses: string[]
 ): Promise<{ success: boolean; error?: string }> {
-  // Reject kills during pregame
   const game = getGame(gameId);
-  if (game && game.subPhase !== "game") {
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "game") {
     return { success: false, error: "Game has not started yet" };
   }
 
   const now = Math.floor(Date.now() / 1000);
+  if (now > game.expiryDeadline) {
+    void triggerExpiryCancellation(gameId, {
+      reason: "kill_submission_after_expiry",
+      expiryDeadline: game.expiryDeadline,
+    });
+    return { success: false, error: "Game has expired" };
+  }
+
   touchPlayerComplianceSignals(gameId, hunterAddress, now, {
     location: true,
     network: true,
@@ -1105,6 +1155,14 @@ export function handleLocationUpdate(
   if (!player.isAlive) return { success: false, error: "Player is eliminated" };
 
   const now = Math.floor(Date.now() / 1000);
+  if (game.phase === GamePhase.ACTIVE && now > game.expiryDeadline) {
+    void triggerExpiryCancellation(gameId, {
+      reason: "location_update_after_expiry",
+      expiryDeadline: game.expiryDeadline,
+    });
+    return { success: false, error: "Game has expired" };
+  }
+
   touchPlayerComplianceSignals(gameId, address, now, {
     location: true,
     network: true,
@@ -1191,6 +1249,10 @@ export function handleCheckin(
     ble: bleNearbyAddresses.length > 0 || normalizedBluetoothId != null,
   });
   if (now > game.expiryDeadline) {
+    void triggerExpiryCancellation(gameId, {
+      reason: "checkin_after_expiry",
+      expiryDeadline: game.expiryDeadline,
+    });
     return { success: false, error: "Game has expired" };
   }
 
@@ -1300,8 +1362,8 @@ function startPreGameSpectatorBroadcast(gameId: number): void {
   const interval = setInterval(() => {
     if (!spectatorBroadcastFn) return;
 
-    const alivePlayers = getAlivePlayers(gameId);
-    const positions = alivePlayers.flatMap((p) => {
+    const players = getPlayers(gameId);
+    const positions = players.flatMap((p) => {
       const ping = getLatestLocationPing(gameId, p.address);
       if (!ping) return [];
       const approx = approximateSpectatorPosition(ping.lat, ping.lng);
@@ -1313,7 +1375,7 @@ function startPreGameSpectatorBroadcast(gameId: number): void {
       type: "spectator:positions",
       players: positions,
       zone,
-      aliveCount: alivePlayers.length,
+      aliveCount: players.filter((p) => p.isAlive).length,
     });
   }, 2000);
 
@@ -1339,6 +1401,18 @@ async function gameTick(gameId: number): Promise<void> {
   if (!active) return;
 
   const now = Math.floor(Date.now() / 1000);
+  const game = getGame(gameId);
+  if (!game || game.phase !== GamePhase.ACTIVE || game.subPhase !== "game") {
+    cleanupActiveGame(gameId);
+    return;
+  }
+  if (now > game.expiryDeadline) {
+    await triggerExpiryCancellation(gameId, {
+      reason: "active_game_expired",
+      expiryDeadline: game.expiryDeadline,
+    });
+    return;
+  }
 
   // Check zone shrink
   const newZone = active.zoneTracker.tick();
@@ -1374,8 +1448,8 @@ async function gameTick(gameId: number): Promise<void> {
 
   // Broadcast player positions to spectators every 2 seconds
   if (now % 2 === 0 && spectatorBroadcastFn) {
-    const alivePlayers = getAlivePlayers(gameId);
-    const positions = alivePlayers.flatMap((p) => {
+    const players = getPlayers(gameId);
+    const positions = players.flatMap((p) => {
       const ping = getLatestLocationPing(gameId, p.address);
       if (!ping) return [];
       const approx = approximateSpectatorPosition(ping.lat, ping.lng);
@@ -1387,7 +1461,7 @@ async function gameTick(gameId: number): Promise<void> {
       type: "spectator:positions",
       players: positions,
       zone: active.zoneTracker.getZoneState(),
-      aliveCount: alivePlayers.length,
+      aliveCount: players.filter((p) => p.isAlive).length,
     });
   }
 
@@ -1618,6 +1692,14 @@ export function handleHeartbeatScan(
   if (game.subPhase !== "game") {
     return { success: false, error: "Game has not started yet" };
   }
+  const now = Math.floor(Date.now() / 1000);
+  if (now > game.expiryDeadline) {
+    void triggerExpiryCancellation(gameId, {
+      reason: "heartbeat_scan_after_expiry",
+      expiryDeadline: game.expiryDeadline,
+    });
+    return { success: false, error: "Game has expired" };
+  }
 
   // 2. Check if heartbeat is disabled (too few players)
   const aliveCount = getAlivePlayerCount(gameId);
@@ -1630,7 +1712,6 @@ export function handleHeartbeatScan(
   if (!scanner || !scanner.isAlive) {
     return { success: false, error: "Scanner is not alive" };
   }
-  const now = Math.floor(Date.now() / 1000);
   touchPlayerComplianceSignals(gameId, scannerAddress, now, {
     location: true,
     network: true,
@@ -1694,7 +1775,11 @@ export function handleHeartbeatScan(
   }
 
   // 10. Refresh the SCANNED player's heartbeat (not the scanner's)
-  updateLastHeartbeat(gameId, scannedPlayer.address, now);
+  // Guarded at DB layer to never refresh eliminated players.
+  const refreshed = updateLastHeartbeat(gameId, scannedPlayer.address, now);
+  if (!refreshed) {
+    return { success: false, error: "Scanned player is eliminated" };
+  }
 
   // 11. Record the scan
   insertHeartbeatScan({
@@ -2118,7 +2203,20 @@ export function recoverGames(): void {
   const activeDbGames = getGamesInPhase(GamePhase.ACTIVE);
   for (const game of activeDbGames) {
     const fullGame = getGame(game.gameId);
-    if (!fullGame || !fullGame.startedAt) continue;
+    if (!fullGame) continue;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (nowSec > fullGame.expiryDeadline) {
+      log.info(
+        { gameId: game.gameId, subPhase: fullGame.subPhase, expiryDeadline: fullGame.expiryDeadline, now: nowSec },
+        "Recovered active game already expired; triggering expiry cancellation"
+      );
+      void triggerExpiryCancellation(game.gameId, {
+        reason: "recovery_expired",
+        expiryDeadline: fullGame.expiryDeadline,
+      });
+      continue;
+    }
 
     if (fullGame.subPhase === "checkin") {
       log.info({ gameId: game.gameId }, "Recovering checkin monitor");
@@ -2127,7 +2225,6 @@ export function recoverGames(): void {
       startCheckinMonitor(game.gameId);
       void evaluateCheckinState(game.gameId);
     } else if (fullGame.subPhase === "pregame") {
-      const nowSec = Math.floor(Date.now() / 1000);
       const remainingSeconds = getPregameRemainingSeconds(game.gameId, fullGame.subPhaseStartedAt, nowSec);
       log.info({ gameId: game.gameId, remainingSeconds }, "Recovering pregame timer");
       startPreGameSpectatorBroadcast(game.gameId);
@@ -2145,12 +2242,16 @@ export function recoverGames(): void {
     } else if (fullGame.subPhase === "game") {
       // Recover active game with zone tracker and tick
       log.info({ gameId: game.gameId }, "Recovering active game");
-      initPlayersCompliance(game.gameId, Math.floor(Date.now() / 1000));
+      initPlayersCompliance(game.gameId, nowSec);
+      const recoveredStartedAt = fullGame.startedAt ?? nowSec;
+      if (!fullGame.startedAt) {
+        log.warn({ gameId: game.gameId }, "Recovered active game missing startedAt; using current timestamp");
+      }
       const zoneTracker = ZoneTracker.fromDb(
         game.gameId,
         game.centerLat,
         game.centerLng,
-        fullGame.startedAt
+        recoveredStartedAt
       );
 
       // Rehydrate in-memory out-of-zone state from latest persisted pings so

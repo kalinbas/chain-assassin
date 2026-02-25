@@ -87,6 +87,7 @@ data class GameState(
     val currentTarget: Target? = null,
     val hunterPlayerNumber: Int? = null,
     val playersRemaining: Int = 100,
+    val registeredPlayerCount: Int = 0,
     val currentZoneRadius: Double = 0.0,
     val killFeed: List<KillEvent> = emptyList(),
     val isInZone: Boolean = true,

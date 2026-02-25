@@ -88,25 +88,6 @@ fun PregameScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Player number badge
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Primary)
-                    .border(3.dp, Primary.copy(alpha = 0.5f), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    "#${state.currentPlayer.number}",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = Background,
-                    fontWeight = FontWeight.Bold
-                )
-            }
-
-            Spacer(Modifier.height(32.dp))
-
             // Phase badge
             Surface(
                 color = Primary.copy(alpha = 0.15f),

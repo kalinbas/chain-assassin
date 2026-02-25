@@ -612,6 +612,12 @@ export function setPlayerCheckedIn(gameId: number, address: string, bluetoothId?
     .run(bluetoothId ?? null, gameId, address.toLowerCase());
 }
 
+export function setPlayerBluetoothId(gameId: number, address: string, bluetoothId: string | null): void {
+  getDb()
+    .prepare("UPDATE players SET bluetooth_id = ? WHERE game_id = ? AND address = ?")
+    .run(bluetoothId, gameId, address.toLowerCase());
+}
+
 export function getCheckedInCount(gameId: number): number {
   const row = getDb()
     .prepare(
@@ -915,12 +921,13 @@ export function initPlayersCompliance(gameId: number, timestamp: number): void {
     .run(timestamp, timestamp, timestamp, gameId, ZERO_ADDRESS);
 }
 
-export function updateLastHeartbeat(gameId: number, address: string, timestamp: number): void {
-  getDb()
+export function updateLastHeartbeat(gameId: number, address: string, timestamp: number): boolean {
+  const result = getDb()
     .prepare(
-      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND address = ?"
+      "UPDATE players SET last_heartbeat_at = ? WHERE game_id = ? AND address = ? AND is_alive = 1"
     )
     .run(timestamp, gameId, address.toLowerCase());
+  return result.changes > 0;
 }
 
 export function updateLastLocation(gameId: number, address: string, timestamp: number): void {
@@ -995,7 +1002,11 @@ export function getLeaderboard(gameId: number): LeaderboardEntry[] {
     .prepare(
       `SELECT address, player_number, kills, is_alive, eliminated_at
        FROM players WHERE game_id = ? AND address != ?
-       ORDER BY is_alive DESC, kills DESC, player_number ASC`
+       ORDER BY
+         is_alive DESC,
+         CASE WHEN is_alive = 0 THEN COALESCE(eliminated_at, 0) ELSE 0 END DESC,
+         kills DESC,
+         player_number ASC`
     )
     .all(gameId, ZERO_ADDRESS) as Record<string, unknown>[];
   return rows.map((r) => ({

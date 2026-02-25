@@ -39,6 +39,11 @@ data class ServerLeaderboardEntry(
     val eliminatedAt: Long?
 )
 
+data class ServerActivityEntry(
+    val type: String,
+    val timestamp: Long
+)
+
 // ============ REST API Response Models ============
 
 /**
@@ -75,7 +80,8 @@ data class ServerGame(
     val winner3: Int,
     val topKiller: Int,
     val zoneShrinks: List<ServerZoneShrink>,
-    val leaderboard: List<ServerLeaderboardEntry> = emptyList()
+    val leaderboard: List<ServerLeaderboardEntry> = emptyList(),
+    val activity: List<ServerActivityEntry> = emptyList()
 )
 
 data class ServerZoneShrink(

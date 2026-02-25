@@ -8,6 +8,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -53,6 +54,22 @@ fun GameHistoryDetailScreen(
 
     val isCancelled = item.phase == GamePhase.CANCELLED
     val isWinner = item.rank == 1 && item.phase == GamePhase.ENDED
+    val placementTitle = when (item.rank) {
+        1 -> "FIRST PLACE"
+        2 -> "SECOND PLACE"
+        3 -> "THIRD PLACE"
+        else -> null
+    }
+    val placementColor = when (item.rank) {
+        1 -> Warning
+        2 -> TextPrimary
+        3 -> Color(0xFFCD7F32)
+        else -> TextPrimary
+    }
+    val isTopKiller = item.phase == GamePhase.ENDED &&
+        item.participated &&
+        item.playerNumber != 0 &&
+        item.topKiller == item.playerNumber
     val hasUnclaimedPrize = item.prizeEth > 0.0 && !item.claimed && item.participated
     val dateFormat = SimpleDateFormat("EEEE, MMM d · HH:mm", Locale.getDefault())
 
@@ -85,36 +102,49 @@ fun GameHistoryDetailScreen(
         ) {
             // Header
             item {
-                if (isWinner && item.participated) {
+                if (isCancelled) {
+                    Text(
+                        "CANCELLED",
+                        style = MaterialTheme.typography.displaySmall,
+                        color = TextSecondary,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 4.sp
+                    )
+                } else if (item.participated && placementTitle != null) {
                     Icon(
                         Icons.Default.EmojiEvents,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = Warning
+                        tint = placementColor
                     )
                     Spacer(Modifier.height(12.dp))
                     Text(
-                        "WINNER",
+                        placementTitle,
+                        style = MaterialTheme.typography.displaySmall,
+                        color = placementColor,
+                        fontWeight = FontWeight.Black,
+                        letterSpacing = 4.sp
+                    )
+                } else if (isTopKiller) {
+                    Icon(
+                        Icons.Default.FlashOn,
+                        contentDescription = null,
+                        modifier = Modifier.size(64.dp),
+                        tint = Primary
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        "MOST KILLS",
                         style = MaterialTheme.typography.displaySmall,
                         color = Primary,
                         fontWeight = FontWeight.Black,
-                        letterSpacing = 6.sp
+                        letterSpacing = 4.sp
                     )
                 } else {
                     Text(
-                        when {
-                            item.phase == GamePhase.CANCELLED -> "CANCELLED"
-                            !item.participated -> "GAME OVER"
-                            item.phase == GamePhase.ELIMINATED -> "ELIMINATED"
-                            else -> "GAME OVER"
-                        },
+                        "GAME OVER",
                         style = MaterialTheme.typography.displaySmall,
-                        color = when {
-                            item.phase == GamePhase.CANCELLED -> TextSecondary
-                            !item.participated -> TextSecondary
-                            item.phase == GamePhase.ELIMINATED -> Danger
-                            else -> TextPrimary
-                        },
+                        color = TextPrimary,
                         fontWeight = FontWeight.Black,
                         letterSpacing = 4.sp
                     )
@@ -494,7 +524,7 @@ private fun LeaderboardRow(entry: LeaderboardEntry) {
             textAlign = TextAlign.Center
         )
         Text(
-            text = if (entry.isAlive) "WINNER" else "DEAD",
+            text = if (entry.isAlive) "ALIVE" else "DEAD",
             style = MaterialTheme.typography.labelSmall,
             color = if (entry.isAlive) Warning else Danger,
             fontWeight = FontWeight.Bold,

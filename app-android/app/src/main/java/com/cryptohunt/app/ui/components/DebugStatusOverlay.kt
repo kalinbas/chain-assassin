@@ -19,9 +19,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.cryptohunt.app.domain.ble.BleAdvertiser
-import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.location.LocationTracker
 import com.cryptohunt.app.domain.server.ConnectionState
+import com.cryptohunt.app.domain.server.DebugEchoWebSocketClient
 import com.cryptohunt.app.domain.server.GameServerClient
 import com.cryptohunt.app.ui.theme.*
 import dagger.hilt.EntryPoint
@@ -33,8 +33,8 @@ import dagger.hilt.components.SingletonComponent
 @InstallIn(SingletonComponent::class)
 interface DebugStatusEntryPoint {
     fun gameServerClient(): GameServerClient
+    fun debugEchoWebSocketClient(): DebugEchoWebSocketClient
     fun locationTracker(): LocationTracker
-    fun bleScanner(): BleScanner
     fun bleAdvertiser(): BleAdvertiser
 }
 
@@ -46,13 +46,13 @@ fun DebugStatusOverlay() {
     }
 
     val serverClient = remember { entryPoint.gameServerClient() }
+    val debugEchoClient = remember { entryPoint.debugEchoWebSocketClient() }
     val locationTracker = remember { entryPoint.locationTracker() }
-    val bleScanner = remember { entryPoint.bleScanner() }
     val bleAdvertiser = remember { entryPoint.bleAdvertiser() }
 
     val connectionState by serverClient.connectionState.collectAsState()
+    val debugConnectionState by debugEchoClient.connectionState.collectAsState()
     val locationState by locationTracker.state.collectAsState()
-    val bleScanState by bleScanner.state.collectAsState()
     val bleAdvertiseState by bleAdvertiser.state.collectAsState()
 
     // Check if Bluetooth adapter is enabled
@@ -74,16 +74,16 @@ fun DebugStatusOverlay() {
 
     val off = TextDim.copy(alpha = 0.3f)
 
-    val serverColor = if (connectionState == ConnectionState.CONNECTED) Primary else off
+    val effectiveConnectionState = if (debugConnectionState != ConnectionState.DISCONNECTED) {
+        debugConnectionState
+    } else {
+        connectionState
+    }
+    val serverColor = if (effectiveConnectionState == ConnectionState.CONNECTED) Primary else off
 
     val gpsColor = if (locationState.isTracking && locationState.gpsLostSeconds == 0) Primary else off
 
-    val bleColor = when {
-        !btEnabled -> off
-        bleScanState.isScanning && bleAdvertiseState.isAdvertising -> Primary
-        btEnabled && (bleScanState.errorMessage != null || bleAdvertiseState.errorMessage != null) -> Danger
-        else -> Warning
-    }
+    val bleColor = if (btEnabled && bleAdvertiseState.isAdvertising) Primary else off
 
     Row(
         modifier = Modifier

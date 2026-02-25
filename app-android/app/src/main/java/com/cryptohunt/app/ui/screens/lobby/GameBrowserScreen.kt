@@ -591,25 +591,19 @@ private fun HistoryCard(item: GameHistoryItem, onClick: () -> Unit) {
                     Surface(
                         color = when {
                             isCancelled -> TextSecondary.copy(alpha = 0.15f)
-                            !item.participated -> SurfaceVariant.copy(alpha = 0.3f)
-                            isWinner -> Warning.copy(alpha = 0.15f)
-                            else -> Danger.copy(alpha = 0.15f)
+                            else -> Primary.copy(alpha = 0.15f)
                         },
                         shape = RoundedCornerShape(4.dp)
                     ) {
                         Text(
                             when {
                                 isCancelled -> "CANCELLED"
-                                !item.participated -> "ENDED"
-                                isWinner -> "WON"
-                                else -> "LOST"
+                                else -> "FINISHED"
                             },
                             style = MaterialTheme.typography.labelSmall,
                             color = when {
                                 isCancelled -> TextSecondary
-                                !item.participated -> TextSecondary
-                                isWinner -> Warning
-                                else -> Danger
+                                else -> Primary
                             },
                             fontWeight = FontWeight.Bold,
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)

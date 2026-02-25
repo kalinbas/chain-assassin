@@ -27,6 +27,7 @@ import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.testing.TestTags
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.LobbyViewModel
+import kotlinx.coroutines.delay
 import org.osmdroid.config.Configuration
 import org.osmdroid.tileprovider.tilesource.OnlineTileSourceBase
 import org.osmdroid.util.GeoPoint
@@ -37,7 +38,6 @@ import org.osmdroid.views.overlay.Overlay
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,7 +51,11 @@ fun GameDetailScreen(
     LaunchedEffect(gameId) {
         if (gameId.isNotEmpty()) {
             viewModel.selectGame(gameId)
+            viewModel.startDetailAutoRefresh(gameId)
         }
+    }
+    DisposableEffect(gameId) {
+        onDispose { viewModel.stopDetailAutoRefresh() }
     }
 
     val game by viewModel.selectedGame.collectAsState()
@@ -67,16 +71,19 @@ fun GameDetailScreen(
 
     val config = game?.config
     val context = LocalContext.current
+    val registrationDeadlineMs = config?.registrationDeadline ?: 0L
+    var registrationNowMs by remember(registrationDeadlineMs, game?.onChainPhase) {
+        mutableStateOf(System.currentTimeMillis())
+    }
 
-    LaunchedEffect(game?.config?.id, game?.onChainPhase, game?.config?.registrationDeadline) {
-        val selected = game ?: return@LaunchedEffect
-        if (selected.onChainPhase != OnChainPhase.REGISTRATION) return@LaunchedEffect
-        val deadlineMs = selected.config.registrationDeadline
-        val waitMs = (deadlineMs - System.currentTimeMillis()).coerceAtLeast(0L) + 1500L
-        delay(waitMs)
-        if (viewModel.selectedGame.value?.onChainPhase == OnChainPhase.REGISTRATION) {
-            viewModel.refresh()
-            viewModel.selectGame(selected.config.id)
+    LaunchedEffect(registrationDeadlineMs, game?.onChainPhase) {
+        if (registrationDeadlineMs <= 0L || game?.onChainPhase != OnChainPhase.REGISTRATION) {
+            return@LaunchedEffect
+        }
+        while (true) {
+            registrationNowMs = System.currentTimeMillis()
+            if (registrationNowMs >= registrationDeadlineMs) break
+            delay(1000)
         }
     }
 
@@ -357,6 +364,16 @@ fun GameDetailScreen(
                 val dateFormat = SimpleDateFormat("EEEE, MMM d · HH:mm", Locale.getDefault())
                 InfoRow("Starts", dateFormat.format(Date(startTime)))
             }
+            if (config.registrationDeadline > 0L) {
+                val dateFormat = SimpleDateFormat("EEEE, MMM d · HH:mm", Locale.getDefault())
+                val msLeft = config.registrationDeadline - registrationNowMs
+                val registrationValue = if (msLeft > 0L) {
+                    "${dateFormat.format(Date(config.registrationDeadline))} (${formatCountdown(msLeft)} left)"
+                } else {
+                    "${dateFormat.format(Date(config.registrationDeadline))} (closed)"
+                }
+                InfoRow("Registration open until", registrationValue)
+            }
             InfoRow("Entry Fee", "${config.entryFee} ETH")
             InfoRow("Players", "${config.minPlayers} – ${config.maxPlayers}")
             InfoRow("Duration", "${config.durationMinutes} minutes")
@@ -455,5 +472,17 @@ private fun RuleItem(text: String) {
     Row(modifier = Modifier.padding(vertical = 3.dp)) {
         Text("\u2022", color = Primary, modifier = Modifier.padding(end = 8.dp))
         Text(text, style = MaterialTheme.typography.bodySmall, color = TextSecondary)
+    }
+}
+
+private fun formatCountdown(millis: Long): String {
+    val totalSeconds = (millis / 1000L).coerceAtLeast(0L)
+    val hours = totalSeconds / 3600L
+    val minutes = (totalSeconds % 3600L) / 60L
+    val seconds = totalSeconds % 60L
+    return if (hours > 0L) {
+        String.format(Locale.getDefault(), "%dh %02dm %02ds", hours, minutes, seconds)
+    } else {
+        String.format(Locale.getDefault(), "%dm %02ds", minutes, seconds)
     }
 }

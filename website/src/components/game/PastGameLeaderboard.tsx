@@ -29,9 +29,11 @@ function sortByKillTimeline(entries: GameLeaderboardEntry[]): GameLeaderboardEnt
   return [...entries].sort((a, b) => {
     if (a.isAlive !== b.isAlive) return a.isAlive ? -1 : 1;
 
-    const aElim = a.eliminatedAt ?? Number.MAX_SAFE_INTEGER;
-    const bElim = b.eliminatedAt ?? Number.MAX_SAFE_INTEGER;
-    if (aElim !== bElim) return bElim - aElim;
+    if (!a.isAlive && !b.isAlive) {
+      const aElim = a.eliminatedAt ?? 0;
+      const bElim = b.eliminatedAt ?? 0;
+      if (aElim !== bElim) return bElim - aElim;
+    }
 
     if (a.kills !== b.kills) return b.kills - a.kills;
     return a.playerNumber - b.playerNumber;
@@ -86,7 +88,7 @@ export function PastGameLeaderboard({ game }: { game: Game }) {
     <section className="past-leaderboard">
       <h3 className="game-detail__section-title">Final Leaderboard</h3>
       <p className="past-leaderboard__sub">
-        Ordered by elimination timeline (latest elimination first).
+        Ordered by final placement (alive, then elimination timing, kills, player number).
       </p>
 
       <div className="past-leaderboard__table">
@@ -104,10 +106,6 @@ export function PastGameLeaderboard({ game }: { game: Game }) {
             ? (endAt ?? entry.eliminatedAt ?? startAt ?? 0)
             : (entry.eliminatedAt ?? startAt ?? 0);
           const survivalSeconds = startAt == null ? null : Math.max(0, survivalUntil - startAt);
-          const knockoutAt = (!entry.isAlive && startAt != null && entry.eliminatedAt != null)
-            ? `T+${formatDuration(entry.eliminatedAt - startAt)}`
-            : null;
-
           return (
             <div className={`past-leaderboard__row ${entry.isAlive ? 'past-leaderboard__row--alive' : ''}`} key={entry.playerNumber}>
               <span className="past-leaderboard__rank">{index + 1}</span>
@@ -118,10 +116,7 @@ export function PastGameLeaderboard({ game }: { game: Game }) {
                 {survivalSeconds == null ? '—' : formatDuration(survivalSeconds)}
               </span>
               <span className={`past-leaderboard__status ${entry.isAlive ? 'past-leaderboard__status--alive' : 'past-leaderboard__status--dead'}`}>
-                {entry.isAlive ? 'WINNER' : 'OUT'}
-                {!entry.isAlive && knockoutAt && (
-                  <span className="past-leaderboard__status-time">{knockoutAt}</span>
-                )}
+                {entry.isAlive ? 'ALIVE' : 'DEAD'}
               </span>
             </div>
           );

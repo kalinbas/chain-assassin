@@ -1,7 +1,19 @@
 package com.cryptohunt.app.ui.screens.lobby
 
+import android.bluetooth.BluetoothAdapter
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Canvas
 import android.graphics.Paint
+import android.location.LocationManager
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -81,14 +93,76 @@ fun RegisteredDetailScreen(
     }
 
     DisposableEffect(lifecycleOwner, context) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
+        val mainHandler = Handler(Looper.getMainLooper())
+        val refreshDeviceReady = {
+            mainHandler.post {
                 deviceReady = isDeviceGameReady(context)
             }
         }
+
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                refreshDeviceReady()
+            }
+        }
+
+        val stateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                when (intent?.action) {
+                    BluetoothAdapter.ACTION_STATE_CHANGED,
+                    LocationManager.PROVIDERS_CHANGED_ACTION,
+                    LocationManager.MODE_CHANGED_ACTION -> refreshDeviceReady()
+                }
+            }
+        }
+
+        val receiverFilter = IntentFilter().apply {
+            addAction(BluetoothAdapter.ACTION_STATE_CHANGED)
+            addAction(LocationManager.PROVIDERS_CHANGED_ACTION)
+            addAction(LocationManager.MODE_CHANGED_ACTION)
+        }
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.registerReceiver(stateReceiver, receiverFilter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            context.registerReceiver(stateReceiver, receiverFilter)
+        }
+
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        val networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                refreshDeviceReady()
+            }
+
+            override fun onLost(network: Network) {
+                refreshDeviceReady()
+            }
+
+            override fun onCapabilitiesChanged(network: Network, networkCapabilities: NetworkCapabilities) {
+                refreshDeviceReady()
+            }
+        }
+        try {
+            connectivityManager?.registerDefaultNetworkCallback(networkCallback)
+        } catch (_: Exception) {
+            // Keep readiness updates functional via lifecycle + state broadcasts.
+        }
+
+        refreshDeviceReady()
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose {
             lifecycleOwner.lifecycle.removeObserver(observer)
+            try {
+                context.unregisterReceiver(stateReceiver)
+            } catch (_: Exception) {
+                // Receiver may already be unregistered by system.
+            }
+            try {
+                connectivityManager?.unregisterNetworkCallback(networkCallback)
+            } catch (_: Exception) {
+                // Callback may already be removed.
+            }
         }
     }
 

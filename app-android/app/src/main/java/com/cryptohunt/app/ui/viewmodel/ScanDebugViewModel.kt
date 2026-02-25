@@ -9,6 +9,7 @@ import com.cryptohunt.app.domain.ble.BleScanState
 import com.cryptohunt.app.domain.ble.BleScanner
 import com.cryptohunt.app.domain.model.LocationState
 import com.cryptohunt.app.domain.location.LocationTracker
+import com.cryptohunt.app.domain.server.DebugEchoWebSocketClient
 import com.cryptohunt.app.domain.server.GameServerClient
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -45,6 +46,7 @@ class ScanDebugViewModel @Inject constructor(
     private val locationTracker: LocationTracker,
     private val bleScanner: BleScanner,
     private val bleAdvertiser: BleAdvertiser,
+    private val debugEchoWebSocketClient: DebugEchoWebSocketClient,
     private val serverClient: GameServerClient
 ) : ViewModel() {
 
@@ -58,6 +60,8 @@ class ScanDebugViewModel @Inject constructor(
     private val debugBleToken: String = generateDebugBleToken()
 
     fun syncSensors(locationPermissionGranted: Boolean, bluetoothPermissionGranted: Boolean) {
+        debugEchoWebSocketClient.start()
+
         val isLocationTracking = locationTracker.state.value.isTracking
         if (locationPermissionGranted && !isLocationTracking) {
             try {
@@ -75,7 +79,7 @@ class ScanDebugViewModel @Inject constructor(
             if (!isBleScanning) {
                 bleScanner.startScanning()
             }
-            if (bleScanner.state.value.isScanning && !isBleAdvertising) {
+            if (!isBleAdvertising) {
                 bleAdvertiser.startAdvertising(debugBleToken)
             }
         } else {
@@ -154,6 +158,7 @@ class ScanDebugViewModel @Inject constructor(
     }
 
     fun stopSensors() {
+        debugEchoWebSocketClient.stop()
         if (locationTracker.state.value.isTracking) {
             locationTracker.stopTracking()
         }

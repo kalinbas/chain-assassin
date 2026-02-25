@@ -52,6 +52,7 @@ class GameEngine @Inject constructor() {
             config = config,
             currentPlayer = currentPlayer,
             playersRemaining = config.maxPlayers,
+            registeredPlayerCount = 0,
             currentZoneRadius = config.initialRadiusMeters,
             registeredAt = System.currentTimeMillis(),
             gameStartTime = startTime,
@@ -296,6 +297,7 @@ class GameEngine @Inject constructor() {
             checkinEndsAt = msg.checkinEndsAt ?: current.checkinEndsAt,
             pregameEndsAt = msg.pregameEndsAt ?: current.pregameEndsAt,
             playersRemaining = syncedPlayersRemaining,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, msg.playerCount ?: 0),
             checkedInCount = msg.checkedInCount ?: current.checkedInCount,
             complianceWarning = if (phase == GamePhase.ACTIVE || phase == GamePhase.ELIMINATED) {
                 current.complianceWarning
@@ -425,6 +427,7 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(
             leaderboard = entries,
             playersRemaining = aliveCount,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, entries.size),
             heartbeatDisabled = aliveCount <= current.heartbeatDisableThreshold
         )
     }
@@ -471,7 +474,8 @@ class GameEngine @Inject constructor() {
             phase = GamePhase.PREGAME,
             pregameEndsAt = msg.pregameEndsAt,
             checkedInCount = msg.checkedInCount,
-            playersRemaining = msg.playerCount
+            playersRemaining = msg.playerCount,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, msg.playerCount)
         )
         _events.tryEmit(GameEvent.PregameStarted)
     }
@@ -480,6 +484,7 @@ class GameEngine @Inject constructor() {
         val current = _state.value ?: return
         _state.value = current.copy(
             playersRemaining = msg.playerCount,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, msg.playerCount),
             heartbeatDisabled = msg.playerCount <= current.heartbeatDisableThreshold
         )
     }
@@ -494,6 +499,7 @@ class GameEngine @Inject constructor() {
         _state.value = current.copy(
             checkedInCount = msg.checkedInCount,
             playersRemaining = msg.totalPlayers,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, msg.totalPlayers),
             checkedInPlayerNumbers = updatedNumbers,
             checkInVerified = current.checkInVerified || isMe
         )
@@ -528,7 +534,8 @@ class GameEngine @Inject constructor() {
     private fun handlePlayerRegistered(msg: ServerMessage.PlayerRegistered) {
         val current = _state.value ?: return
         _state.value = current.copy(
-            playersRemaining = msg.playerCount
+            playersRemaining = msg.playerCount,
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, msg.playerCount)
         )
         Log.i(TAG, "Player registered: #${msg.playerNumber}, total: ${msg.playerCount}")
     }
