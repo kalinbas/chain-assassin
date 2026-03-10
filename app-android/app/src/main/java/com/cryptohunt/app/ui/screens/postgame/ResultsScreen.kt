@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.EmojiEvents
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -31,10 +32,51 @@ fun ResultsScreen(
 ) {
     val gameState by viewModel.gameState.collectAsState()
     val state = gameState
+    val playerNumber = state?.currentPlayer?.number ?: 0
+    val placement = if (playerNumber > 0) {
+        when (playerNumber) {
+            state?.winner1 ?: 0 -> 1
+            state?.winner2 ?: 0 -> 2
+            state?.winner3 ?: 0 -> 3
+            else -> 0
+        }
+    } else {
+        0
+    }
+    val isTopKiller = state?.topKiller == playerNumber && playerNumber > 0
+    val isWinner = placement == 1
+    val title = when {
+        placement == 1 -> "FIRST PLACE"
+        placement == 2 -> "SECOND PLACE"
+        placement == 3 -> "THIRD PLACE"
+        isTopKiller -> "MOST KILLS"
+        else -> "GAME OVER"
+    }
+    val titleColor = when {
+        placement == 1 -> Warning
+        placement == 2 -> TextPrimary
+        placement == 3 -> Color(0xFFCD7F32)
+        isTopKiller -> Primary
+        else -> TextPrimary
+    }
+    val endedAt = state?.gameEndedAt ?: (System.currentTimeMillis() / 1000)
+    val survivedSeconds = if ((state?.gameStartTime ?: 0L) > 0L) {
+        (endedAt - state!!.gameStartTime).coerceAtLeast(0L)
+    } else {
+        0L
+    }
+    val leaderboardRank = state?.leaderboard?.firstOrNull { it.isCurrentPlayer }?.rank ?: 0
+    val totalPlayers = when {
+        (state?.registeredPlayerCount ?: 0) > 0 -> state?.registeredPlayerCount ?: 0
+        (state?.leaderboard?.size ?: 0) > 0 -> state?.leaderboard?.size ?: 0
+        else -> state?.playersRemaining ?: 0
+    }
 
-    val isWinner = state?.playersRemaining == 1 &&
-            state.currentPlayer.isAlive &&
-            state.phase == com.cryptohunt.app.domain.model.GamePhase.ENDED
+    LaunchedEffect(state?.config?.id, state?.phase) {
+        if (state?.phase == com.cryptohunt.app.domain.model.GamePhase.ENDED) {
+            viewModel.refreshEndedSummary()
+        }
+    }
 
     LazyColumn(
         modifier = Modifier
@@ -53,30 +95,31 @@ fun ResultsScreen(
         item {
             Spacer(Modifier.height(16.dp))
 
-            if (isWinner) {
+            if (placement in 1..3) {
                 Icon(
                     Icons.Default.EmojiEvents,
                     contentDescription = null,
                     modifier = Modifier.size(80.dp),
-                    tint = Warning
+                    tint = titleColor
                 )
                 Spacer(Modifier.height(16.dp))
-                Text(
-                    "WINNER",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = Primary,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 6.sp
+            } else if (isTopKiller) {
+                Icon(
+                    Icons.Default.FlashOn,
+                    contentDescription = null,
+                    modifier = Modifier.size(80.dp),
+                    tint = titleColor
                 )
-            } else {
-                Text(
-                    "GAME OVER",
-                    style = MaterialTheme.typography.displayMedium,
-                    color = TextPrimary,
-                    fontWeight = FontWeight.Black,
-                    letterSpacing = 4.sp
-                )
+                Spacer(Modifier.height(16.dp))
             }
+
+            Text(
+                title,
+                style = MaterialTheme.typography.displayMedium,
+                color = titleColor,
+                fontWeight = FontWeight.Black,
+                letterSpacing = if (placement == 1) 6.sp else 4.sp
+            )
 
             Spacer(Modifier.height(8.dp))
             Text(
@@ -106,8 +149,17 @@ fun ResultsScreen(
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         StatColumn("KILLS", "${state?.currentPlayer?.killCount ?: 0}", Primary)
-                        StatColumn("SURVIVED", TimeUtils.formatDuration(if ((state?.gameStartTime ?: 0L) > 0L) (System.currentTimeMillis() / 1000 - state!!.gameStartTime) else 0L), TextPrimary)
-                        StatColumn("RANK", if (isWinner) "#1" else "#${(state?.playersRemaining ?: 0) + 1}", if (isWinner) Warning else TextPrimary)
+                        StatColumn("SURVIVED", TimeUtils.formatDuration(survivedSeconds), TextPrimary)
+                        StatColumn(
+                            "RANK",
+                            when {
+                                placement in 1..3 -> "#$placement/$totalPlayers"
+                                leaderboardRank > 0 && totalPlayers > 0 -> "#$leaderboardRank/$totalPlayers"
+                                totalPlayers > 0 -> "#—/$totalPlayers"
+                                else -> "—"
+                            },
+                            if (isWinner) Warning else TextPrimary
+                        )
                     }
                 }
             }
@@ -121,7 +173,7 @@ fun ResultsScreen(
             Spacer(Modifier.height(12.dp))
 
             val cfg = state?.config
-            val playerCount = maxOf(cfg?.maxPlayers ?: 0, cfg?.minPlayers ?: 0)
+            val playerCount = maxOf(totalPlayers, cfg?.minPlayers ?: 0)
             val totalPool = ((cfg?.entryFee ?: 0.0) * playerCount) + (cfg?.baseReward ?: 0.0)
             Card(
                 modifier = Modifier.fillMaxWidth(),

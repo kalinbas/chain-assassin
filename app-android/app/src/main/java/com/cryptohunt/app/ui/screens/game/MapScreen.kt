@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.MapViewModel
 import org.osmdroid.config.Configuration
@@ -36,6 +37,8 @@ import org.osmdroid.views.overlay.Overlay
 @Composable
 fun MapScreen(
     onBack: () -> Unit,
+    onEliminated: () -> Unit,
+    onGameEnd: () -> Unit,
     viewModel: MapViewModel = hiltViewModel()
 ) {
     val gameState by viewModel.gameState.collectAsState()
@@ -76,6 +79,15 @@ fun MapScreen(
             mapViewRef.value?.controller?.animateTo(
                 GeoPoint(activePing.lat, activePing.lng), 17.0, 1000L
             )
+        }
+    }
+
+    LaunchedEffect(gameState?.phase) {
+        when (gameState?.phase) {
+            GamePhase.ELIMINATED -> onEliminated()
+            GamePhase.ENDED,
+            GamePhase.CANCELLED -> onGameEnd()
+            else -> {}
         }
     }
 

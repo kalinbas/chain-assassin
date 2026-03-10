@@ -73,7 +73,7 @@ class GameEngine @Inject constructor() {
         _events.tryEmit(GameEvent.CheckInStarted)
     }
 
-    fun processCheckInScan(scannedPayload: String, bluetoothId: String? = null): CheckInResult {
+    fun processCheckInScan(scannedPayload: String): CheckInResult {
         val current = _state.value ?: return CheckInResult.NoGame
         if (current.phase != GamePhase.CHECK_IN) return CheckInResult.WrongPhase
         if (current.checkInVerified) return CheckInResult.AlreadyVerified
@@ -86,13 +86,17 @@ class GameEngine @Inject constructor() {
             return CheckInResult.ScanYourself
         }
 
-        // Optimistic: mark as verified locally, server will confirm
+        return CheckInResult.Verified
+    }
+
+    fun confirmCheckIn(bluetoothId: String? = null) {
+        val current = _state.value ?: return
+        if (current.phase != GamePhase.CHECK_IN || current.checkInVerified) return
         _state.value = current.copy(
             checkInVerified = true,
             bluetoothId = bluetoothId
         )
         _events.tryEmit(GameEvent.CheckInVerified)
-        return CheckInResult.Verified
     }
 
 
@@ -510,7 +514,14 @@ class GameEngine @Inject constructor() {
 
     private fun handleGameEnded(msg: ServerMessage.GameEnded) {
         val current = _state.value ?: return
-        _state.value = current.copy(phase = GamePhase.ENDED)
+        _state.value = current.copy(
+            phase = GamePhase.ENDED,
+            winner1 = msg.winner1,
+            winner2 = msg.winner2,
+            winner3 = msg.winner3,
+            topKiller = msg.topKiller,
+            gameEndedAt = System.currentTimeMillis() / 1000
+        )
         _events.tryEmit(GameEvent.GameEnded)
     }
 
@@ -576,6 +587,39 @@ class GameEngine @Inject constructor() {
         if (scannedGameId != currentGameId) return null
         if (scannedPlayerNumber <= 0) return null
         return scannedPlayerNumber
+    }
+
+    fun applyEndedSummary(
+        winner1: Int,
+        winner2: Int,
+        winner3: Int,
+        topKiller: Int,
+        playerCount: Int,
+        endedAt: Long?,
+        leaderboard: List<ServerLeaderboardEntry>
+    ) {
+        val current = _state.value ?: return
+        val mappedLeaderboard = leaderboard.mapIndexed { index, entry ->
+            LeaderboardEntry(
+                rank = index + 1,
+                playerNumber = entry.playerNumber,
+                kills = entry.kills,
+                isAlive = entry.isAlive,
+                isCurrentPlayer = entry.playerNumber == current.currentPlayer.number
+            )
+        }
+        val aliveCount = mappedLeaderboard.count { it.isAlive }
+        _state.value = current.copy(
+            phase = GamePhase.ENDED,
+            winner1 = winner1,
+            winner2 = winner2,
+            winner3 = winner3,
+            topKiller = topKiller,
+            gameEndedAt = endedAt ?: current.gameEndedAt ?: (System.currentTimeMillis() / 1000),
+            registeredPlayerCount = maxOf(current.registeredPlayerCount, playerCount),
+            playersRemaining = if (aliveCount > 0) aliveCount else current.playersRemaining,
+            leaderboard = if (mappedLeaderboard.isNotEmpty()) mappedLeaderboard else current.leaderboard
+        )
     }
 
 }

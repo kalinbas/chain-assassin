@@ -435,18 +435,50 @@ fun AppNavHost(
         composable(NavRoutes.PhotoCapture.route) {
             PhotoCaptureScreen(
                 onPhotoTaken = { navController.popBackStack() },
-                onBack = { navController.popBackStack() }
+                onBack = { navController.popBackStack() },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                },
+                onGameEnd = {
+                    navController.navigate(NavRoutes.Results.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                }
             )
         }
 
         composable(NavRoutes.Map.route) {
-            MapScreen(onBack = { navController.popBackStack() })
+            MapScreen(
+                onBack = { navController.popBackStack() },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                },
+                onGameEnd = {
+                    navController.navigate(NavRoutes.Results.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(NavRoutes.Intel.route) {
             IntelScreen(
                 onBack = { navController.popBackStack() },
-                onNavigateToMap = { navController.navigate(NavRoutes.Map.route) }
+                onNavigateToMap = { navController.navigate(NavRoutes.Map.route) },
+                onEliminated = {
+                    navController.navigate(NavRoutes.Eliminated.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                },
+                onGameEnd = {
+                    navController.navigate(NavRoutes.Results.route) {
+                        popUpTo(NavRoutes.MainGame.route) { inclusive = true }
+                    }
+                }
             )
         }
 

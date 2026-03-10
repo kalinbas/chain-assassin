@@ -46,6 +46,7 @@ import com.google.mlkit.vision.barcode.BarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.common.InputImage
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
@@ -57,6 +58,7 @@ fun CheckInCameraScreen(
     val gameState by viewModel.gameState.collectAsState()
     val lifecycleOwner = LocalLifecycleOwner.current
     val haptic = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
 
     val permissions = remember {
         buildList {
@@ -90,6 +92,7 @@ fun CheckInCameraScreen(
     val allScannerPermissionsGranted = cameraGranted && locationGranted && bluetoothGranted
 
     var verified by remember { mutableStateOf(false) }
+    var submitting by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var autoNavigatedAway by remember { mutableStateOf(false) }
 
@@ -175,33 +178,43 @@ fun CheckInCameraScreen(
                                         for (barcode in barcodes) {
                                             if (barcode.format == Barcode.FORMAT_QR_CODE) {
                                                 val raw = barcode.rawValue ?: continue
-                                                if (!verified && QrGenerator.parsePayload(raw) != null) {
-                                                    val result = viewModel.processCheckInScan(raw)
-                                                    when (result) {
-                                                        is CheckInResult.Verified -> {
-                                                            verified = true
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                if (!verified && !submitting && QrGenerator.parsePayload(raw) != null) {
+                                                    submitting = true
+                                                    scope.launch {
+                                                        val result = viewModel.processCheckInScan(raw)
+                                                        when (result) {
+                                                            is CheckInResult.Verified -> {
+                                                                verified = true
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is CheckInResult.AlreadyVerified -> {
+                                                                verified = true
+                                                            }
+                                                            is CheckInResult.PlayerNotCheckedIn -> {
+                                                                errorMessage = "This player hasn't checked in yet"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is CheckInResult.ServerRejected -> {
+                                                                errorMessage = "Check-in rejected by server"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is CheckInResult.ScanYourself -> {
+                                                                errorMessage = "You can't scan yourself!"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is CheckInResult.UnknownPlayer -> {
+                                                                errorMessage = "Unknown player"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            is CheckInResult.TooFar -> {
+                                                                errorMessage = "Too far from meeting point"
+                                                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                                            }
+                                                            else -> {}
                                                         }
-                                                        is CheckInResult.AlreadyVerified -> {
-                                                            verified = true
+                                                        if (!verified) {
+                                                            submitting = false
                                                         }
-                                                        is CheckInResult.PlayerNotCheckedIn -> {
-                                                            errorMessage = "This player hasn't checked in yet"
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        }
-                                                        is CheckInResult.ScanYourself -> {
-                                                            errorMessage = "You can't scan yourself!"
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        }
-                                                        is CheckInResult.UnknownPlayer -> {
-                                                            errorMessage = "Unknown player"
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        }
-                                                        is CheckInResult.TooFar -> {
-                                                            errorMessage = "Too far from meeting point"
-                                                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                                        }
-                                                        else -> {}
                                                     }
                                                 }
                                             }

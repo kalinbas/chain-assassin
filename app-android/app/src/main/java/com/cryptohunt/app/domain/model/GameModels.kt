@@ -112,13 +112,19 @@ data class GameState(
     val heartbeatDisabled: Boolean = false,
     val complianceWarning: ComplianceWarningStatus? = null,
     val eliminationReason: EliminationReason? = null,
-    val eliminatedByPlayerNumber: Int? = null
+    val eliminatedByPlayerNumber: Int? = null,
+    val winner1: Int = 0,
+    val winner2: Int = 0,
+    val winner3: Int = 0,
+    val topKiller: Int = 0,
+    val gameEndedAt: Long? = null
 )
 
 sealed class CheckInResult {
     data object Verified : CheckInResult()
     data object AlreadyVerified : CheckInResult()
     data object PlayerNotCheckedIn : CheckInResult()
+    data object ServerRejected : CheckInResult()
     data object ScanYourself : CheckInResult()
     data object UnknownPlayer : CheckInResult()
     data object WrongPhase : CheckInResult()

@@ -15,6 +15,7 @@ import com.cryptohunt.app.domain.model.GameState
 import com.cryptohunt.app.domain.model.LocationState
 import com.cryptohunt.app.domain.server.ConnectionState
 import com.cryptohunt.app.domain.server.GameServerClient
+import com.cryptohunt.app.domain.server.ServerLeaderboardEntry
 import com.cryptohunt.app.util.QrGenerator
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
@@ -141,7 +142,7 @@ class GameViewModel @Inject constructor(
         return result
     }
 
-    fun processCheckInScan(qrPayload: String): CheckInResult {
+    suspend fun processCheckInScan(qrPayload: String): CheckInResult {
         // Proximity check — must be within 500m of meeting point
         val state = gameState.value ?: return CheckInResult.NoGame
         val loc = locationTracker.state.value
@@ -155,11 +156,11 @@ class GameViewModel @Inject constructor(
         }
 
         val ownBleToken = buildOwnBleToken(state)
-        val result = gameEngine.processCheckInScan(qrPayload, ownBleToken)
+        val result = gameEngine.processCheckInScan(qrPayload)
         if (result is CheckInResult.Verified) {
-            val gameId = state.config.id.toIntOrNull() ?: return result
+            val gameId = state.config.id.toIntOrNull() ?: return CheckInResult.NoGame
             val bleAddresses = getNearbyBleTokens()
-            viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+            val submitted = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
                 serverClient.submitCheckin(
                     gameId = gameId,
                     lat = loc.lat,
@@ -169,6 +170,10 @@ class GameViewModel @Inject constructor(
                     bleAddresses = bleAddresses
                 )
             }
+            if (!submitted) {
+                return CheckInResult.ServerRejected
+            }
+            gameEngine.confirmCheckIn(ownBleToken)
         }
         return result
     }
@@ -251,6 +256,38 @@ class GameViewModel @Inject constructor(
     private fun getNearbyBleTokens(excludeToken: String? = null): List<String> {
         val nearby = bleScanner.getNearbyTokens()
         return if (excludeToken == null) nearby else nearby.filter { it != excludeToken }
+    }
+
+    fun refreshEndedSummary() {
+        viewModelScope.launch {
+            val state = gameState.value ?: return@launch
+            val gameId = state.config.id.toIntOrNull() ?: return@launch
+            val detail = try {
+                serverClient.fetchGameDetail(gameId)
+            } catch (_: Exception) {
+                null
+            } ?: return@launch
+
+            val sortedLeaderboard = detail.leaderboard.sortedWith(
+                compareByDescending<ServerLeaderboardEntry> { it.isAlive }
+                    .thenByDescending { if (it.isAlive) 0L else (it.eliminatedAt ?: 0L) }
+                    .thenByDescending { it.kills }
+                    .thenBy { it.playerNumber }
+            )
+            val endedAt = detail.activity
+                .firstOrNull { it.type == "end" && it.timestamp > 0L }
+                ?.timestamp
+
+            gameEngine.applyEndedSummary(
+                winner1 = detail.winner1,
+                winner2 = detail.winner2,
+                winner3 = detail.winner3,
+                topKiller = detail.topKiller,
+                playerCount = detail.playerCount,
+                endedAt = endedAt,
+                leaderboard = sortedLeaderboard
+            )
+        }
     }
 
     override fun onCleared() {

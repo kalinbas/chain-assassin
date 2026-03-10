@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.GameViewModel
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -40,10 +41,13 @@ import java.io.File
 fun PhotoCaptureScreen(
     onBack: () -> Unit,
     onPhotoTaken: () -> Unit,
+    onEliminated: () -> Unit,
+    onGameEnd: () -> Unit,
     viewModel: GameViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val gameState by viewModel.gameState.collectAsState()
 
     var capturedFile by remember { mutableStateOf<File?>(null) }
     var caption by remember { mutableStateOf("") }
@@ -66,6 +70,15 @@ fun PhotoCaptureScreen(
         if (errorMessage != null) {
             delay(2500)
             errorMessage = null
+        }
+    }
+
+    LaunchedEffect(gameState?.phase) {
+        when (gameState?.phase) {
+            GamePhase.ELIMINATED -> onEliminated()
+            GamePhase.ENDED,
+            GamePhase.CANCELLED -> onGameEnd()
+            else -> {}
         }
     }
 

@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.cryptohunt.app.domain.model.GamePhase
 import com.cryptohunt.app.ui.theme.*
 import com.cryptohunt.app.ui.viewmodel.*
 import kotlinx.coroutines.delay
@@ -25,6 +26,8 @@ import kotlinx.coroutines.delay
 fun IntelScreen(
     onBack: () -> Unit,
     onNavigateToMap: () -> Unit,
+    onEliminated: () -> Unit,
+    onGameEnd: () -> Unit,
     viewModel: GameViewModel = hiltViewModel()
 ) {
     val gameState by viewModel.gameState.collectAsState()
@@ -49,6 +52,15 @@ fun IntelScreen(
             activatingItem = null
             onBack()
             onNavigateToMap()
+        }
+    }
+
+    LaunchedEffect(gameState?.phase) {
+        when (gameState?.phase) {
+            GamePhase.ELIMINATED -> onEliminated()
+            GamePhase.ENDED,
+            GamePhase.CANCELLED -> onGameEnd()
+            else -> {}
         }
     }
 
