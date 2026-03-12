@@ -73,6 +73,7 @@ export const config = {
 
   // Pregame
   pregameDurationSeconds: envInt("PREGAME_DURATION_SECONDS", 180),  // 3 minutes
+  simulationPregameDurationSeconds: envInt("SIMULATION_PREGAME_DURATION_SECONDS", 60),
 
   // Photos
   photosDir: optionalEnv("PHOTOS_DIR", "./data/photos"),

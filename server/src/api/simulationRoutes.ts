@@ -64,14 +64,14 @@ simulationRouter.post("/api/simulation/deploy", walletAuth, requireOperator, (re
       centerLng: body.centerLng ?? -99.1299,
       initialRadiusMeters: body.initialRadiusMeters ?? 500,
       speedMultiplier: Math.min(50, Math.max(1, body.speedMultiplier ?? 1)),
-      minActiveDurationSeconds: Math.max(60, body.minActiveDurationSeconds ?? 60),
+      minActiveDurationSeconds: Math.max(10, body.minActiveDurationSeconds ?? 60),
       title: body.title ?? "Simulation Game",
       // Small non-zero default fee so refund scenarios are testable.
       entryFeeWei: body.entryFeeWei ?? "1000000000000",
       baseRewardWei: body.baseRewardWei ?? "0",
-      registrationDelaySeconds: Math.min(600, Math.max(30, body.registrationDelaySeconds ?? 60)),
-      gameStartDelaySeconds: Math.min(600, Math.max(10, body.gameStartDelaySeconds ?? 60)),
-      maxDurationSeconds: Math.min(7200, Math.max(180, body.maxDurationSeconds ?? 300)),
+      registrationDelaySeconds: Math.min(600, Math.max(5, body.registrationDelaySeconds ?? 60)),
+      gameStartDelaySeconds: Math.min(600, Math.max(5, body.gameStartDelaySeconds ?? 60)),
+      maxDurationSeconds: Math.min(7200, Math.max(60, body.maxDurationSeconds ?? 300)),
     };
 
     const sim = deploySimulation(cfg);

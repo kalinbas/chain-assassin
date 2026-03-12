@@ -57,7 +57,6 @@ import { getHttpProvider } from "../blockchain/client.js";
 
 const log = createLogger("gameManager");
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
-const SIMULATION_PREGAME_DURATION_SECONDS = 60;
 const SIM_GAME_SYNC_KEY_PREFIX = "simulation_game:";
 const OPERATOR_SYNC_MAX_ATTEMPTS = 4;
 const OPERATOR_SYNC_BASE_DELAY_MS = 1_000;
@@ -557,7 +556,9 @@ function getRequiredCheckedInCount(
 }
 
 export function getPregameDurationSeconds(gameId: number): number {
-  return isSimulatedGame(gameId) ? SIMULATION_PREGAME_DURATION_SECONDS : config.pregameDurationSeconds;
+  return isSimulatedGame(gameId)
+    ? config.simulationPregameDurationSeconds
+    : config.pregameDurationSeconds;
 }
 
 export function getPregameEndsAt(gameId: number, subPhaseStartedAt: number | null): number | null {
